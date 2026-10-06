@@ -1,0 +1,311 @@
+Rakesh Sangolli: Yes, which is good.
+
+Jash Sheth: Yeah, can you see this dashboard?
+
+Rakesh Sangolli: Yeah, yeah.
+
+Jash Sheth: Yeah, so we want something like this only. But on our software level, like a proper URL. This is on Claude, right?
+
+Rakesh Sangolli: Correct. Yeah.
+
+Jash Sheth: So practice. Why? So, basically, this is at control tower. I have added all the product names. A lot twice. If you click on any you can see, there are lots over here. If there are not too lot, whatever the data is there. The Lord quantity and the grn quantity matches. That means it if it is completed. It goes on these tab that these are the products which are done.
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: These are the shipments that are coming, which are of finished good summer of CKD. So, we have written timelines over. Here, you can show the remarks, and if the ETA is changing, then it comes over here, that you know the ETS change these many times that something like that?
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: Industry. Okay?
+
+Rakesh Sangolli: Yeah.
+
+Jash Sheth: what is received, what is not received. Okay, MGR, and I can add over here. So, if I add suppose 500, and if I add the date, then it will come over here. Kgrn 510, something like that?
+
+Rakesh Sangolli: So, grn is for receiving the raw materials, right?
+
+Jash Sheth: No grn is that the product has reached the warehouse now, and now it is used to sell.
+
+Rakesh Sangolli: Okay, got done. Got it.
+
+Jash Sheth: Received note. The customers.
+
+Rakesh Sangolli: Okay, so here not tracking ROM of raw materials, right?
+
+Jash Sheth: on 1st October. Delete, right? Today, this is the Lord called. Total produce three work reason. It can mean anything some damage. Some issue something like that? Muno, we are not tracking raw materials, but if anything is missing, then we can
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: put it over here basically.
+
+Rakesh Sangolli: Uh, that is for one part, right?
+
+Jash Sheth: Sorry, that is.
+
+Rakesh Sangolli: One product.
+
+Jash Sheth: Yeah, this is for one product. Yeah.
+
+Rakesh Sangolli: For the text, like multiple raw materials to make correct.
+
+Jash Sheth: Yeah, sorry, cat rub again.
+
+Rakesh Sangolli: So, one product takes multiple. Raw materials to make.
+
+Jash Sheth: Right? Yes, yes.
+
+Rakesh Sangolli: Yeah.
+
+Jash Sheth: Then we have this planted jump start of the month.
+
+Rakesh Sangolli: Okay, so.
+
+Jash Sheth: Then, if there is any blocker in productions material?
+
+Rakesh Sangolli: In like a product or raw material?
+
+Jash Sheth: No, my dear. But sometimes we have direct finished goods also coming.
+
+Rakesh Sangolli: God makes sense.
+
+Jash Sheth: That's it! So it doesn't matter to me. So, if I click on this? Food becomes blue. See, I think I in this completed, and there was one of the Lord. Www. So, this is that. And yet? We don't have to. We just need to track that date changes. We'll be happy.
+
+Rakesh Sangolli: Okay. Is data?
+
+Jash Sheth: There are 34 Lords fire over to. Who are you soon? 23 are on track. It's like that. Are there a lot of? What I can see. There are lot of lots. These are like three large see.
+
+Rakesh Sangolli: So okay, three rods. It will be divided by 3.
+
+Jash Sheth: Ah, it will be high. See the first Lord. Tus Reme patissas? Like this?
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: In terms of raw material. October, we ordered 20, 000 raw 20, 000 quantity. All materials from China.
+
+Rakesh Sangolli: Name, but there are many raw materials, you know. So, how do you say 20,000
+
+Jash Sheth: Nate.
+
+Rakesh Sangolli: Rometers like ABC?
+
+Jash Sheth: That is required.
+
+Rakesh Sangolli: Like, let's say I want to make a charger? It's not converted so, uh?
+
+Jash Sheth: Two good drop down makes it easier. Button shark. See, I cannot say that, uh, that is. That happens all the time.
+
+Rakesh Sangolli: Okay, okay.
+
+Jash Sheth: Sometimes, there are some things this means is required.
+
+Rakesh Sangolli: Okay, make sense.
+
+Jash Sheth: And what I'll explain you. Yeah, that is produced in if I suppose. Fix. Ah, see in this tone RF. You see, I have produced. 16, 000, right? Is 3,000 missing right from this?
+
+Rakesh Sangolli: Yes, yeah.
+
+Jash Sheth: Because there might be some issue in the product after manufacturing it. Tu esi, Le que Donda, means difference. Not necessary.
+
+Rakesh Sangolli: So produce produce equal to a rejected plus grn.
+
+Jash Sheth: Ah, like?
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: You keep balance you a lot going. This is. Balance is Lord quantity minus grn?
+
+Rakesh Sangolli: Good balances.
+
+Jash Sheth: Lord quantity minus grn?
+
+Rakesh Sangolli: Okay, so log quantity equal to grn plus balance, so balance is nothing but, uh.
+
+Jash Sheth: Now, this this date over here that you see, uh? Full grn date. 1st September. Uh, all made a full grn date may happen. Key, suppose. A third October. Are you ready? This is done and grn. Okay. So here Number 13,000. Alright.
+
+Rakesh Sangolli: Yeah.
+
+Jash Sheth: 13,000. Right. The book completed and camera. And see. Two days past Banna.
+
+Rakesh Sangolli: Okay, okay.
+
+Jash Sheth: This is the data that we require when we want to see, right? Keep mere passed third. Fourth September, we are the sub Still, it took me 32 days to manufacture this. So why it plan time cooler at? This can be the question then raised to them manufacturing team.
+
+Rakesh Sangolli: Yeah, we can put some notes notes tab with regards.
+
+Jash Sheth: Her. So this is this is what I'm telling you. Yeah.
+
+Rakesh Sangolli: Mater.
+
+Jash Sheth: oh,
+
+Rakesh Sangolli: How do you how do you track it currently like here?
+
+Jash Sheth: Your We are not tracking it currently but you Component, Allah, Batch, 1
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: Quantity Date Received status. Oh yes, we are. But that happened very early, I told, You Know, Kiki Bar a show, the Puri guitar. Two women, packaging, appetizers.
+
+Rakesh Sangolli: You got it, got it. So basically, both assemble both also assembles and.
+
+Jash Sheth: Here and sometimes Pura FG at the direct warehouse. To move many happy. Yeah, both also assembled both also gets full finished goods. Only that is ready to build to the customer as well. So he I told you right this is on Lord.
+
+Rakesh Sangolli: Correct. Yeah.
+
+Jash Sheth: So yeah, pick a few shoes. Have we be aesthetically? They still not very right.
+
+Rakesh Sangolli: Yeah, I'll completely understand, but this is enough to, you know, give us an idea.
+
+Jash Sheth: so this this is what we want, basically, as I tracker
+
+Rakesh Sangolli: Yeah.
+
+Jash Sheth: Okay, a shipment striker, a total quantity, kidney area cab area. Should you see if you see this the 88 to this was 20 seconds, not change to 24 and still it is hasn't reached our warehouse. This is overdue by eight days already. This is overdue by four days. This is four days to Portugal Sky. ETA a sixth, October. So I say, but that's basically a somebody view of what we need to ask to the 13s
+
+Rakesh Sangolli: Makes us face it.
+
+Jash Sheth: and, you know, get answers on basically minus minus naka na Perez up close.
+
+Rakesh Sangolli: Hmm.
+
+Jash Sheth: Close or less so subjects that fit. Next. The year it is written. This is Mkcfg. They finish good to
+
+Rakesh Sangolli: Couldn't, yeah.
+
+Jash Sheth: FG is finished, goods. Mkc is making China. MK is making India. CKD is completely knocked down matlabsavara and knock down conditioner, right here.
+
+Rakesh Sangolli: Uh, basically, that one, uh, kit option, basically.
+
+Jash Sheth: We are basically to you like all RM received together times.
+
+Ajmal ibn Abdul Jaleel: Okay.
+
+Jash Sheth: So each of BB I got currently it is on hold. Cast status, a skyscraper compan. Ies. That.
+
+Rakesh Sangolli: Okay.
+
+Jash Sheth: Direct energy.
+
+Rakesh Sangolli: Got it. So, like to summarize you need a production tracker?
+
+Jash Sheth: Yeah. Hmm.
+
+Rakesh Sangolli: And shipment tracker.
+
+Jash Sheth: Yes. Anti this. If you see that, this is only earphone and headphones and speakers right now, right?
+
+Rakesh Sangolli: Correct?
+
+Jash Sheth: We make watches. We make a lot of other things right to organ home. Quick into map software milia So, how much are you happy to bang with you the communities? Sound bar speaker, headphone personal audio, party speaker but Beto variables be a power banks. Be a Africa, top. Most of it already.
+
+Rakesh Sangolli: Got?
+
+Jash Sheth: And each at the end of the month, it changes right up by at the end of one more thing. I wanted to see, I tell you at the end of the month, you have to make a quick status irrespective of product entire He support 1.5 like units. I could only make one line fifty thousand. I
+
+Rakesh Sangolli: Hmm, got it. Got it.
+
+Jash Sheth: remaining was massive ias number 8, particular product, something like that. We'll make our channel, but that is my limit got extend towards. So go back.
+
+Rakesh Sangolli: God got it!
+
+Jash Sheth: yeah, so this is
+
+Rakesh Sangolli: Yeah, I think makes sense. So, production shipment. And that's what two things we need to track, right?
+
+Jash Sheth: Right. Yes.
+
+Rakesh Sangolli: Okay, okay.
+
+Jash Sheth: Basically Diego software enough, it's been whatever you what, I showed the dashboard, whatever your inputs can be which can make it more easier for us to track and most important. Not so many columns even I have to fill it manually. Right? The ball sorry but not be a task. Crazy. Could you drop down Mrs? Electronic date. My service. Fine. Just a BN, obviously, but aesthetically more better. More cleaner view. More easier to work.
+
+Rakesh Sangolli: Yeah.
+
+Jash Sheth: Hmm. Okay.
+
+Ajmal ibn Abdul Jaleel: That you maybe?
+
+Jash Sheth: Okay. Sorry.
+
+Rakesh Sangolli: Yeah, so.
+
+Jash Sheth: Okay.
+
+Rakesh Sangolli: The end product will look like, so it will be like the end product, but us.
+
+Jash Sheth: Okay.
+
+Rakesh Sangolli: On definitions and Logics. Internet definition. Balance.
+
+Jash Sheth: Okay. Okay definition stay here, right? Because sheet from my end and my
+
+Rakesh Sangolli: Uh, like, it's like 60 of the job is done. We do our work basically, you know, uh, like mapping everything to, you know, each thing to another. Make an extra sheet of a Google sheet onto.
+
+Jash Sheth: Take a map with sheet one. Okay, wait it all the terminologies on the formula that I think are matching
+
+Rakesh Sangolli: Yes, yeah.
+
+Jash Sheth: Just available Lord Quality and all of that.
+
+Rakesh Sangolli: Yeah, makes sense. Yeah, and if you have any internal Excel sheet that you use,
+
+Jash Sheth: Okay, I am Casey to be Chota terminal Logie there, and make a sheet and share it with you. Then it will be more easy for you to understand.
+
+Rakesh Sangolli: right, please share that also, uh, if it's also mock. Also, no worries. Uh, just do a column after the columns.
+
+Jash Sheth: Well sure.
+
+Rakesh Sangolli: Uh, record data is fine.
+
+Jash Sheth: They said to go ahead and use karate, but I'll make this sheet for you to stay up terminology and you can use that same. Then in the software.
+
+Rakesh Sangolli: Masons make sense. So, what I will do is I'll go ahead and create a group right now with all of us. Uh, we can, you know, share all of our work and updates there.
+
+Jash Sheth: Okay.
+
+Rakesh Sangolli: Okay, and, uh, I think at least. So, once UI is done, uh, I think it will be way faster, but we'll try to, you
+
+Jash Sheth: Right.
+
+Rakesh Sangolli: know, uh, do this in, like two weeks or something, you know, and after the demo also, so some same break like they will ask for some more things you you told
+
+Jash Sheth: Right.
+
+Rakesh Sangolli: from your perspective.
+
+Jash Sheth: They get me a lot of changes from there and that's why.
+
+Rakesh Sangolli: Yeah, so there there will be changes. Like, let's say, uh, there will be someone above you, right? So he'll be like admin, so he needs to have all the answers.
+
+Jash Sheth: Right.
+
+Rakesh Sangolli: Abby, uh, there are some people who are in the lower chain, right? We have already done stuff like that, so we have an idea how it works.
+
+Jash Sheth: Okay. Okay. Perfect.
+
+Rakesh Sangolli: And yeah, so we'll give an update on that basically.
+
+Jash Sheth: Don't know.
+
+Rakesh Sangolli: Even anything else you want to ask?
+
+Ajmal ibn Abdul Jaleel: Or you can, uh, almost to Clearwater.
+
+Rakesh Sangolli: Okay, so Josh will be troubling you quite a bit from now on.
+
+Jash Sheth: Already Snow White.
+
+Rakesh Sangolli: So, you know, bear with us.
+
+Jash Sheth: Yeah. Josh
+
+Rakesh Sangolli: Yeah.
+
+Jash Sheth: oh,
+
+Rakesh Sangolli: Sure. Then, if there's anything nothing else, I can drop off. Yes.
+
+Jash Sheth: Yeah, short. Thank you. Thank you.
+
+Rakesh Sangolli: Actress. Thank you, Chris.
+
+Ajmal ibn Abdul Jaleel: Thank you.
