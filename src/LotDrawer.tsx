@@ -13,10 +13,13 @@ import { productChoices, stamp } from './models'
 import {
   balance,
   dateLabel,
+  effectiveRmReadyDate,
   fullGrnDate,
   grnProgress,
   leadTime,
+  planDelay,
   quantity,
+  signedDays,
   rmMetrics,
   today,
   totalGrn,
@@ -352,7 +355,14 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             <div>
               <h3 className="section-title mb-3">Dates & logistics</h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="RM ready date at factory">
+                <Field
+                  label="RM ready date at factory"
+                  help={
+                    draft.rmMode === 'components'
+                      ? 'Leave blank to use the date the last required component was fully received.'
+                      : undefined
+                  }
+                >
                   <Input
                     type="date"
                     value={draft.rmReadyDate}
@@ -373,7 +383,10 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     onChange={(e) => update('revisedEta', e.target.value)}
                   />
                 </Field>
-                <Field label="Actual date">
+                <Field
+                  label="Actual date"
+                  help="Optional note. Completion timing is measured from the full GRN date."
+                >
                   <Input
                     type="date"
                     value={draft.actualDate}
@@ -388,11 +401,26 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     clearable
                   />
                 </Field>
-                <div className="rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
-                  <b>Full GRN date:</b> {dateLabel(fullGrnDate(draft, rs))}
-                  <br />
-                  <b>RM-to-GRN lead time:</b>{' '}
-                  {leadTime(draft, rs) === null ? 'Not available' : `${leadTime(draft, rs)} days`}
+                <div className="space-y-1 rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
+                  <div>
+                    <b>Full GRN date:</b> {dateLabel(fullGrnDate(draft, rs))}
+                  </div>
+                  <div>
+                    <b>Against planned date:</b>{' '}
+                    {planDelay(draft, rs) === null
+                      ? 'Not available'
+                      : signedDays(planDelay(draft, rs))}
+                  </div>
+                  <div>
+                    <b>RM ready:</b> {dateLabel(effectiveRmReadyDate(draft, bs))}
+                    {!draft.rmReadyDate && effectiveRmReadyDate(draft, bs) && ' (from batches)'}
+                  </div>
+                  <div>
+                    <b>RM-to-GRN lead time:</b>{' '}
+                    {leadTime(draft, rs, bs) === null
+                      ? 'Not available'
+                      : `${leadTime(draft, rs, bs)} days`}
+                  </div>
                 </div>
               </div>
             </div>

@@ -16,10 +16,14 @@ import {
   completed,
   dateLabel,
   effectiveLotEta,
+  fullGrnDate,
   grnProgress,
+  leadTime,
   lotFlags,
+  planDelay,
   quantity,
   rmMetrics,
+  signedDays,
   sum,
   today,
   totalGrn,
@@ -52,6 +56,9 @@ type Column =
   | 'mode'
   | 'rm'
   | 'followUp'
+  | 'fullGrn'
+  | 'planDelay'
+  | 'leadTime'
 const columnLabels: Record<Column, string> = {
   label: 'Lot',
   status: 'Status',
@@ -69,6 +76,9 @@ const columnLabels: Record<Column, string> = {
   mode: 'Mode',
   rm: 'RM Ready',
   followUp: 'Follow-up',
+  fullGrn: 'Full GRN Date',
+  planDelay: 'Vs Plan',
+  leadTime: 'RM→GRN Days',
 }
 const defaultCols: Column[] = [
   'label',
@@ -83,6 +93,18 @@ const defaultCols: Column[] = [
   'plannedDate',
   'eta',
   'blocker',
+]
+const completedCols: Column[] = [
+  'label',
+  'category',
+  'ems',
+  'lotQty',
+  'produced',
+  'grn',
+  'plannedDate',
+  'fullGrn',
+  'planDelay',
+  'leadTime',
 ]
 const simpleCols: Column[] = ['label', 'status', 'stage', 'lotQty', 'grn', 'balance', 'eta']
 const allCols = Object.keys(columnLabels) as Column[]
@@ -338,6 +360,24 @@ export default function Production({
         )}%`
       case 'followUp':
         return dateLabel(l.followUpDate)
+      case 'fullGrn':
+        return dateLabel(fullGrnDate(l, rs))
+      case 'planDelay': {
+        const delay = planDelay(l, rs)
+        return (
+          <span className={delay && delay > 0 ? 'font-semibold text-rose-700' : ''}>
+            {signedDays(delay)}
+          </span>
+        )
+      }
+      case 'leadTime':
+        return (
+          leadTime(
+            l,
+            rs,
+            data.rmBatches.filter((b) => b.lotId === l.id),
+          ) ?? '—'
+        )
     }
   }
   const csv = () => {
@@ -370,6 +410,14 @@ export default function Production({
         CurrentETA: effectiveLotEta(l),
         Blocker: l.blockerCategory,
         FollowUp: l.followUpDate,
+        FullGRNDate: fullGrnDate(l, rs),
+        DaysVsPlan: planDelay(l, rs) ?? '',
+        RMToGRNDays:
+          leadTime(
+            l,
+            rs,
+            data.rmBatches.filter((b) => b.lotId === l.id),
+          ) ?? '',
       }
     })
     downloadFile(`${mode}-lots-${today()}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
@@ -394,6 +442,7 @@ export default function Production({
   useEffect(() => {
     setExpanded([])
     setQuick('')
+    setColumns(mode === 'completed' ? completedCols : defaultCols)
   }, [mode])
   return (
     <div className="space-y-5">

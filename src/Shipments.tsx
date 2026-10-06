@@ -21,6 +21,7 @@ import {
   quantity,
   shipmentFlags,
   shipmentQuantity,
+  shipmentStatus,
   sum,
   today,
 } from './calculations'
@@ -167,6 +168,7 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
           CurrentETA: effectiveShipmentEta(s),
           ActualWarehouseArrival: s.actualArrival,
           Stage: s.stage,
+          Status: shipmentStatus(s),
           ETASlipDays: etaSlip(s) ?? '',
           ActualArrivalDelayDays: arrivalDelay(s) ?? '',
           Remarks: s.remarks,
@@ -284,7 +286,7 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
                     <th>ETD</th>
                     <th>Current ETA</th>
                     <th>ETA slip</th>
-                    <th>Stage</th>
+                    <th>Status</th>
                     <th>Arrival</th>
                     <th></th>
                   </tr>
@@ -315,11 +317,20 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
                       <td>
                         <Badge
                           tone={
-                            s.actualArrival ? 'green' : shipmentFlags(s).overdue ? 'red' : 'blue'
+                            s.actualArrival
+                              ? (arrivalDelay(s) ?? 0) > 0
+                                ? 'amber'
+                                : 'green'
+                              : shipmentFlags(s).overdue
+                                ? 'red'
+                                : 'blue'
                           }
                         >
-                          {s.actualArrival ? 'Arrived' : s.stage}
+                          {shipmentStatus(s)}
                         </Badge>
+                        {s.actualArrival && (
+                          <div className="mt-1 text-[11px] text-slate-500">Stage: {s.stage}</div>
+                        )}
                       </td>
                       <td>{dateLabel(s.actualArrival)}</td>
                       <td>
@@ -336,9 +347,17 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[#173b3d]">{s.number}</span>
                     <Badge
-                      tone={s.actualArrival ? 'green' : shipmentFlags(s).overdue ? 'red' : 'blue'}
+                      tone={
+                        s.actualArrival
+                          ? (arrivalDelay(s) ?? 0) > 0
+                            ? 'amber'
+                            : 'green'
+                          : shipmentFlags(s).overdue
+                            ? 'red'
+                            : 'blue'
+                      }
                     >
-                      {s.actualArrival ? 'Arrived' : s.stage}
+                      {shipmentStatus(s)}
                     </Badge>
                   </div>
                   <div className="mt-1 text-xs text-slate-500">

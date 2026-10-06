@@ -36,10 +36,37 @@ export function fullGrnDate(lot: Lot, receipts: GRNReceipt[]) {
     ? [...receipts].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || ''
     : ''
 }
-export function leadTime(lot: Lot, receipts: GRNReceipt[]) {
-  const date = fullGrnDate(lot, receipts)
-  return date && lot.rmReadyDate ? dayDiff(date, lot.rmReadyDate) : null
+// The manual RM ready date wins. In component mode it otherwise falls back to the date on which
+// the last required component's received total first covered the lot quantity.
+export function effectiveRmReadyDate(lot: Lot, batches: RMBatch[]) {
+  if (lot.rmReadyDate) return lot.rmReadyDate
+  if (lot.rmMode !== 'components' || !lot.rmComponents.length || lot.lotQty <= 0) return ''
+  const dates = lot.rmComponents.map((component) => {
+    let total = 0
+    const received = batches
+      .filter((b) => b.component === component && b.receivedQty > 0)
+      .sort((a, b) => a.receivedDate.localeCompare(b.receivedDate))
+    for (const b of received) {
+      if (!b.receivedDate) return ''
+      total += b.receivedQty
+      if (total >= lot.lotQty) return b.receivedDate
+    }
+    return ''
+  })
+  return dates.every(Boolean) ? dates.sort()[dates.length - 1] : ''
 }
+export function leadTime(lot: Lot, receipts: GRNReceipt[], batches: RMBatch[] = []) {
+  const date = fullGrnDate(lot, receipts),
+    ready = effectiveRmReadyDate(lot, batches)
+  return date && ready ? dayDiff(date, ready) : null
+}
+// Days between full GRN and the planned date; positive means the lot completed late.
+export function planDelay(lot: Lot, receipts: GRNReceipt[]) {
+  const date = fullGrnDate(lot, receipts)
+  return date && lot.plannedDate ? dayDiff(date, lot.plannedDate) : null
+}
+export const signedDays = (n: number | null) =>
+  n === null ? '—' : n === 0 ? 'On time' : `${Math.abs(n)}d ${n > 0 ? 'late' : 'early'}`
 export function effectiveLotEta(lot: Lot) {
   return lot.revisedEta || lot.plannedDate
 }
@@ -117,6 +144,20 @@ export function etaSlip(s: Shipment) {
 }
 export function arrivalDelay(s: Shipment) {
   return s.plannedEta && s.actualArrival ? dayDiff(s.actualArrival, s.plannedEta) : null
+}
+// Status label as the client tracks it: "Overdue 8d", "Arrived 6d late", otherwise the stage.
+export function shipmentStatus(s: Shipment, date = today()) {
+  const f = shipmentFlags(s, date)
+  if (f.arrived) {
+    const delay = arrivalDelay(s)
+    return delay === null
+      ? 'Arrived'
+      : delay === 0
+        ? 'Arrived on time'
+        : `Arrived ${signedDays(delay)}`
+  }
+  if (f.overdue) return `Overdue ${dayDiff(date, effectiveShipmentEta(s))}d`
+  return s.stage || 'In transit'
 }
 export function dateLabel(value: string) {
   if (!value) return 'Not set'

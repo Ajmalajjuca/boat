@@ -20,6 +20,9 @@ Settings lets you manage dropdown values, export all records as JSON, merge or r
 - Lot quantities and RM component quantities are provisionally finished-product-equivalent units. `Balance + total GRN = Lot Qty`.
 - Rework quantity is a subset of fresh production, not additional output.
 - In component mode, producible quantity is the smallest received total among required components, capped at lot quantity. All RM Received mode handles a kit as a single readiness quantity.
+- Fresh production and GRN are not capped by each other or by Lot Qty; the client's data has production above Lot Qty and GRN with no production entered.
+- Completed lots show the full GRN date (latest receipt), days late or early against the planned date, and RM-to-GRN lead time. In component mode a blank RM ready date is derived from the batch that last brought a required component up to Lot Qty.
+- Shipment status reads `Overdue Nd` from the current ETA, or `Arrived Nd late/early` against the original planned ETA.
 - Completion requires positive lot quantity and full GRN. Dates use date-only comparisons in the user's local calendar.
 - Shipment arrival means actual warehouse arrival. A stage label alone does not mark a shipment arrived.
 - Quantities are whole units. GRN receipt dates and actual warehouse arrival cannot be in the future, and shipment ETAs and arrival cannot be before ETD.
