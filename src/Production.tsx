@@ -21,6 +21,7 @@ import {
   quantity,
   rmMetrics,
   sum,
+  today,
   totalGrn,
 } from './calculations'
 import { downloadFile, toCsv } from './repository'
@@ -359,21 +360,19 @@ export default function Production({
         Rework: l.reworkQty,
         GRN: totalGrn(rs),
         Balance: balance(l, rs),
-        RMReady: rmMetrics(
-          l,
-          data.rmBatches.filter((b) => b.lotId === l.id),
-        ).percent,
+        RMReadyPercent: Math.round(
+          rmMetrics(
+            l,
+            data.rmBatches.filter((b) => b.lotId === l.id),
+          ).percent,
+        ),
         PlannedDate: l.plannedDate,
         CurrentETA: effectiveLotEta(l),
         Blocker: l.blockerCategory,
         FollowUp: l.followUpDate,
       }
     })
-    downloadFile(
-      `${mode}-lots-${new Date().toISOString().slice(0, 10)}.csv`,
-      toCsv(rows),
-      'text/csv;charset=utf-8',
-    )
+    downloadFile(`${mode}-lots-${today()}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
   }
   csvRef.current = csv
   const clear = () => {
@@ -605,7 +604,9 @@ export default function Production({
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-[#173b3d]">
                           {product.name}{' '}
-                          <span className="font-normal text-slate-500">· {product.variant}</span>
+                          {product.variant && (
+                            <span className="font-normal text-slate-500">· {product.variant}</span>
+                          )}
                         </span>
                         <span className="text-xs text-slate-500">
                           {product.segment} · {pl.length} lots ·{' '}
@@ -683,7 +684,7 @@ export default function Production({
                       <div>
                         <b className="text-sm text-[#173b3d]">{product.name}</b>
                         <span className="ml-2 text-xs text-slate-500">
-                          {product.variant} · {product.segment}
+                          {[product.variant, product.segment].filter(Boolean).join(' · ')}
                         </span>
                       </div>
                       <div className="flex gap-2">

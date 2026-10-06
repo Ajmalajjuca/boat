@@ -238,6 +238,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     value={draft.ems}
                     options={lookup('ems')}
                     onChange={(v) => update('ems', v)}
+                    clearable
                   />
                 </Field>
                 <Field label="Point of contact">
@@ -245,6 +246,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     value={draft.poc}
                     options={lookup('poc')}
                     onChange={(v) => update('poc', v)}
+                    clearable
                   />
                 </Field>
                 <label className="flex items-center gap-3 pt-6 text-sm text-slate-700">
@@ -383,6 +385,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     value={draft.logisticsMode}
                     options={lookup('logistics')}
                     onChange={(v) => update('logisticsMode', v)}
+                    clearable
                   />
                 </Field>
                 <div className="rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
@@ -470,6 +473,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     <Input
                       type="number"
                       min="0"
+                      step="1"
                       value={draft.readyQty}
                       onChange={(e) => update('readyQty', number(e.target.value))}
                     />
@@ -553,7 +557,17 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                   <tbody>
                     {bs.map((b) => (
                       <tr key={b.id}>
-                        <td>{b.component}</td>
+                        <td>
+                          {b.component}
+                          {!(
+                            draft.rmMode === 'components' &&
+                            draft.rmComponents.includes(b.component)
+                          ) && (
+                            <Badge tone="slate" className="ml-2">
+                              Not counted
+                            </Badge>
+                          )}
+                        </td>
                         <td>{b.label}</td>
                         <td>{quantity(b.plannedQty)}</td>
                         <td className="font-semibold">{quantity(b.receivedQty)}</td>
@@ -734,6 +748,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 <Input
                   type="number"
                   min="0"
+                  step="1"
                   required
                   value={batch.plannedQty}
                   onChange={(e) => setBatch({ ...batch, plannedQty: number(e.target.value) })}
@@ -743,6 +758,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 <Input
                   type="number"
                   min="0"
+                  step="1"
                   required
                   value={batch.receivedQty}
                   onChange={(e) => setBatch({ ...batch, receivedQty: number(e.target.value) })}
@@ -812,6 +828,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 <Input
                   type="date"
                   required
+                  max={today()}
                   value={receipt.date}
                   onChange={(e) => setReceipt({ ...receipt, date: e.target.value })}
                 />
@@ -820,6 +837,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 <Input
                   type="number"
                   min="1"
+                  step="1"
                   max={
                     draft.lotQty -
                     totalGrn(rs) +

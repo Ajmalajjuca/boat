@@ -15,6 +15,10 @@ import {
 } from 'react'
 
 export const cn = (...values: ClassValue[]) => twMerge(clsx(values))
+// Radix listens for Escape in the capture phase, so an open SearchSelect must veto closing its dialog.
+const keepOpenForSearch = (e: KeyboardEvent) => {
+  if (e.target instanceof Element && e.target.closest('[data-search-open]')) e.preventDefault()
+}
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
   {
@@ -153,6 +157,7 @@ export function Sheet({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[#092a2d]/50 backdrop-blur-[2px]" />
         <DialogPrimitive.Content
+          onEscapeKeyDown={keepOpenForSearch}
           className={cn(
             'fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-[#f8faf9] shadow-2xl outline-none',
             width === 'wide' ? 'max-w-[780px]' : 'max-w-[560px]',
@@ -201,7 +206,10 @@ export function Modal({
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-[#092a2d]/50" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-[71] max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none">
+        <DialogPrimitive.Content
+          onEscapeKeyDown={keepOpenForSearch}
+          className="fixed left-1/2 top-1/2 z-[71] max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none"
+        >
           <div className="mb-5 flex items-start justify-between">
             <DialogPrimitive.Title className="text-lg font-bold text-[#173b3d]">
               {title}
@@ -225,12 +233,14 @@ export function SearchSelect({
   options,
   placeholder = 'Select...',
   disabled = false,
+  clearable = false,
 }: {
   value: string
   onChange: (value: string) => void
   options: (string | { value: string; label: string })[]
   placeholder?: string
   disabled?: boolean
+  clearable?: boolean
 }) {
   const [open, setOpen] = useState(false),
     [term, setTerm] = useState(''),
@@ -251,7 +261,7 @@ export function SearchSelect({
   )
   const selected = normalized.find((option) => option.value === value)
   return (
-    <div ref={root} className="relative">
+    <div ref={root} className="relative" data-search-open={open || undefined}>
       <button
         type="button"
         disabled={disabled}
@@ -301,6 +311,18 @@ export function SearchSelect({
             }}
           />
           <div className="max-h-48 overflow-y-auto">
+            {clearable && value && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange('')
+                  setOpen(false)
+                }}
+                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm text-slate-500 hover:bg-slate-100 focus:bg-slate-100"
+              >
+                Clear selection
+              </button>
+            )}
             {matches.length ? (
               matches.map((option, index) => (
                 <button

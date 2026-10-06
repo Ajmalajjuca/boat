@@ -1,5 +1,5 @@
 import { dayOffset, today } from './calculations'
-import type { DataSet, Lot, LookupKind } from './models'
+import type { DataSet, Lot, LookupKind, LookupValue } from './models'
 import { stamp } from './models'
 
 export const lookupSeeds: Record<LookupKind, string[]> = {
@@ -36,16 +36,29 @@ export function seedLookups() {
     values.map((value, sort) => stamp({ kind: kind as LookupKind, value, sort })),
   )
 }
-export function newLot(productId: string): Lot {
+// Returns the preferred default when it still exists in Settings, otherwise the first value.
+export function defaultLookup(
+  values: LookupValue[] | undefined,
+  kind: LookupKind,
+  preferred: string,
+) {
+  if (!values) return preferred
+  const options = values
+    .filter((v) => v.kind === kind)
+    .sort((a, b) => a.sort - b.sort)
+    .map((v) => v.value)
+  return options.includes(preferred) ? preferred : options[0] || ''
+}
+export function newLot(productId: string, lookups?: LookupValue[]): Lot {
   return stamp({
     productId,
     label: '',
-    category: 'BAU',
+    category: defaultLookup(lookups, 'category', 'BAU'),
     directFg: false,
     ems: '',
     poc: '',
-    status: 'On Track',
-    stage: 'RM Sourcing',
+    status: defaultLookup(lookups, 'status', 'On Track'),
+    stage: defaultLookup(lookups, 'stage', 'RM Sourcing'),
     rmMode: 'all' as const,
     rmComponents: [],
     readyQty: 0,
@@ -58,7 +71,7 @@ export function newLot(productId: string): Lot {
     revisedEta: '',
     actualDate: '',
     logisticsMode: '',
-    blockerCategory: 'None',
+    blockerCategory: defaultLookup(lookups, 'blocker', 'None'),
     blockerDescription: '',
     followUpDate: '',
     followUpNote: '',

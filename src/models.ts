@@ -91,6 +91,14 @@ export type LookupKind =
   | 'logistics'
   | 'component'
   | 'shipmentStage'
+// Calculations depend on these exact labels, so they cannot be renamed or deleted.
+export const systemLookups: Partial<Record<LookupKind, string[]>> = {
+  status: ['On Track', 'Delayed', 'Hold'],
+  blocker: ['None', 'Approval Blocker'],
+  category: ['BAU'],
+}
+export const isSystemLookup = (kind: LookupKind, value: string) =>
+  !!systemLookups[kind]?.includes(value)
 export interface LookupValue extends RecordBase {
   kind: LookupKind
   value: string

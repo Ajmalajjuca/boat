@@ -10,8 +10,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { DataSet, Shipment, ShipmentItem } from './models'
+import type { DataSet, LookupValue, Shipment, ShipmentItem } from './models'
 import { productChoices, stamp } from './models'
+import { defaultLookup } from './demo'
 import {
   arrivalDelay,
   dateLabel,
@@ -42,7 +43,7 @@ type Props = {
   onOpen: (s: Shipment) => void
   csvRef: MutableRefObject<(() => void) | null>
 }
-export const newShipment = (): Shipment =>
+export const newShipment = (lookups?: LookupValue[]): Shipment =>
   stamp({
     number: '',
     vessel: '',
@@ -50,7 +51,7 @@ export const newShipment = (): Shipment =>
     plannedEta: '',
     revisedEta: '',
     actualArrival: '',
-    stage: 'In Transit',
+    stage: defaultLookup(lookups, 'shipmentStage', 'In Transit'),
     remarks: '',
   })
 export default function Shipments({ data, onOpen, csvRef }: Props) {
@@ -230,6 +231,7 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
             <option value="">All stages</option>
             {data.lookupValues
               .filter((v) => v.kind === 'shipmentStage')
+              .sort((a, b) => a.sort - b.sort)
               .map((v) => (
                 <option key={v.id}>{v.value}</option>
               ))}
@@ -387,15 +389,22 @@ export function ShipmentDrawer({
   onClose: () => void
   run: (fn: () => Promise<unknown>) => Promise<boolean>
 }) {
-  const initialLines = () => data.shipmentItems.filter((i) => i.shipmentId === shipment.id)
+  const blankLine = () => stamp({ shipmentId: shipment.id, productId: '', quantity: 1 })
+  // A new shipment starts with one empty product line so it can be filled in directly.
+  const initialLines = () => {
+    const current = data.shipmentItems.filter((i) => i.shipmentId === shipment.id)
+    return current.length || data.shipments.some((s) => s.id === shipment.id)
+      ? current
+      : [blankLine()]
+  }
   const [draft, setDraft] = useState(shipment),
     [lines, setLines] = useState<ShipmentItem[]>(initialLines),
-    [baseline, setBaseline] = useState(JSON.stringify({ shipment, lines: initialLines() })),
+    [baseline, setBaseline] = useState(() => JSON.stringify({ shipment, lines })),
     [reason, setReason] = useState(''),
     [note, setNote] = useState(''),
     [tab, setTab] = useState<'details' | 'history'>('details')
   useEffect(() => {
-    const current = data.shipmentItems.filter((i) => i.shipmentId === shipment.id)
+    const current = initialLines()
     setDraft(shipment)
     setLines(current)
     setBaseline(JSON.stringify({ shipment, lines: current }))
@@ -415,8 +424,7 @@ export function ShipmentDrawer({
       .map((v) => v.value)
   const update = <K extends keyof Shipment>(key: K, value: Shipment[K]) =>
     setDraft((d) => ({ ...d, [key]: value }))
-  const addLine = () =>
-    setLines([...lines, stamp({ shipmentId: shipment.id, productId: '', quantity: 1 })])
+  const addLine = () => setLines([...lines, blankLine()])
   const updateLine = (id: string, patch: Partial<ShipmentItem>) =>
     setLines(lines.map((line) => (line.id === id ? { ...line, ...patch } : line)))
   const save = async (e?: FormEvent) => {
@@ -547,6 +555,7 @@ export function ShipmentDrawer({
               <Field label="Actual warehouse arrival">
                 <Input
                   type="date"
+                  max={today()}
                   value={draft.actualArrival}
                   onChange={(e) => update('actualArrival', e.target.value)}
                 />
@@ -620,6 +629,12 @@ export function ShipmentDrawer({
               placeholder="Shipment context and next steps"
             />
           </Field>
+          {draft.stage === 'Arrived at Warehouse' && !draft.actualArrival && (
+            <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+              The stage says Arrived at Warehouse, but no actual arrival date is set, so this
+              shipment still counts as in transit.
+            </div>
+          )}
           <div className="rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
             An arrival is counted only when Actual warehouse arrival is set. The stage remains a
             separately editable operational label.

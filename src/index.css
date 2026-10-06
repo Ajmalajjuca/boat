@@ -13,53 +13,59 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
-* {
-  box-sizing: border-box;
+/* Base rules stay layered so Tailwind text-size utilities apply to buttons and inputs. */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-width: 320px;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid #df7b43;
+    outline-offset: 2px;
+  }
 }
-body {
-  margin: 0;
-  min-width: 320px;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid #df7b43;
-  outline-offset: 2px;
-}
-.field {
-  display: block;
-  width: 100%;
-  min-height: 40px;
-  border: 1px solid #d9e2e4;
-  border-radius: 9px;
-  background: #fff;
-  padding: 9px 11px;
-  color: #273e43;
-  font-size: 13px;
-  outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-}
-.field:focus,
-.field:focus-visible {
-  border-color: #d77a43;
-  box-shadow: 0 0 0 3px rgba(219, 109, 50, 0.14);
-}
-.field::placeholder {
-  color: #94a3a8;
-}
-.field-label {
-  display: block;
-  margin-bottom: 6px;
-  color: #486065;
-  font-size: 12px;
-  font-weight: 700;
+/* Layered so Tailwind utilities on a control (flex, pl-9, min-h-20) can override it. */
+@layer components {
+  .field {
+    display: block;
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid #d9e2e4;
+    border-radius: 9px;
+    background: #fff;
+    padding: 9px 11px;
+    color: #273e43;
+    font-size: 13px;
+    outline: none;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .field:focus,
+  .field:focus-visible {
+    border-color: #d77a43;
+    box-shadow: 0 0 0 3px rgba(219, 109, 50, 0.14);
+  }
+  .field::placeholder {
+    color: #94a3a8;
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 6px;
+    color: #486065;
+    font-size: 12px;
+    font-weight: 700;
+  }
 }
 .table-wrap {
   overflow: auto;

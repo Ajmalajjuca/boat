@@ -1,0 +1,764 @@
+{
+  "app": "Supply Chain Control Tower",
+  "schemaVersion": 1,
+  "exportedAt": "2026-10-06T09:01:26.470Z",
+  "data": {
+    "products": [
+      {
+        "name": "Test EchoPods Lite",
+        "variant": "Slate",
+        "segment": "PA / TWS",
+        "id": "9b01f03d-f409-48bf-9020-e38d459c584f",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "name": "Test WaveBand Flex",
+        "variant": "Ocean",
+        "segment": "Headphones & Neckbands",
+        "id": "8265ff63-5c7e-4a1c-8769-0f71add7d6a0",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "name": "Test SoundDock 300",
+        "variant": "Black",
+        "segment": "Soundbars",
+        "id": "1a7d53e8-461b-47c6-bc15-b679f528a041",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "name": "Test PartyPulse 500",
+        "variant": "Red",
+        "segment": "Party Speakers",
+        "id": "7e9e410e-ff08-49e1-b8e3-79bdb97a9604",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "lots": [
+      {
+        "productId": "9b01f03d-f409-48bf-9020-e38d459c584f",
+        "label": "TEST-EP-001",
+        "category": "NPI",
+        "directFg": false,
+        "ems": "Orion EMS",
+        "poc": "Maya Shah",
+        "status": "Delayed",
+        "stage": "Factory Production",
+        "rmMode": "components",
+        "rmComponents": [
+          "Plastic",
+          "PCBA",
+          "Battery"
+        ],
+        "readyQty": 0,
+        "lotQty": 1000,
+        "freshProductionQty": 450,
+        "reworkQty": 25,
+        "reworkReason": "Charging-contact alignment",
+        "rmReadyDate": "",
+        "plannedDate": "2026-10-05",
+        "revisedEta": "2026-10-08",
+        "actualDate": "",
+        "logisticsMode": "Road",
+        "blockerCategory": "RM Blocker",
+        "blockerDescription": "Battery batch short by 400 units",
+        "followUpDate": "2026-10-06",
+        "followUpNote": "Confirm battery delivery",
+        "id": "343aaf64-edfe-4dbd-bb15-fe40310607d6",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "productId": "9b01f03d-f409-48bf-9020-e38d459c584f",
+        "label": "TEST-EP-002",
+        "category": "BAU",
+        "directFg": false,
+        "ems": "Orion EMS",
+        "poc": "Maya Shah",
+        "status": "On Track",
+        "stage": "In Transit to WH",
+        "rmMode": "all",
+        "rmComponents": [],
+        "readyQty": 500,
+        "lotQty": 500,
+        "freshProductionQty": 500,
+        "reworkQty": 0,
+        "reworkReason": "",
+        "rmReadyDate": "2026-09-25",
+        "plannedDate": "2026-10-04",
+        "revisedEta": "",
+        "actualDate": "2026-10-05",
+        "logisticsMode": "Road",
+        "blockerCategory": "None",
+        "blockerDescription": "",
+        "followUpDate": "",
+        "followUpNote": "",
+        "id": "ac5b0eed-bed4-439c-bc16-77a6e8f613fa",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "productId": "8265ff63-5c7e-4a1c-8769-0f71add7d6a0",
+        "label": "TEST-WB-001",
+        "category": "BAU",
+        "directFg": false,
+        "ems": "Aster Manufacturing",
+        "poc": "Rohit Mehta",
+        "status": "On Track",
+        "stage": "PDI/QC",
+        "rmMode": "all",
+        "rmComponents": [],
+        "readyQty": 750,
+        "lotQty": 750,
+        "freshProductionQty": 450,
+        "reworkQty": 0,
+        "reworkReason": "",
+        "rmReadyDate": "",
+        "plannedDate": "2026-10-03",
+        "revisedEta": "",
+        "actualDate": "",
+        "logisticsMode": "Road",
+        "blockerCategory": "None",
+        "blockerDescription": "",
+        "followUpDate": "",
+        "followUpNote": "",
+        "id": "94bea87e-bddc-4991-b30e-2b98519130bf",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "productId": "1a7d53e8-461b-47c6-bc15-b679f528a041",
+        "label": "TEST-SD-001",
+        "category": "NPI",
+        "directFg": false,
+        "ems": "Delta Assembly",
+        "poc": "Anika Rao",
+        "status": "On Track",
+        "stage": "Factory Production",
+        "rmMode": "components",
+        "rmComponents": [
+          "Shell",
+          "PCBA",
+          "Packaging"
+        ],
+        "readyQty": 0,
+        "lotQty": 400,
+        "freshProductionQty": 150,
+        "reworkQty": 0,
+        "reworkReason": "",
+        "rmReadyDate": "",
+        "plannedDate": "2026-10-11",
+        "revisedEta": "",
+        "actualDate": "",
+        "logisticsMode": "Road",
+        "blockerCategory": "None",
+        "blockerDescription": "",
+        "followUpDate": "",
+        "followUpNote": "",
+        "id": "4ceae9a8-be50-4c28-af32-b23051e4a6ca",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "rmBatches": [
+      {
+        "lotId": "343aaf64-edfe-4dbd-bb15-fe40310607d6",
+        "component": "Plastic",
+        "label": "TEST-PL-01",
+        "plannedQty": 1000,
+        "plannedDate": "2026-10-01",
+        "receivedQty": 1000,
+        "receivedDate": "2026-10-04",
+        "status": "Received",
+        "notes": "",
+        "id": "73c9da84-021c-458b-8143-b36afd0d5844",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "343aaf64-edfe-4dbd-bb15-fe40310607d6",
+        "component": "PCBA",
+        "label": "TEST-PC-01",
+        "plannedQty": 1000,
+        "plannedDate": "2026-10-01",
+        "receivedQty": 800,
+        "receivedDate": "2026-10-04",
+        "status": "Partial",
+        "notes": "",
+        "id": "c3c42a30-3e9c-415f-8620-4d82ca9e51cd",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "343aaf64-edfe-4dbd-bb15-fe40310607d6",
+        "component": "Battery",
+        "label": "TEST-BT-01",
+        "plannedQty": 1000,
+        "plannedDate": "2026-10-01",
+        "receivedQty": 600,
+        "receivedDate": "2026-10-04",
+        "status": "Partial",
+        "notes": "",
+        "id": "9211fb77-63eb-4cab-b87b-b1594f49f881",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "4ceae9a8-be50-4c28-af32-b23051e4a6ca",
+        "component": "Shell",
+        "label": "TEST-SH-01",
+        "plannedQty": 400,
+        "plannedDate": "2026-10-01",
+        "receivedQty": 400,
+        "receivedDate": "2026-10-04",
+        "status": "Received",
+        "notes": "",
+        "id": "77999787-577b-434e-a073-b88acc36535c",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "4ceae9a8-be50-4c28-af32-b23051e4a6ca",
+        "component": "PCBA",
+        "label": "TEST-PC-02",
+        "plannedQty": 400,
+        "plannedDate": "2026-10-01",
+        "receivedQty": 400,
+        "receivedDate": "2026-10-04",
+        "status": "Received",
+        "notes": "",
+        "id": "b0867cb7-5938-4967-bf82-55c068011065",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "4ceae9a8-be50-4c28-af32-b23051e4a6ca",
+        "component": "Packaging",
+        "label": "TEST-PK-01",
+        "plannedQty": 400,
+        "plannedDate": "2026-10-01",
+        "receivedQty": 400,
+        "receivedDate": "2026-10-04",
+        "status": "Received",
+        "notes": "",
+        "id": "1f42fb47-acc9-4f2a-940d-b03e17953f2d",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "grnReceipts": [
+      {
+        "lotId": "343aaf64-edfe-4dbd-bb15-fe40310607d6",
+        "label": "TEST-EP-001 partial receipt",
+        "date": "2026-10-05",
+        "quantity": 200,
+        "note": "First cartons received",
+        "id": "b1c4d150-fa70-424a-9b04-86f0c6bf13b6",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "ac5b0eed-bed4-439c-bc16-77a6e8f613fa",
+        "label": "TEST-EP-002 dock A",
+        "date": "2026-10-04",
+        "quantity": 300,
+        "note": "Partial GRN",
+        "id": "2ab909b2-d250-4112-8baf-7ff9f5ab6e70",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "ac5b0eed-bed4-439c-bc16-77a6e8f613fa",
+        "label": "TEST-EP-002 dock B",
+        "date": "2026-10-05",
+        "quantity": 200,
+        "note": "Full GRN",
+        "id": "99cd56dc-f48d-4bc3-89e6-5922e2e26072",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "lotId": "94bea87e-bddc-4991-b30e-2b98519130bf",
+        "label": "TEST-WB-001 partial receipt",
+        "date": "2026-10-05",
+        "quantity": 100,
+        "note": "PDI-cleared units",
+        "id": "f651d99f-ffdc-4100-a1a1-e25f96097a38",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "shipments": [
+      {
+        "number": "TEST-SEA-001",
+        "vessel": "MV Sample Horizon",
+        "etd": "2026-09-26",
+        "plannedEta": "2026-10-04",
+        "revisedEta": "2026-10-09",
+        "actualArrival": "",
+        "stage": "Reached Port",
+        "remarks": "Port congestion; awaiting customs clearance",
+        "id": "eb5969cc-bef0-4b07-a410-ba5663ff9019",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "number": "TEST-AIR-002",
+        "vessel": "Sample Air Cargo 204",
+        "etd": "2026-10-02",
+        "plannedEta": "2026-10-05",
+        "revisedEta": "",
+        "actualArrival": "2026-10-06",
+        "stage": "Arrived at Warehouse",
+        "remarks": "Received and counted at warehouse",
+        "id": "2cd34697-e835-46c9-bcd3-de9e40cab0e5",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "number": "TEST-SEA-003",
+        "vessel": "MV Sample Meridian",
+        "etd": "2026-09-22",
+        "plannedEta": "2026-10-02",
+        "revisedEta": "",
+        "actualArrival": "",
+        "stage": "CFS Movement Awaited",
+        "remarks": "Overdue; request delivery update",
+        "id": "e1794561-b58f-40eb-8dbb-f5ed903cb2c0",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "shipmentItems": [
+      {
+        "shipmentId": "eb5969cc-bef0-4b07-a410-ba5663ff9019",
+        "productId": "9b01f03d-f409-48bf-9020-e38d459c584f",
+        "quantity": 300,
+        "id": "093318d1-522b-42bf-ae9a-5df9bdfc19ed",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "shipmentId": "eb5969cc-bef0-4b07-a410-ba5663ff9019",
+        "productId": "1a7d53e8-461b-47c6-bc15-b679f528a041",
+        "quantity": 150,
+        "id": "8826df05-4667-4711-97ab-ba6a05d9cf09",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "shipmentId": "2cd34697-e835-46c9-bcd3-de9e40cab0e5",
+        "productId": "1a7d53e8-461b-47c6-bc15-b679f528a041",
+        "quantity": 100,
+        "id": "110cd498-baea-46e7-a478-4a970773d26c",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "shipmentId": "e1794561-b58f-40eb-8dbb-f5ed903cb2c0",
+        "productId": "8265ff63-5c7e-4a1c-8769-0f71add7d6a0",
+        "quantity": 600,
+        "id": "81544605-ea9a-4246-a90d-033e1addd2d9",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "etaRevisions": [
+      {
+        "shipmentId": "eb5969cc-bef0-4b07-a410-ba5663ff9019",
+        "previousDate": "2026-10-04",
+        "newDate": "2026-10-09",
+        "reason": "Port congestion",
+        "id": "953bbb23-c800-4175-91ef-f9ed16ffc065",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "activityLogs": [
+      {
+        "entityType": "lot",
+        "entityId": "343aaf64-edfe-4dbd-bb15-fe40310607d6",
+        "message": "Follow up with supplier on remaining battery units",
+        "kind": "note",
+        "id": "cc743810-2fcd-4d34-833e-2f9e1e89e162",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "entityType": "shipment",
+        "entityId": "eb5969cc-bef0-4b07-a410-ba5663ff9019",
+        "message": "Customs documentation submitted",
+        "kind": "note",
+        "id": "cba0c787-55d8-4e7c-b7b2-99b1e1028fb4",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "lookupValues": [
+      {
+        "kind": "segment",
+        "value": "PA / TWS",
+        "sort": 0,
+        "id": "e521e121-ea10-402c-96c6-57471cf9fd95",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "segment",
+        "value": "Headphones & Neckbands",
+        "sort": 1,
+        "id": "54a1c53e-9224-48ff-a0d4-9f68c95c91d9",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "segment",
+        "value": "BT Speakers",
+        "sort": 2,
+        "id": "8e8281b5-6134-451d-93e0-d06392de95ca",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "segment",
+        "value": "Soundbars",
+        "sort": 3,
+        "id": "01a240a1-cc63-4714-8250-43cc0094a7c2",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "segment",
+        "value": "Party Speakers",
+        "sort": 4,
+        "id": "117b93e6-4dd2-43a4-b403-3552b1acb8f3",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "category",
+        "value": "BAU",
+        "sort": 0,
+        "id": "17f5b131-f878-434b-a69e-857c430f22df",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "category",
+        "value": "NPI",
+        "sort": 1,
+        "id": "f5f70767-8fa9-4bdb-a3c9-a4db3d3de437",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "ems",
+        "value": "Orion EMS",
+        "sort": 0,
+        "id": "5ba13709-a21c-493a-bcf6-4730d99754dd",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "ems",
+        "value": "Aster Manufacturing",
+        "sort": 1,
+        "id": "22f4ec29-f16e-48ef-bb1b-2a37065b06ca",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "ems",
+        "value": "Delta Assembly",
+        "sort": 2,
+        "id": "f94f7e4b-a627-4884-acba-a12ba49ab6a0",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "poc",
+        "value": "Maya Shah",
+        "sort": 0,
+        "id": "9db9d81f-0c78-4ddf-9d03-2b9c7fadf757",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "poc",
+        "value": "Rohit Mehta",
+        "sort": 1,
+        "id": "0da2ccbc-f8c6-437a-bacc-fba0ec2400b8",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "poc",
+        "value": "Anika Rao",
+        "sort": 2,
+        "id": "473513e0-0829-4292-97f1-38f51fd70f1a",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "status",
+        "value": "On Track",
+        "sort": 0,
+        "id": "bd5db7d9-d6f3-4f0a-87f2-b40bf36ff103",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "status",
+        "value": "Delayed",
+        "sort": 1,
+        "id": "59e13972-4fb5-4ea1-ace6-e54c4fc61b33",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "status",
+        "value": "Hold",
+        "sort": 2,
+        "id": "480321b0-cd26-4ad9-88cb-5b164806bae3",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "stage",
+        "value": "RM Sourcing",
+        "sort": 0,
+        "id": "2d7f5411-2a28-457d-be88-3132b3905743",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "stage",
+        "value": "Factory Production",
+        "sort": 1,
+        "id": "2c2ac7ec-7a02-4f7b-bbd8-4f65fe954395",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "stage",
+        "value": "Ready at Factory",
+        "sort": 2,
+        "id": "30688261-aa19-4e94-ac86-f7d3c5e3dd59",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "stage",
+        "value": "PDI/QC",
+        "sort": 3,
+        "id": "d2605802-b957-4eda-90d7-2b9da25cbc72",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "stage",
+        "value": "In Transit to WH",
+        "sort": 4,
+        "id": "942ed9d0-fe13-403b-9c27-f5e3a866380d",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "None",
+        "sort": 0,
+        "id": "d7a2e9c6-d6f5-4a81-8ccf-bfec09fa972e",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "RM Blocker",
+        "sort": 1,
+        "id": "d4997ebe-340a-4e80-8d29-081cb07bfabb",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "Quality-PDI Blocker",
+        "sort": 2,
+        "id": "7eb22db7-bfa5-4580-bf8e-462dd0b77a60",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "Manpower Constraint",
+        "sort": 3,
+        "id": "f267cb45-4453-44e8-9e4e-31d283e1697c",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "Logistics-Customs Blocker",
+        "sort": 4,
+        "id": "a8929e2d-79b7-4aa5-b012-d2ca6f0837b9",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "Approval Blocker",
+        "sort": 5,
+        "id": "6ca3e174-2ea8-4e69-bdef-e75fe31d710b",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "blocker",
+        "value": "Other",
+        "sort": 6,
+        "id": "bfec97bd-00d3-455e-840d-332a5d14d473",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "logistics",
+        "value": "Road",
+        "sort": 0,
+        "id": "05763928-b41e-41f6-b519-5fb47f8ed599",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "logistics",
+        "value": "Air",
+        "sort": 1,
+        "id": "2a01258f-ab22-4a27-a45f-0c8b7a667aa7",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "logistics",
+        "value": "Sea",
+        "sort": 2,
+        "id": "72151096-3c74-493b-9fd1-01a9bef0a768",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "logistics",
+        "value": "Rail",
+        "sort": 3,
+        "id": "65421af3-6236-4353-ba82-cefdfdfc060c",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "Kit (All Together)",
+        "sort": 0,
+        "id": "6666b478-5ff9-473b-ba26-6cbe7e3b4e76",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "Plastic",
+        "sort": 1,
+        "id": "eda3bd9f-fe94-4297-939f-01a597dd799e",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "PCBA",
+        "sort": 2,
+        "id": "cdea10c7-8898-46a0-a790-9b9e5fbd3ae9",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "Battery",
+        "sort": 3,
+        "id": "1f379a1d-0384-486e-ad18-7848ae0819fa",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "Shell",
+        "sort": 4,
+        "id": "81903aea-1a17-4ea1-bd11-aa1af79a3f23",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "Packaging",
+        "sort": 5,
+        "id": "e2151ce0-93aa-4f64-b18c-46a5d6b3cc69",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "EVA",
+        "sort": 6,
+        "id": "a2fdf4ee-0ec2-4e46-8bc2-9d3e83b5b798",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "component",
+        "value": "Other",
+        "sort": 7,
+        "id": "72dbb9bd-f22f-4b02-a064-3a83b8956eaa",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "shipmentStage",
+        "value": "In Transit",
+        "sort": 0,
+        "id": "3d077301-1a4f-4199-a25e-33ad310fe520",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "shipmentStage",
+        "value": "Reached Port",
+        "sort": 1,
+        "id": "92c15a1c-809a-4b7c-ab2c-bf130328c4ad",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "shipmentStage",
+        "value": "CFS Movement Awaited",
+        "sort": 2,
+        "id": "cb5d8419-e690-40f7-8d3a-f0d7c557832d",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      },
+      {
+        "kind": "shipmentStage",
+        "value": "Arrived at Warehouse",
+        "sort": 3,
+        "id": "2be5c4a9-bbdd-44cd-94a8-ad00c5fbe937",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ],
+    "settings": [
+      {
+        "key": "initialized",
+        "value": "test-backup",
+        "id": "f06f64fc-1006-4b24-bb34-2eaabf1f30f1",
+        "createdAt": "2026-10-06T09:01:26.470Z",
+        "updatedAt": "2026-10-06T09:01:26.470Z"
+      }
+    ]
+  }
+}

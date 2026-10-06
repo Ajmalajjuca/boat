@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { db, getData } from './db'
-import type { DataSet, Lot, Product, Shipment } from './models'
+import type { DataSet, LookupValue, Lot, Product, Shipment } from './models'
 import { dataKeys, productChoices, stamp } from './models'
 import { completed, quantity, today } from './calculations'
 import {
@@ -35,7 +35,7 @@ import LotDrawer from './LotDrawer'
 import Shipments, { newShipment, ShipmentDrawer } from './Shipments'
 import Settings, { performReset } from './Settings'
 import { Badge, Button, Card, Field, Input, Modal, SearchSelect } from './ui'
-import { newLot } from './demo'
+import { defaultLookup, newLot } from './demo'
 
 type Screen = 'production' | 'completed' | 'shipments' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -54,8 +54,8 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
   },
   settings: { title: 'Settings', description: 'Manage operational values and local browser data.' },
 }
-function productBlank(): Product {
-  return stamp({ name: '', variant: '', segment: 'PA / TWS' })
+function productBlank(lookups: LookupValue[]): Product {
+  return stamp({ name: '', variant: '', segment: defaultLookup(lookups, 'segment', 'PA / TWS') })
 }
 export default function App() {
   const data = useLiveQuery(getData, [])
@@ -95,7 +95,7 @@ export default function App() {
     }
   }
   const openProduct = (value?: Product) => {
-    const next = value || productBlank()
+    const next = value || productBlank(data?.lookupValues || [])
     setProduct(next)
     setProductBase(JSON.stringify(next))
   }
@@ -227,9 +227,7 @@ export default function App() {
             <div className="text-xs font-bold uppercase tracking-[.22em] text-teal-200">
               Supply chain workspace
             </div>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">
-              Your app starts here.
-            </h1>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Your app starts here.</h1>
             <p className="mt-3 text-sm leading-6 text-teal-100">
               Track production lots, material shortages, partial GRN receipts, and finished goods
               shipments in one local workspace.
@@ -272,11 +270,7 @@ export default function App() {
                 <Box size={22} />
               </div>
               <div>
-                <div className="text-sm font-extrabold leading-4 tracking-wide">
-                  BOAT
-                  <br />
-                  
-                </div>
+                <div className="text-sm font-extrabold leading-4 tracking-wide">BOAT</div>
                 <div className="mt-1 text-[9px] font-semibold uppercase tracking-widest text-teal-200">
                   Supply chain
                 </div>
@@ -388,7 +382,7 @@ export default function App() {
                   )}
                 </>
               ) : screen === 'shipments' ? (
-                <Button onClick={() => setSelectedShipment(newShipment())}>
+                <Button onClick={() => setSelectedShipment(newShipment(data.lookupValues))}>
                   <Plus size={16} /> Add Shipment
                 </Button>
               ) : null}
@@ -443,7 +437,7 @@ export default function App() {
               data={data}
               mode={screen === 'production' ? 'active' : 'completed'}
               onOpenLot={setSelectedLot}
-              onNewLot={(productId) => setSelectedLot(newLot(productId))}
+              onNewLot={(productId) => setSelectedLot(newLot(productId, data.lookupValues))}
               onEditProduct={openProduct}
               csvRef={csvRef}
             />
@@ -552,7 +546,7 @@ export default function App() {
               disabled={!addLotProductId}
               onClick={() => {
                 setAddLotOpen(false)
-                setSelectedLot(newLot(addLotProductId))
+                setSelectedLot(newLot(addLotProductId, data.lookupValues))
               }}
             >
               Continue to lot details
@@ -563,7 +557,8 @@ export default function App() {
       <Modal open={importOpen} onOpenChange={setImportOpen} title="Import JSON backup">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Choose a App JSON export. The file is checked before any records are written.
+            Choose a JSON backup exported from this app. The file is checked before any records are
+            written.
           </p>
           <Field label="Backup file">
             <Input

@@ -11,6 +11,8 @@ import {
   Upload,
 } from 'lucide-react'
 import type { DataSet, LookupKind, LookupValue } from './models'
+import { isSystemLookup } from './models'
+import { SCHEMA_VERSION } from './db'
 import { deleteLookup, resetData, saveLookup } from './repository'
 import { Badge, Button, Card, Empty, Field, Input, Modal } from './ui'
 
@@ -56,7 +58,7 @@ export default function Settings({
             <h2 className="text-base font-bold text-[#173b3d]">Dropdown values</h2>
             <p className="mt-1 text-xs text-slate-500">
               Add values as your operation evolves. Values in use cannot be renamed or deleted until
-              records are reassigned.
+              records are reassigned. Required values drive status cards and cannot be changed.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row">
@@ -94,12 +96,25 @@ export default function Settings({
                     key={item.id}
                     className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5"
                   >
-                    <span className="text-sm font-medium text-slate-700">{item.value}</span>
+                    <span className="text-sm font-medium text-slate-700">
+                      {item.value}
+                      {isSystemLookup(item.kind, item.value) && (
+                        <Badge className="ml-2" tone="slate">
+                          Required
+                        </Badge>
+                      )}
+                    </span>
                     <div className="flex gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
                         aria-label={`Rename ${item.value}`}
+                        disabled={isSystemLookup(item.kind, item.value)}
+                        title={
+                          isSystemLookup(item.kind, item.value)
+                            ? 'Used by app calculations; cannot be renamed'
+                            : undefined
+                        }
                         onClick={() => {
                           setEditing(item)
                           setEditValue(item.value)
@@ -112,6 +127,12 @@ export default function Settings({
                         size="icon"
                         className="text-rose-700"
                         aria-label={`Delete ${item.value}`}
+                        disabled={isSystemLookup(item.kind, item.value)}
+                        title={
+                          isSystemLookup(item.kind, item.value)
+                            ? 'Used by app calculations; cannot be deleted'
+                            : undefined
+                        }
                         onClick={async () => {
                           if (
                             window.confirm(
@@ -230,7 +251,7 @@ export default function Settings({
             </div>
             <div className="flex justify-between">
               <span>Schema version</span>
-              <Badge>1</Badge>
+              <Badge>{SCHEMA_VERSION}</Badge>
             </div>
           </div>
         </Card>

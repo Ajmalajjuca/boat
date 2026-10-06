@@ -22,5 +22,8 @@ Settings lets you manage dropdown values, export all records as JSON, merge or r
 - In component mode, producible quantity is the smallest received total among required components, capped at lot quantity. All RM Received mode handles a kit as a single readiness quantity.
 - Completion requires positive lot quantity and full GRN. Dates use date-only comparisons in the user's local calendar.
 - Shipment arrival means actual warehouse arrival. A stage label alone does not mark a shipment arrived.
+- Quantities are whole units. GRN receipt dates and actual warehouse arrival cannot be in the future, and shipment ETAs and arrival cannot be before ETD.
+- Lot labels are unique within a product, shipment invoice numbers are unique, and a product appears once per shipment.
+- Saved records must use values that exist in Settings, so every JSON export can be imported again. The values `On Track`, `Delayed`, `Hold`, `None`, `Approval Blocker`, and `BAU` drive the summary cards and cannot be renamed or deleted.
 
 The full implementation plan is in `docs/superpowers/plans/2026-10-05-supply-chain-control-tower.md`.
