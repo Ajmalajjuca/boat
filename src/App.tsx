@@ -212,7 +212,7 @@ export default function App() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6]">
         <div className="flex items-center gap-3 text-sm font-semibold text-[#173b3d]">
-          <Activity className="animate-pulse text-[#d96d35]" /> Loading Control Tower...
+          <Activity className="animate-pulse text-[#d96d35]" /> Loading...
         </div>
       </div>
     )
@@ -228,7 +228,7 @@ export default function App() {
               Supply chain workspace
             </div>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight">
-              Your control tower starts here.
+              Your app starts here.
             </h1>
             <p className="mt-3 text-sm leading-6 text-teal-100">
               Track production lots, material shortages, partial GRN receipts, and finished goods
@@ -273,9 +273,9 @@ export default function App() {
               </div>
               <div>
                 <div className="text-sm font-extrabold leading-4 tracking-wide">
-                  CONTROL
+                  BOAT
                   <br />
-                  TOWER
+                  
                 </div>
                 <div className="mt-1 text-[9px] font-semibold uppercase tracking-widest text-teal-200">
                   Supply chain
@@ -563,7 +563,7 @@ export default function App() {
       <Modal open={importOpen} onOpenChange={setImportOpen} title="Import JSON backup">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Choose a Control Tower JSON export. The file is checked before any records are written.
+            Choose a App JSON export. The file is checked before any records are written.
           </p>
           <Field label="Backup file">
             <Input
