@@ -71,7 +71,7 @@ export default function Settings({
       setEditing(null)
   }
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
       <div className="space-y-5">
         <Card>
           <div className="border-b border-slate-100 px-5 py-4">

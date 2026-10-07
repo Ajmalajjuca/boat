@@ -46,7 +46,7 @@ import {
 type Props = {
   data: DataSet
   onOpen: (s: Shipment) => void
-  csvRef: MutableRefObject<(() => void) | null>
+  csvRef: MutableRefObject<(() => boolean) | null>
 }
 export const newShipment = (lookups?: LookupValue[]): Shipment =>
   stamp({
@@ -154,6 +154,7 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
     },
   ]
   const csv = () =>
+    shipments.length > 0 &&
     downloadFile(
       `shipments-${today()}.csv`,
       toCsv(
@@ -725,7 +726,8 @@ export function ShipmentDrawer({
             An arrival is counted only when Actual warehouse arrival is set. The stage remains a
             separately editable operational label.
           </div>
-          <button type="submit" className="sr-only">
+          {/* Lets Enter submit the form; hidden from assistive tech to avoid a duplicate Save. */}
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
             Save shipment
           </button>
         </form>

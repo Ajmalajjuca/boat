@@ -38,7 +38,8 @@ type Props = {
   onOpenLot: (lot: Lot) => void
   onNewLot: (productId: string) => void
   onEditProduct: (product: Product) => void
-  csvRef: MutableRefObject<(() => void) | null>
+  onAddProduct: () => void
+  csvRef: MutableRefObject<(() => boolean) | null>
 }
 type Column =
   | 'label'
@@ -109,6 +110,16 @@ const completedCols: Column[] = [
 ]
 const simpleCols: Column[] = ['label', 'status', 'stage', 'lotQty', 'grn', 'balance', 'eta']
 const allCols = Object.keys(columnLabels) as Column[]
+const filterPlaceholders = {
+  segment: 'All segments',
+  category: 'All categories',
+  ems: 'All EMS',
+  poc: 'All POCs',
+  status: 'All statuses',
+  stage: 'All stages',
+  mode: 'All modes',
+  blocker: 'All blockers',
+}
 const statuses = (lot: Lot, receipts: DataSet['grnReceipts']) => {
   const f = lotFlags(lot, receipts)
   if (f.done) return <Badge tone="green">Completed</Badge>
@@ -129,6 +140,7 @@ export default function Production({
   onOpenLot,
   onNewLot,
   onEditProduct,
+  onAddProduct,
   csvRef,
 }: Props) {
   const [search, setSearch] = useState(''),
@@ -429,7 +441,8 @@ export default function Production({
           ) ?? '',
       }
     })
-    downloadFile(`${mode}-lots-${today()}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
+    if (!rows.length) return false
+    return downloadFile(`${mode}-lots-${today()}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
   }
   csvRef.current = csv
   const clear = () => {
@@ -453,6 +466,12 @@ export default function Production({
     setQuick('')
     setColumns(mode === 'completed' ? completedCols : defaultCols)
   }, [mode])
+  // Searching or filtering expands the matching products so their lots are visible at once.
+  const narrowing = !!search.trim() || !!quick || Object.values(filters).some(Boolean)
+  const matchingProducts = productOrder.map((p) => p.id).join(',')
+  useEffect(() => {
+    if (narrowing) setExpanded(matchingProducts ? matchingProducts.split(',') : [])
+  }, [narrowing, matchingProducts])
   return (
     <div className="space-y-5">
       {mode === 'active' && (
@@ -569,9 +588,7 @@ export default function Production({
                 value={filters[kind]}
                 onChange={(e) => setFilters({ ...filters, [kind]: e.target.value })}
               >
-                <option value="">
-                  All {kind === 'mode' ? 'modes' : kind === 'ems' ? 'EMS' : `${kind}s`}
-                </option>
+                <option value="">{filterPlaceholders[kind]}</option>
                 {look(kind === 'mode' ? 'logistics' : kind).map((v) => (
                   <option key={v}>{v}</option>
                 ))}
@@ -620,16 +637,28 @@ export default function Production({
         {lots.length === 0 && emptyProducts.length === 0 ? (
           <div className="p-5">
             <Empty
-              title={mode === 'completed' ? 'No completed lots yet' : 'No matching lots'}
+              title={
+                mode === 'completed'
+                  ? 'No completed lots yet'
+                  : data.products.length
+                    ? 'No matching lots'
+                    : 'No products yet'
+              }
               description={
                 mode === 'completed'
                   ? 'A lot appears here when its GRN receipts equal its positive lot quantity.'
-                  : 'Try clearing filters or add a lot to a product.'
+                  : data.products.length
+                    ? 'Try clearing filters or add a lot to a product.'
+                    : 'Add your first product, then add production lots to it.'
               }
               action={
                 mode === 'active' && (search || quick || Object.values(filters).some(Boolean)) ? (
                   <Button variant="secondary" onClick={clear}>
                     Clear filters
+                  </Button>
+                ) : mode === 'active' && !data.products.length ? (
+                  <Button onClick={onAddProduct}>
+                    <Plus size={16} /> Add Product
                   </Button>
                 ) : undefined
               }
@@ -668,7 +697,9 @@ export default function Production({
                         </span>
                         <span className="text-xs text-slate-500">
                           {product.segment} · {pl.length} lots ·{' '}
-                          {pl.filter((l) => l.status === 'Delayed').length} delayed
+                          {mode === 'active'
+                            ? `${pl.filter((l) => l.status === 'Delayed').length} delayed`
+                            : 'completed'}
                         </span>
                       </span>
                     </button>
@@ -837,10 +868,25 @@ function LotTable({
                   Balance <b>{quantity(balance(l, rs))}</b>
                 </span>
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                <span>{l.stage}</span>
-                <span>ETA {dateLabel(effectiveLotEta(l))}</span>
-              </div>
+              {completed(l, rs) ? (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 text-xs text-slate-500">
+                  <span>Full GRN {dateLabel(fullGrnDate(l, rs))}</span>
+                  <span>
+                    {signedDays(planDelay(l, rs))} vs plan · RM→GRN{' '}
+                    {leadTime(
+                      l,
+                      rs,
+                      data.rmBatches.filter((b) => b.lotId === l.id),
+                    ) ?? '—'}{' '}
+                    days
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                  <span>{l.stage}</span>
+                  <span>ETA {dateLabel(effectiveLotEta(l))}</span>
+                </div>
+              )}
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
                 <div className="h-full bg-[#d96d35]" style={{ width: `${grnProgress(l, rs)}%` }} />
               </div>

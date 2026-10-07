@@ -723,6 +723,7 @@ export function downloadFile(name: string, content: string, type: string) {
   a.download = name
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return true
 }
 const csvCell = (v: unknown) => `"${String(v ?? '').replaceAll('"', '""')}"`
 export function toCsv(rows: Record<string, unknown>[]) {

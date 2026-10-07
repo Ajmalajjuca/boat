@@ -95,7 +95,7 @@ export default function App() {
     [importError, setImportError] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('idle'),
     [message, setMessage] = useState('')
-  const csvRef = useRef<(() => void) | null>(null),
+  const csvRef = useRef<(() => boolean) | null>(null),
     busy = useRef(false),
     productForm = useFormErrors()
   useEffect(() => {
@@ -437,7 +437,16 @@ export default function App() {
                 <span className="sm:hidden">Export</span>
               </Button>
               {screen !== 'settings' && (
-                <Button variant="secondary" size="sm" onClick={() => csvRef.current?.()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (csvRef.current && !csvRef.current()) {
+                      setSaveState('idle')
+                      setMessage('Nothing to export: the current view has no rows.')
+                    }
+                  }}
+                >
                   <ArrowDownToLine size={15} /> CSV
                 </Button>
               )}
@@ -492,6 +501,7 @@ export default function App() {
               onOpenLot={setSelectedLot}
               onNewLot={(productId) => setSelectedLot(newLot(productId, data.lookupValues))}
               onEditProduct={openProduct}
+              onAddProduct={() => openProduct()}
               csvRef={csvRef}
             />
           )}

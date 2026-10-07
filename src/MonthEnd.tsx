@@ -16,7 +16,7 @@ import { Card, Empty, Select } from './ui'
 type Props = {
   data: DataSet
   onOpenLot: (lot: Lot) => void
-  csvRef: MutableRefObject<(() => void) | null>
+  csvRef: MutableRefObject<(() => boolean) | null>
 }
 export default function MonthEnd({ data, onOpenLot, csvRef }: Props) {
   const current = monthOf(today())
@@ -45,6 +45,7 @@ export default function MonthEnd({ data, onOpenLot, csvRef }: Props) {
   const short = summary.lots.filter((row) => row.shortfall > 0)
   const receiptsFor = (id: string) => data.grnReceipts.filter((r) => r.lotId === id)
   csvRef.current = () =>
+    summary.lots.length > 0 &&
     downloadFile(
       `month-end-${month}.csv`,
       toCsv(
