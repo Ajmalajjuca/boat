@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import type { DataSet, LookupKind, LookupValue } from './models'
+import type { DataSet, LookupKind, LookupValue, UserProfile } from './models'
 import { isSystemLookup } from './models'
 import { SCHEMA_VERSION } from './db'
 import { deleteLookup, resetData, saveLookup } from './repository'
@@ -27,6 +27,8 @@ import {
   type Run,
 } from './ui'
 import { validateLookupValue } from './validation'
+import { useAccess } from './access'
+import { RolesCard } from './Profiles'
 
 const kinds: { kind: LookupKind; label: string; help: string }[] = [
   { kind: 'segment', label: 'Segments', help: 'Product families used for grouping and filtering.' },
@@ -46,13 +48,23 @@ export default function Settings({
   onImport,
   onExport,
   onReset,
+  users,
+  lockMinutes,
+  onSignIn,
+  onMessage,
 }: {
   data: DataSet
   run: Run
   onImport: () => void
   onExport: () => void
   onReset: () => void
+  users: UserProfile[]
+  lockMinutes: number
+  onSignIn: (userId: string) => void
+  onMessage: (message: string) => void
 }) {
+  const access = useAccess(),
+    editable = access.can('manageSettings')
   const [kind, setKind] = useState<LookupKind>('segment'),
     [value, setValue] = useState(''),
     [editing, setEditing] = useState<LookupValue | null>(null),
@@ -77,8 +89,9 @@ export default function Settings({
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="text-base font-bold text-[#173b3d]">Dropdown values</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Add values as your operation evolves. Values in use cannot be renamed or deleted until
-              records are reassigned. Required values drive status cards and cannot be changed.
+              {editable
+                ? 'Add values as your operation evolves. Values in use cannot be renamed or deleted until records are reassigned. Required values drive status cards and cannot be changed.'
+                : 'Values used in forms and filters. Only admins can change them.'}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row">
@@ -99,28 +112,30 @@ export default function Settings({
             <div className="min-w-0 flex-1 p-5">
               <h3 className="font-bold text-[#173b3d]">{current.label}</h3>
               <p className="mt-1 text-xs text-slate-500">{current.help}</p>
-              <div className="mt-4 flex items-start gap-2">
-                <Field
-                  label={`New ${current.label.toLowerCase().replace(/s$/, '')}`}
-                  error={addForm.errors.value || addForm.errors.form}
-                  className="flex-1"
-                >
-                  <Input
-                    placeholder={`Add ${current.label.toLowerCase().replace(/s$/, '')}...`}
-                    value={value}
-                    onChange={(e) => {
-                      setValue(e.target.value)
-                      addForm.clear('value')
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') add()
-                    }}
-                  />
-                </Field>
-                <Button onClick={add} className="mt-[22px]">
-                  <Plus size={15} /> Add
-                </Button>
-              </div>
+              {editable && (
+                <div className="mt-4 flex items-start gap-2">
+                  <Field
+                    label={`New ${current.label.toLowerCase().replace(/s$/, '')}`}
+                    error={addForm.errors.value || addForm.errors.form}
+                    className="flex-1"
+                  >
+                    <Input
+                      placeholder={`Add ${current.label.toLowerCase().replace(/s$/, '')}...`}
+                      value={value}
+                      onChange={(e) => {
+                        setValue(e.target.value)
+                        addForm.clear('value')
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') add()
+                      }}
+                    />
+                  </Field>
+                  <Button onClick={add} className="mt-[22px]">
+                    <Plus size={15} /> Add
+                  </Button>
+                </div>
+              )}
               <div className="mt-5 space-y-2">
                 {items.map((item) => (
                   <div
@@ -135,54 +150,60 @@ export default function Settings({
                         </Badge>
                       )}
                     </span>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Rename ${item.value}`}
-                        disabled={isSystemLookup(item.kind, item.value)}
-                        title={
-                          isSystemLookup(item.kind, item.value)
-                            ? 'Used by app calculations; cannot be renamed'
-                            : undefined
-                        }
-                        onClick={() => {
-                          renameForm.reset()
-                          setEditing(item)
-                          setEditValue(item.value)
-                        }}
-                      >
-                        <Pencil size={15} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-rose-700"
-                        aria-label={`Delete ${item.value}`}
-                        disabled={isSystemLookup(item.kind, item.value)}
-                        title={
-                          isSystemLookup(item.kind, item.value)
-                            ? 'Used by app calculations; cannot be deleted'
-                            : undefined
-                        }
-                        onClick={async () => {
-                          if (
-                            window.confirm(
-                              `Delete lookup value "${item.value}"? Values currently in use cannot be deleted.`,
+                    {editable && (
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Rename ${item.value}`}
+                          disabled={isSystemLookup(item.kind, item.value)}
+                          title={
+                            isSystemLookup(item.kind, item.value)
+                              ? 'Used by app calculations; cannot be renamed'
+                              : undefined
+                          }
+                          onClick={() => {
+                            renameForm.reset()
+                            setEditing(item)
+                            setEditValue(item.value)
+                          }}
+                        >
+                          <Pencil size={15} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-rose-700"
+                          aria-label={`Delete ${item.value}`}
+                          disabled={isSystemLookup(item.kind, item.value)}
+                          title={
+                            isSystemLookup(item.kind, item.value)
+                              ? 'Used by app calculations; cannot be deleted'
+                              : undefined
+                          }
+                          onClick={async () => {
+                            if (
+                              window.confirm(
+                                `Delete lookup value "${item.value}"? Values currently in use cannot be deleted.`,
+                              )
                             )
-                          )
-                            await run(() => deleteLookup(item))
-                        }}
-                      >
-                        <Trash2 size={15} />
-                      </Button>
-                    </div>
+                              await run(() => deleteLookup(item))
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {!items.length && (
                   <Empty
                     title="No values"
-                    description="Add a value above to make it available in forms and filters."
+                    description={
+                      editable
+                        ? 'Add a value above to make it available in forms and filters.'
+                        : 'An admin can add values here.'
+                    }
                   />
                 )}
               </div>
@@ -191,7 +212,7 @@ export default function Settings({
         </Card>
         <Card className="p-5">
           <div className="flex items-start gap-3">
-            <Info size={18} className="mt-0.5 text-[#d96d35]" />
+            <Info size={18} className="mt-0.5 shrink-0 text-[#d96d35]" />
             <div>
               <h3 className="font-bold text-[#173b3d]">
                 Operational definitions & provisional rules
@@ -230,9 +251,17 @@ export default function Settings({
         </Card>
       </div>
       <div className="space-y-5">
+        <RolesCard
+          users={users}
+          lookups={data.lookupValues}
+          lockMinutes={lockMinutes}
+          run={run}
+          onSignIn={onSignIn}
+          onMessage={onMessage}
+        />
         <Card className="p-5">
           <div className="flex items-start gap-3">
-            <Database size={19} className="text-[#d96d35]" />
+            <Database size={19} className="shrink-0 text-[#d96d35]" />
             <div>
               <h2 className="font-bold text-[#173b3d]">Data management</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -243,15 +272,26 @@ export default function Settings({
             </div>
           </div>
           <div className="mt-5 grid gap-2">
-            <Button variant="secondary" onClick={onExport}>
-              <Download size={16} /> Export all records as JSON
-            </Button>
-            <Button variant="secondary" onClick={onImport}>
-              <Upload size={16} /> Import JSON backup
-            </Button>
-            <Button variant="danger" onClick={onReset}>
-              <RotateCcw size={16} /> Reset all application data
-            </Button>
+            {access.can('exportBackup') && (
+              <Button variant="secondary" onClick={onExport}>
+                <Download size={16} /> Export all records as JSON
+              </Button>
+            )}
+            {access.can('manageData') && (
+              <>
+                <Button variant="secondary" onClick={onImport}>
+                  <Upload size={16} /> Import JSON backup
+                </Button>
+                <Button variant="danger" onClick={onReset}>
+                  <RotateCcw size={16} /> Reset all application data
+                </Button>
+              </>
+            )}
+            {!access.can('exportBackup') && (
+              <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                Backups are available to admins and planners. Import and reset are admin only.
+              </p>
+            )}
           </div>
           <p className="mt-3 text-xs text-slate-500">
             Merge updates matching IDs and adds new records, while keeping one copy of each dropdown

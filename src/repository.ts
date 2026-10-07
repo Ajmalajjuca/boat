@@ -1,6 +1,16 @@
 import { db, allTables, getData, SCHEMA_VERSION } from './db'
 import { demoData, seedLookups } from './demo'
 import { effectiveShipmentEta, sum, totalGrn } from './calculations'
+import {
+  actorName,
+  hashSecret,
+  newRecoveryKey,
+  newSalt,
+  normalizeRecoveryKey,
+  requireAction,
+  requireLotEdit,
+  validatePin,
+} from './access'
 import type {
   ActivityLog,
   DataSet,
@@ -13,6 +23,7 @@ import type {
   RMBatch,
   Shipment,
   ShipmentItem,
+  UserProfile,
 } from './models'
 import { dataKeys, isSystemLookup, now, stamp, uid } from './models'
 import {
@@ -24,6 +35,7 @@ import {
   validateProduct,
   validateReceipt,
   validateShipment,
+  validateUser,
   ValidationError,
 } from './validation'
 
@@ -36,7 +48,12 @@ const log = (
   entityId: string,
   message: string,
   kind: string,
-) => db.activityLogs.add(stamp({ entityType, entityId, message, kind }))
+) => {
+  const actor = actorName()
+  return db.activityLogs.add(
+    stamp({ entityType, entityId, message, kind, ...(actor ? { actor } : {}) }),
+  )
+}
 const clean = (s: string) => s.trim()
 const sameText = (a: string, b: string) => clean(a).toLowerCase() === clean(b).toLowerCase()
 // Exported backups are validated against Settings values, so saved records must use them too.
@@ -46,6 +63,7 @@ async function requireLookup(kind: LookupKind, value: string, field: string) {
 }
 
 export async function initialize(choice: 'demo' | 'empty') {
+  requireAction('manageData')
   await db.transaction('rw', allTables, async () => {
     if (await db.settings.where('key').equals('initialized').first()) return
     if ((await db.products.count()) || (await db.lots.count()) || (await db.shipments.count()))
@@ -71,6 +89,7 @@ export async function initialize(choice: 'demo' | 'empty') {
   })
 }
 export async function saveProduct(input: Product) {
+  requireAction('editProducts')
   assertValid(validateProduct(input))
   const item = {
     ...input,
@@ -91,6 +110,7 @@ export async function saveProduct(input: Product) {
   return item
 }
 export async function deleteProduct(id: string) {
+  requireAction('deleteProducts')
   await db.transaction('rw', allTables, async () => {
     if (await db.shipmentItems.where('productId').equals(id).count())
       throw new Error(
@@ -165,6 +185,8 @@ export async function saveLot(input: Lot) {
           `Lot quantity cannot be below the ${totalGrn(receipts)} units already received.`,
         )
       const old = await db.lots.get(input.id)
+      if (old) requireLotEdit(old, input)
+      else requireAction('createLots')
       const item = {
         ...input,
         label: clean(input.label),
@@ -195,6 +217,7 @@ async function deleteLotInside(id: string) {
   await db.lots.delete(id)
 }
 export async function deleteLot(id: string) {
+  requireAction('deleteLots')
   await db.transaction('rw', db.lots, db.rmBatches, db.grnReceipts, db.activityLogs, async () =>
     deleteLotInside(id),
   )
@@ -205,6 +228,7 @@ export async function saveBatch(item: RMBatch) {
   await db.transaction('rw', db.rmBatches, db.lots, db.activityLogs, async () => {
     const lot = await db.lots.get(item.lotId)
     if (!lot) throw new Error('Lot no longer exists.')
+    requireLotEdit(lot)
     if (lot.rmMode !== 'components')
       throw new Error('Switch the lot to Track by Component before adding batches.')
     if (!lot.rmComponents.includes(item.component))
@@ -225,6 +249,7 @@ export async function saveBatch(item: RMBatch) {
   })
 }
 export async function deleteBatch(item: RMBatch) {
+  requireAction('deleteEntries')
   await db.transaction('rw', db.rmBatches, db.activityLogs, async () => {
     await db.rmBatches.delete(item.id)
     await log('lot', item.lotId, `Deleted ${item.component} batch ${item.label}`, 'material')
@@ -235,6 +260,7 @@ export async function saveReceipt(item: GRNReceipt) {
   await db.transaction('rw', db.grnReceipts, db.lots, db.activityLogs, async () => {
     const lot = await db.lots.get(item.lotId)
     if (!lot) throw new Error('Lot no longer exists.')
+    requireLotEdit(lot)
     const old = await db.grnReceipts.get(item.id)
     const current = await db.grnReceipts.where('lotId').equals(item.lotId).toArray()
     const next = sum(current.filter((r) => r.id !== item.id).map((r) => r.quantity)) + item.quantity
@@ -258,6 +284,7 @@ export async function saveReceipt(item: GRNReceipt) {
   })
 }
 export async function deleteReceipt(item: GRNReceipt) {
+  requireAction('deleteEntries')
   await db.transaction('rw', db.grnReceipts, db.activityLogs, async () => {
     await db.grnReceipts.delete(item.id)
     await log(
@@ -274,10 +301,17 @@ export async function addNote(
   message: string,
 ) {
   required(message, 'Note')
+  if (entityType === 'shipment') requireAction('editShipments')
+  else {
+    const lot = await db.lots.get(entityId)
+    if (!lot) throw new Error('Lot no longer exists.')
+    requireLotEdit(lot)
+  }
   await log(entityType, entityId, clean(message), 'note')
 }
 
 export async function saveShipment(input: Shipment, lines: ShipmentItem[], reason: string) {
+  requireAction('editShipments')
   assertValid(validateShipment(input, lines))
   await db.transaction(
     'rw',
@@ -367,6 +401,7 @@ export async function saveShipment(input: Shipment, lines: ShipmentItem[], reaso
   )
 }
 export async function deleteShipment(id: string) {
+  requireAction('deleteShipments')
   await db.transaction(
     'rw',
     db.shipments,
@@ -391,7 +426,10 @@ export async function lookupInUse(kind: LookupKind, value: string) {
     case 'ems':
       return !!(await db.lots.where('ems').equals(value).count())
     case 'poc':
-      return !!(await db.lots.where('poc').equals(value).count())
+      return (
+        !!(await db.lots.where('poc').equals(value).count()) ||
+        (await db.users.toArray()).some((user) => user.poc === value)
+      )
     case 'status':
       return !!(await db.lots.where('status').equals(value).count())
     case 'stage':
@@ -409,10 +447,13 @@ export async function lookupInUse(kind: LookupKind, value: string) {
       )
   }
 }
+// Lookup checks also read profiles, because a POC profile owns a point-of-contact value.
+const lookupTables = [...allTables, db.users]
 export async function saveLookup(kind: LookupKind, value: string, existing?: LookupValue) {
+  requireAction('manageSettings')
   assertValid(validateLookupValue(value))
   const normalized = clean(value)
-  await db.transaction('rw', allTables, async () => {
+  await db.transaction('rw', lookupTables, async () => {
     if (
       (await db.lookupValues.where('[kind+value]').equals([kind, normalized]).first()) &&
       normalized !== existing?.value
@@ -440,7 +481,8 @@ export async function saveLookup(kind: LookupKind, value: string, existing?: Loo
 export async function deleteLookup(item: LookupValue) {
   if (isSystemLookup(item.kind, item.value))
     throw new Error(`${item.value} is used by app calculations and cannot be deleted.`)
-  await db.transaction('rw', allTables, async () => {
+  requireAction('manageSettings')
+  await db.transaction('rw', lookupTables, async () => {
     if (await lookupInUse(item.kind, item.value))
       throw new Error('This value is in use. Reassign records before deleting it.')
     await db.lookupValues.delete(item.id)
@@ -448,11 +490,13 @@ export async function deleteLookup(item: LookupValue) {
 }
 
 export async function resetData() {
+  requireAction('manageData')
   await db.transaction('rw', allTables, async () => {
     for (const table of allTables) await table.clear()
   })
 }
 export async function exportData() {
+  requireAction('exportBackup')
   return {
     app: 'Supply Chain Control Tower',
     schemaVersion: SCHEMA_VERSION,
@@ -472,6 +516,7 @@ const fields: Record<
   keyof DataSet,
   {
     strings: string[]
+    optionalStrings?: string[]
     numbers?: string[]
     dates?: string[]
     booleans?: string[]
@@ -533,7 +578,10 @@ const fields: Record<
     strings: ['shipmentId', 'previousDate', 'newDate', 'reason'],
     dates: ['previousDate', 'newDate'],
   },
-  activityLogs: { strings: ['entityType', 'entityId', 'message', 'kind'] },
+  activityLogs: {
+    strings: ['entityType', 'entityId', 'message', 'kind'],
+    optionalStrings: ['actor'],
+  },
   lookupValues: { strings: ['kind', 'value'], numbers: ['sort'] },
   settings: { strings: ['key', 'value'] },
 }
@@ -568,6 +616,9 @@ export function parseImport(raw: unknown): DataSet {
       ids.add(row.id)
       for (const name of fields[key].strings)
         if (typeof row[name] !== 'string') throw new Error(`Invalid ${key}.${name}.`)
+      for (const name of fields[key].optionalStrings || [])
+        if (row[name] !== undefined && typeof row[name] !== 'string')
+          throw new Error(`Invalid ${key}.${name}.`)
       for (const name of fields[key].numbers || [])
         if (!Number.isInteger(row[name]) || Number(row[name]) < 0)
           throw new Error(`Invalid ${key}.${name}.`)
@@ -679,6 +730,7 @@ function validateRelations(data: DataSet) {
       throw new Error('An activity record has a missing parent or invalid type.')
 }
 export async function importData(raw: unknown, mode: 'merge' | 'replace') {
+  requireAction('manageData')
   const incoming = parseImport(raw)
   const current = mode === 'merge' ? await getData() : null
   if (current) {
@@ -714,6 +766,125 @@ export async function importData(raw: unknown, mode: 'merge' | 'replace') {
     keyof DataSet,
     number
   >
+}
+
+// Role profiles. They live only in this browser and are left out of backups and resets.
+const recoveryKey = 'recoveryKey'
+async function pinFields(pin: string) {
+  const pinSalt = newSalt()
+  return { pinSalt, pinHash: await hashSecret(pin, pinSalt) }
+}
+export async function checkPin(user: UserProfile, pin: string) {
+  if (!user.pinHash) return true
+  return (await hashSecret(pin, user.pinSalt)) === user.pinHash
+}
+// Hashing is awaited outside transactions: IndexedDB commits a transaction that waits on
+// non-database work such as crypto.subtle.
+async function newRecoveryRecord() {
+  const key = newRecoveryKey(),
+    salt = newSalt()
+  const hash = await hashSecret(normalizeRecoveryKey(key), salt)
+  return { key, record: { key: recoveryKey, value: JSON.stringify({ salt, hash }) } }
+}
+// Creates the first admin and turns roles on. Returns the one-time recovery key.
+// The caller picks the id so it can mark the profile signed in before the write lands.
+export async function setupRoles(id: string, name: string, pin: string, confirm: string) {
+  const user: UserProfile = {
+    ...stamp({ name: clean(name), role: 'admin' as const, poc: '', pinHash: '', pinSalt: '' }),
+    id,
+  }
+  assertValid(validateUser(user, pin, confirm))
+  const secured = { ...user, ...(await pinFields(pin)) },
+    recovery = await newRecoveryRecord()
+  await db.transaction('rw', db.users, db.localSettings, async () => {
+    if (await db.users.count()) throw new Error('Roles are already set up. Sign in as an admin.')
+    await db.users.add(secured)
+    await db.localSettings.put(recovery.record)
+  })
+  return { user: secured, recoveryKey: recovery.key }
+}
+export async function saveUser(input: UserProfile, pin: string, confirm: string) {
+  requireAction('manageSettings')
+  const item = {
+    ...input,
+    name: clean(input.name),
+    poc: input.role === 'poc' ? input.poc : '',
+    updatedAt: now(),
+  }
+  assertValid(validateUser(item, pin, confirm))
+  const secured = pin ? { ...item, ...(await pinFields(pin)) } : item
+  await db.transaction('rw', db.users, db.lookupValues, async () => {
+    const users = await db.users.toArray(),
+      old = users.find((u) => u.id === item.id)
+    if (users.some((u) => u.id !== item.id && sameText(u.name, item.name)))
+      throw invalid('name', `A profile named ${item.name} already exists.`)
+    if (item.role === 'poc') await requireLookup('poc', item.poc, 'poc')
+    if (
+      old?.role === 'admin' &&
+      item.role !== 'admin' &&
+      users.filter((u) => u.role === 'admin').length === 1
+    )
+      throw invalid('role', 'Keep at least one admin. Make another profile admin first.')
+    await db.users.put(secured)
+  })
+  return secured
+}
+export async function deleteUser(user: UserProfile, signedInId: string) {
+  requireAction('manageSettings')
+  if (user.id === signedInId)
+    throw new Error('You cannot delete the profile you are signed in with.')
+  await db.transaction('rw', db.users, async () => {
+    const admins = await db.users.where('id').notEqual(user.id).toArray()
+    if (user.role === 'admin' && !admins.some((u) => u.role === 'admin'))
+      throw new Error('Keep at least one admin.')
+    await db.users.delete(user.id)
+  })
+}
+export async function changeOwnPin(
+  user: UserProfile,
+  current: string,
+  pin: string,
+  confirm: string,
+) {
+  if (!(await checkPin(user, current))) throw invalid('current', 'The current PIN is not correct.')
+  const message = validatePin(pin)
+  if (message) throw invalid('pin', message)
+  if (pin !== confirm) throw invalid('confirm', 'The two PINs do not match.')
+  const latest = await db.users.get(user.id)
+  if (!latest) throw new Error('This profile no longer exists.')
+  await db.users.put({ ...latest, ...(await pinFields(pin)), updatedAt: now() })
+}
+// Lets someone who has the recovery key set a new PIN for an admin profile.
+export async function recoverAdmin(key: string, adminId: string, pin: string, confirm: string) {
+  const stored = await db.localSettings.get(recoveryKey)
+  const saved = stored ? (JSON.parse(stored.value) as { salt: string; hash: string }) : null
+  if (!saved || (await hashSecret(normalizeRecoveryKey(key), saved.salt)) !== saved.hash)
+    throw invalid('key', 'This recovery key is not correct.')
+  const admin = await db.users.get(adminId)
+  if (!admin || admin.role !== 'admin') throw invalid('admin', 'Choose an admin profile.')
+  const message = validatePin(pin)
+  if (message) throw invalid('pin', message)
+  if (pin !== confirm) throw invalid('confirm', 'The two PINs do not match.')
+  const next = { ...admin, ...(await pinFields(pin)), updatedAt: now() }
+  await db.users.put(next)
+  return next
+}
+export async function replaceRecoveryKey() {
+  requireAction('manageSettings')
+  const recovery = await newRecoveryRecord()
+  await db.localSettings.put(recovery.record)
+  return recovery.key
+}
+export async function turnOffRoles() {
+  requireAction('manageSettings')
+  await db.transaction('rw', db.users, db.localSettings, async () => {
+    await db.users.clear()
+    await db.localSettings.delete(recoveryKey)
+  })
+}
+export async function setLockMinutes(minutes: number) {
+  requireAction('manageSettings')
+  await db.localSettings.put({ key: 'lockMinutes', value: String(minutes) })
 }
 
 export function downloadFile(name: string, content: string, type: string) {

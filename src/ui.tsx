@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { fieldErrors, type FieldErrors } from './validation'
-import { Check, ChevronDown, CircleAlert, X } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Lock, X } from 'lucide-react'
 import {
   useEffect,
   useLayoutEffect,
@@ -124,6 +124,7 @@ export function Field({
   help,
   error,
   required,
+  locked,
   children,
   className,
 }: {
@@ -131,18 +132,31 @@ export function Field({
   help?: string
   error?: string
   required?: boolean
+  // Shows the value but disables the control because the current role cannot change it.
+  locked?: boolean
   children: ReactNode
   className?: string
 }) {
+  // A disabled fieldset disables every control inside it, including SearchSelect's button.
+  const Outer = locked ? 'fieldset' : 'div'
   return (
     // Error and help text sit outside the <label> so they are not read as part of the field name.
-    <div className={cn('block min-w-0', className)} data-invalid={error ? true : undefined}>
+    <Outer
+      className={cn('block min-w-0', className)}
+      data-invalid={error ? true : undefined}
+      disabled={locked || undefined}
+    >
       <label className="block">
         <span className="field-label">
           {label}
-          {required && (
+          {required && !locked && (
             <span className="ml-0.5 text-rose-600" aria-hidden="true">
               *
+            </span>
+          )}
+          {locked && (
+            <span title="Your role cannot change this field" aria-hidden="true">
+              <Lock size={11} className="ml-1 inline align-[-1px] text-slate-400" />
             </span>
           )}
         </span>
@@ -159,7 +173,7 @@ export function Field({
       ) : (
         help && <span className="mt-1 block text-xs text-slate-500">{help}</span>
       )}
-    </div>
+    </Outer>
   )
 }
 export function Badge({
@@ -392,7 +406,7 @@ export function SearchSelect({
           setTerm('')
           setActive(0)
         }}
-        className="field flex w-full items-center justify-between text-left disabled:opacity-50"
+        className="field flex w-full items-center justify-between text-left"
       >
         <span className={cn('truncate', value ? 'text-slate-800' : 'text-slate-400')}>
           {selected?.label || value || placeholder}

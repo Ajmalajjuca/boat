@@ -79,6 +79,8 @@ export interface ActivityLog extends RecordBase {
   entityId: string
   message: string
   kind: string
+  // Name of the signed-in profile when roles are on; absent in open mode and older backups.
+  actor?: string
 }
 export type LookupKind =
   | 'segment'
@@ -103,6 +105,20 @@ export interface LookupValue extends RecordBase {
   kind: LookupKind
   value: string
   sort: number
+}
+export type Role = 'admin' | 'planner' | 'poc' | 'viewer'
+// Profiles stay in this browser only: they are never exported, imported, or cleared by a reset.
+export interface UserProfile extends RecordBase {
+  name: string
+  role: Role
+  // The point-of-contact value a POC profile owns; empty for other roles.
+  poc: string
+  pinHash: string
+  pinSalt: string
+}
+export interface LocalSetting {
+  key: string
+  value: string
 }
 export interface AppSetting extends RecordBase {
   key: string

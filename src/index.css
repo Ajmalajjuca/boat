@@ -64,6 +64,11 @@
     border-color: #e11d48;
     box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.14);
   }
+  .field:disabled {
+    background: #f3f6f6;
+    color: #5b6f73;
+    cursor: not-allowed;
+  }
   .field::placeholder {
     color: #94a3a8;
   }

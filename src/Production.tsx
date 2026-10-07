@@ -31,6 +31,7 @@ import {
 } from './calculations'
 import { downloadFile, toCsv } from './repository'
 import { Badge, Button, Card, Empty, Input, Select } from './ui'
+import { useAccess } from './access'
 
 type Props = {
   data: DataSet
@@ -143,6 +144,7 @@ export default function Production({
   onAddProduct,
   csvRef,
 }: Props) {
+  const access = useAccess()
   const [search, setSearch] = useState(''),
     [filtersOpen, setFiltersOpen] = useState(false),
     [columnsOpen, setColumnsOpen] = useState(false)
@@ -649,14 +651,16 @@ export default function Production({
                   ? 'A lot appears here when its GRN receipts equal its positive lot quantity.'
                   : data.products.length
                     ? 'Try clearing filters or add a lot to a product.'
-                    : 'Add your first product, then add production lots to it.'
+                    : access.can('editProducts')
+                      ? 'Add your first product, then add production lots to it.'
+                      : 'An admin or planner adds products and lots.'
               }
               action={
                 mode === 'active' && (search || quick || Object.values(filters).some(Boolean)) ? (
                   <Button variant="secondary" onClick={clear}>
                     Clear filters
                   </Button>
-                ) : mode === 'active' && !data.products.length ? (
+                ) : mode === 'active' && !data.products.length && access.can('editProducts') ? (
                   <Button onClick={onAddProduct}>
                     <Plus size={16} /> Add Product
                   </Button>
@@ -719,10 +723,12 @@ export default function Production({
                           {quantity(sum(pl.map((l) => balance(l, receiptsFor(l.id)))))}
                         </b>
                       </span>
-                      <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
-                        Edit
-                      </Button>
-                      {mode === 'active' && (
+                      {access.can('editProducts') && (
+                        <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
+                          Edit
+                        </Button>
+                      )}
+                      {mode === 'active' && access.can('createLots') && (
                         <Button variant="secondary" size="sm" onClick={() => onNewLot(product.id)}>
                           <Plus size={14} /> Add lot
                         </Button>
@@ -740,7 +746,8 @@ export default function Production({
                       />
                     ) : (
                       <p className="px-5 pb-4 text-xs text-slate-500">
-                        No active lots yet. Use Add lot to start tracking this product.
+                        No active lots yet.
+                        {access.can('createLots') && ' Use Add lot to start tracking this product.'}
                       </p>
                     ))}
                 </div>
@@ -777,12 +784,20 @@ export default function Production({
                         </span>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
-                          Edit
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={() => onNewLot(product.id)}>
-                          <Plus size={14} /> Add lot
-                        </Button>
+                        {access.can('editProducts') && (
+                          <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
+                            Edit
+                          </Button>
+                        )}
+                        {access.can('createLots') && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onNewLot(product.id)}
+                          >
+                            <Plus size={14} /> Add lot
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -15,6 +15,21 @@ Open the URL shown by Vite. On first use, choose fictional demo data or an empty
 
 Settings lets you manage dropdown values, export all records as JSON, merge or replace from a validated JSON backup, and reset local data. Merge updates records by ID and keeps one copy of matching dropdown values and setting keys. The header also exports the current filtered production or shipment table as CSV. Browser storage can be cleared, so keep JSON exports as backups.
 
+## Users and roles
+
+Roles are off until an admin profile is created in Settings → Users & roles. While they are off, anyone using the browser can change everything, as before. Once on, the app opens on a profile screen and each profile signs in with a 4–8 digit PIN (viewers may have none).
+
+| Role | Can do |
+| --- | --- |
+| Admin | Everything: Settings values, profiles, import, restore, reset, and every delete |
+| Planner | Add and edit products, lots, and shipments; correct or delete RM batches and GRN receipts; export JSON. No Settings, import, reset, or deleting products, lots, or shipments |
+| POC | Update lots whose POC matches their profile: status, stage, quantities produced, ETAs, blockers, follow-ups, RM batches, GRN receipts, and notes. Plan fields (product, label, category, EMS, POC, RM mode and components, lot quantity, planned date) stay locked |
+| Viewer | Read-only on every screen, plus CSV downloads |
+
+The repository checks the same rules on every write, so a hidden button is not the only guard. History entries record which profile made each change. Setting up roles shows a one-time recovery key that can reset an admin PIN from the profile screen. The app can lock itself after a chosen idle time (15 minutes by default).
+
+Profiles and PINs stay in this browser: they are not included in JSON backups and survive a data reset. PINs are stored as salted SHA-256 hashes. Roles prevent accidental changes on a shared computer; they are not a security boundary, because anyone with browser developer tools can read or edit local data. Real access control needs a backend.
+
 ## Business assumptions
 
 - Lot quantities and RM component quantities are provisionally finished-product-equivalent units. `Balance + total GRN = Lot Qty`.

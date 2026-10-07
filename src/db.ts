@@ -11,8 +11,11 @@ import type {
   Shipment,
   ShipmentItem,
   DataSet,
+  LocalSetting,
+  UserProfile,
 } from './models'
 
+// Version of the JSON backup format; the IndexedDB version below moves independently.
 export const SCHEMA_VERSION = 1
 class ControlTowerDB extends Dexie {
   products!: Table<Product, string>
@@ -25,9 +28,11 @@ class ControlTowerDB extends Dexie {
   activityLogs!: Table<ActivityLog, string>
   lookupValues!: Table<LookupValue, string>
   settings!: Table<AppSetting, string>
+  users!: Table<UserProfile, string>
+  localSettings!: Table<LocalSetting, string>
   constructor() {
     super('supply-chain-control-tower')
-    this.version(SCHEMA_VERSION).stores({
+    this.version(1).stores({
       products: 'id, name, segment',
       lots: 'id, productId, status, stage, category, ems, poc',
       rmBatches: 'id, lotId, component',
@@ -39,6 +44,8 @@ class ControlTowerDB extends Dexie {
       lookupValues: 'id, kind, [kind+value]',
       settings: 'id, key',
     })
+    // Role profiles and device-only preferences; kept out of allTables so backups skip them.
+    this.version(2).stores({ users: 'id, name', localSettings: 'key' })
   }
 }
 export const db = new ControlTowerDB()

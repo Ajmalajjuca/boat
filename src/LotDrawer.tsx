@@ -56,6 +56,7 @@ import {
   validateReceipt,
   type FieldErrors,
 } from './validation'
+import { roleInfo, useAccess } from './access'
 
 type Props = {
   lot: Lot
@@ -90,6 +91,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
   const lotForm = useFormErrors(),
     batchForm = useFormErrors(),
     receiptForm = useFormErrors()
+  const access = useAccess()
   useEffect(() => {
     setDraft(lot)
     setBaseline(JSON.stringify(lot))
@@ -97,6 +99,11 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
   }, [lot.id])
   const dirty = JSON.stringify(draft) !== baseline,
     stored = !!data.lots.find((l) => l.id === lot.id)
+  // Saved lots use the stored POC, so editing the POC field cannot unlock a lot.
+  const level = stored ? access.lotAccess(lot) : access.can('createLots') ? 'full' : 'none',
+    readOnly = level === 'none',
+    planLocked = level !== 'full',
+    canDeleteEntries = access.can('deleteEntries') && !readOnly
   // Warns before a reload or tab close would discard unsaved lot edits.
   useEffect(() => {
     if (!dirty) return
@@ -231,7 +238,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
         footer={
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              {stored && (
+              {stored && access.can('deleteLots') && (
                 <Button variant="danger" size="sm" onClick={remove}>
                   <Trash2 size={14} /> Delete lot
                 </Button>
@@ -241,12 +248,16 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
               <Button variant="secondary" onClick={close}>
                 Close
               </Button>
-              <Button variant="secondary" onClick={() => save()}>
-                Save lot
-              </Button>
-              <Button onClick={() => save(true)}>
-                Save & close <ArrowRight size={15} />
-              </Button>
+              {!readOnly && (
+                <>
+                  <Button variant="secondary" onClick={() => save()}>
+                    Save lot
+                  </Button>
+                  <Button onClick={() => save(true)}>
+                    Save & close <ArrowRight size={15} />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         }
@@ -261,6 +272,13 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             }
           />
         </div>
+        {access.user && level !== 'full' && (
+          <div className="mb-5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs text-slate-600">
+            {readOnly
+              ? `View only. ${roleInfo[access.user.role].label} profiles can't change this lot${access.user.role === 'poc' ? ` because its POC is ${lot.poc || 'not set'}` : ''}.`
+              : 'You can update progress on this lot. Locked fields such as product, lot quantity, planned date, and POC are set by a planner or admin.'}
+          </div>
+        )}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map((s) => (
             <Card key={s.label} className="p-3">
@@ -300,18 +318,28 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
           ))}
         </div>
         {tab === 'overview' && (
-          <div className="space-y-6">
+          <fieldset disabled={readOnly} className="min-w-0 space-y-6">
             <div>
               <h3 className="section-title mb-3">Identification & ownership</h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Product" required error={lotForm.errors.productId}>
+                <Field
+                  label="Product"
+                  required
+                  error={lotForm.errors.productId}
+                  locked={planLocked && !readOnly}
+                >
                   <SearchSelect
                     value={draft.productId}
                     options={products}
                     onChange={(id) => update('productId', id)}
                   />
                 </Field>
-                <Field label="Lot label" required error={lotForm.errors.label}>
+                <Field
+                  label="Lot label"
+                  required
+                  error={lotForm.errors.label}
+                  locked={planLocked && !readOnly}
+                >
                   <Input
                     required
                     value={draft.label}
@@ -319,7 +347,12 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     placeholder="e.g. TWS-2403"
                   />
                 </Field>
-                <Field label="Product category" required error={lotForm.errors.category}>
+                <Field
+                  label="Product category"
+                  required
+                  error={lotForm.errors.category}
+                  locked={planLocked && !readOnly}
+                >
                   <SearchSelect
                     value={draft.category}
                     options={lookup('category')}
@@ -328,6 +361,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Field>
                 <Field
                   label="Manufacturing partner (EMS)"
+                  locked={planLocked && !readOnly}
                   error={lotForm.errors.ems}
                   help="EMS means manufacturing partner."
                 >
@@ -338,7 +372,11 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     clearable
                   />
                 </Field>
-                <Field label="Point of contact" error={lotForm.errors.poc}>
+                <Field
+                  label="Point of contact"
+                  error={lotForm.errors.poc}
+                  locked={planLocked && !readOnly}
+                >
                   <SearchSelect
                     value={draft.poc}
                     options={lookup('poc')}
@@ -349,6 +387,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 <label className="flex items-center gap-3 pt-6 text-sm text-slate-700">
                   <input
                     type="checkbox"
+                    disabled={planLocked}
                     checked={draft.directFg}
                     onChange={(e) => update('directFg', e.target.checked)}
                   />
@@ -385,6 +424,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Field>
                 <Field
                   label="Lot quantity"
+                  locked={planLocked && !readOnly}
                   error={lotForm.errors.lotQty}
                   help="Client-defined arrived raw material, expressed as finished-product-equivalent units."
                 >
@@ -425,7 +465,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     placeholder="Issue being corrected"
                   />
                 </Field>
-                <Field label="RM readiness mode">
+                <Field label="RM readiness mode" locked={planLocked && !readOnly}>
                   <Select
                     value={draft.rmMode}
                     onChange={(e) => setMode(e.target.value as Lot['rmMode'])}
@@ -468,7 +508,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     onChange={(e) => update('rmReadyDate', e.target.value)}
                   />
                 </Field>
-                <Field label="Planned completion / WH receipt">
+                <Field label="Planned completion / WH receipt" locked={planLocked && !readOnly}>
                   <Input
                     type="date"
                     value={draft.plannedDate}
@@ -556,7 +596,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Field>
               </div>
             </div>
-          </div>
+          </fieldset>
         )}
         {tab === 'rm' && (
           <div className="space-y-5">
@@ -584,95 +624,99 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
               </span>
             </div>
             <Card className="p-4">
-              <h3 className="section-title mb-3">Readiness method</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="RM readiness mode">
-                  <Select
-                    value={draft.rmMode}
-                    onChange={(e) => setMode(e.target.value as Lot['rmMode'])}
-                  >
-                    <option value="all">All RM Received</option>
-                    <option value="components">Track by Component</option>
-                  </Select>
-                </Field>
-                {draft.rmMode === 'all' && (
-                  <Field label="Ready quantity" error={lotForm.errors.readyQty}>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={draft.readyQty}
-                      onChange={(e) => update('readyQty', number(e.target.value))}
-                    />
+              <fieldset disabled={readOnly} className="min-w-0">
+                <h3 className="section-title mb-3">Readiness method</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="RM readiness mode" locked={planLocked && !readOnly}>
+                    <Select
+                      value={draft.rmMode}
+                      onChange={(e) => setMode(e.target.value as Lot['rmMode'])}
+                    >
+                      <option value="all">All RM Received</option>
+                      <option value="components">Track by Component</option>
+                    </Select>
                   </Field>
-                )}
-              </div>
-              {draft.rmMode === 'all' && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
-                  <Badge tone="teal">Kit (All Together) selected</Badge>
-                  The ready quantity represents the complete material kit.
+                  {draft.rmMode === 'all' && (
+                    <Field label="Ready quantity" error={lotForm.errors.readyQty}>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={draft.readyQty}
+                        onChange={(e) => update('readyQty', number(e.target.value))}
+                      />
+                    </Field>
+                  )}
                 </div>
-              )}
-              {draft.rmMode === 'components' && (
-                <>
-                  <p className="mt-4 text-xs text-slate-500">
-                    Choose required components. Kit (All Together) is handled by All RM Received
-                    mode to avoid double-counting.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => setMode('all')}
-                  >
-                    Use Kit (All Together)
-                  </Button>
-                  <div
-                    className="mt-3 flex flex-wrap gap-2"
-                    data-invalid={lotForm.errors.rmComponents ? true : undefined}
-                  >
-                    {lookup('component')
-                      .filter((c) => c !== 'Kit (All Together)')
-                      .map((component) => (
-                        <label
-                          key={component}
-                          className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold ${draft.rmComponents.includes(component) ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-600'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="mr-2"
-                            checked={draft.rmComponents.includes(component)}
-                            onChange={() => toggleComponent(component)}
-                          />
-                          {component}
-                        </label>
-                      ))}
+                {draft.rmMode === 'all' && (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+                    <Badge tone="teal">Kit (All Together) selected</Badge>
+                    The ready quantity represents the complete material kit.
                   </div>
-                </>
-              )}
-              {lotForm.errors.rmComponents && (
-                <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
-                  {lotForm.errors.rmComponents}
-                </p>
-              )}
-              {dirty && (
-                <p className="mt-3 text-xs text-amber-700">
-                  Save lot changes before adding a material batch.
-                </p>
-              )}
+                )}
+                {draft.rmMode === 'components' && (
+                  <fieldset disabled={planLocked} className="min-w-0">
+                    <p className="mt-4 text-xs text-slate-500">
+                      Choose required components. Kit (All Together) is handled by All RM Received
+                      mode to avoid double-counting.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setMode('all')}
+                    >
+                      Use Kit (All Together)
+                    </Button>
+                    <div
+                      className="mt-3 flex flex-wrap gap-2"
+                      data-invalid={lotForm.errors.rmComponents ? true : undefined}
+                    >
+                      {lookup('component')
+                        .filter((c) => c !== 'Kit (All Together)')
+                        .map((component) => (
+                          <label
+                            key={component}
+                            className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold ${draft.rmComponents.includes(component) ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-600'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="mr-2"
+                              checked={draft.rmComponents.includes(component)}
+                              onChange={() => toggleComponent(component)}
+                            />
+                            {component}
+                          </label>
+                        ))}
+                    </div>
+                  </fieldset>
+                )}
+                {lotForm.errors.rmComponents && (
+                  <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
+                    {lotForm.errors.rmComponents}
+                  </p>
+                )}
+                {dirty && (
+                  <p className="mt-3 text-xs text-amber-700">
+                    Save lot changes before adding a material batch.
+                  </p>
+                )}
+              </fieldset>
             </Card>
             <div className="flex items-center justify-between">
               <h3 className="section-title">Material batches</h3>
-              <Button
-                size="sm"
-                onClick={() => openBatch()}
-                disabled={
-                  !stored || draft.rmMode !== 'components' || dirty || !draft.rmComponents.length
-                }
-              >
-                <Plus size={14} /> Add batch
-              </Button>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  onClick={() => openBatch()}
+                  disabled={
+                    !stored || draft.rmMode !== 'components' || dirty || !draft.rmComponents.length
+                  }
+                >
+                  <Plus size={14} /> Add batch
+                </Button>
+              )}
             </div>
             {bs.length ? (
               <Card className="table-wrap">
@@ -711,20 +755,24 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                         <td>{b.status}</td>
                         <td>
                           <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => openBatch(b)}>
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-rose-700"
-                              onClick={async () => {
-                                if (window.confirm(`Delete ${b.label} material batch?`))
-                                  await run(() => deleteBatch(b))
-                              }}
-                            >
-                              Delete
-                            </Button>
+                            {!readOnly && (
+                              <Button size="sm" variant="ghost" onClick={() => openBatch(b)}>
+                                Edit
+                              </Button>
+                            )}
+                            {canDeleteEntries && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-rose-700"
+                                onClick={async () => {
+                                  if (window.confirm(`Delete ${b.label} material batch?`))
+                                    await run(() => deleteBatch(b))
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -758,9 +806,11 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                   Multiple partial Goods Received Notes are supported.
                 </p>
               </div>
-              <Button size="sm" onClick={() => openReceipt()} disabled={!stored || dirty}>
-                <Plus size={14} /> Add receipt
-              </Button>
+              {!readOnly && (
+                <Button size="sm" onClick={() => openReceipt()} disabled={!stored || dirty}>
+                  <Plus size={14} /> Add receipt
+                </Button>
+              )}
             </div>
             {rs.length ? (
               <div className="space-y-2">
@@ -781,24 +831,28 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                         </div>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openReceipt(r)}>
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-rose-700"
-                          onClick={async () => {
-                            if (
-                              window.confirm(
-                                `Delete receipt ${r.label}? The lot's completion and balance will update.`,
+                        {!readOnly && (
+                          <Button variant="ghost" size="sm" onClick={() => openReceipt(r)}>
+                            Edit
+                          </Button>
+                        )}
+                        {canDeleteEntries && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-rose-700"
+                            onClick={async () => {
+                              if (
+                                window.confirm(
+                                  `Delete receipt ${r.label}? The lot's completion and balance will update.`,
+                                )
                               )
-                            )
-                              await run(() => deleteReceipt(r))
-                          }}
-                        >
-                          Delete
-                        </Button>
+                                await run(() => deleteReceipt(r))
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </Card>
                   ))}
@@ -812,26 +866,28 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
         )}
         {tab === 'history' && (
           <div className="space-y-5">
-            <Card className="p-4">
-              <h3 className="section-title mb-3">Add an update</h3>
-              <Textarea
-                aria-label="Update note"
-                placeholder="Record a meaningful update or next action..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-              <div className="mt-3 flex justify-end">
-                <Button
-                  size="sm"
-                  disabled={!stored || !note.trim()}
-                  onClick={async () => {
-                    if (await run(() => addNote('lot', lot.id, note))) setNote('')
-                  }}
-                >
-                  Post update
-                </Button>
-              </div>
-            </Card>
+            {!readOnly && (
+              <Card className="p-4">
+                <h3 className="section-title mb-3">Add an update</h3>
+                <Textarea
+                  aria-label="Update note"
+                  placeholder="Record a meaningful update or next action..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    size="sm"
+                    disabled={!stored || !note.trim()}
+                    onClick={async () => {
+                      if (await run(() => addNote('lot', lot.id, note))) setNote('')
+                    }}
+                  >
+                    Post update
+                  </Button>
+                </div>
+              </Card>
+            )}
             <div className="space-y-3">
               {logs.map((item) => (
                 <div key={item.id} className="flex gap-3 border-b border-slate-200 pb-3">
@@ -840,6 +896,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     <div className="text-sm text-slate-700">{item.message}</div>
                     <div className="mt-1 text-xs text-slate-500">
                       {new Date(item.createdAt).toLocaleString()}
+                      {item.actor && ` · ${item.actor}`}
                     </div>
                   </div>
                 </div>

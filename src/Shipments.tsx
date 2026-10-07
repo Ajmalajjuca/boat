@@ -26,6 +26,7 @@ import {
   today,
 } from './calculations'
 import { addNote, deleteShipment, downloadFile, saveShipment, toCsv } from './repository'
+import { roleInfo, useAccess } from './access'
 import { lineField, validateShipment } from './validation'
 import {
   Badge,
@@ -437,6 +438,8 @@ export function ShipmentDrawer({
   }, [shipment.id])
   const stored = !!data.shipments.find((s) => s.id === shipment.id),
     dirty = JSON.stringify({ shipment: draft, lines }) !== baseline
+  const access = useAccess(),
+    readOnly = !access.can('editShipments')
   // Warns before a reload or tab close would discard unsaved shipment edits.
   useEffect(() => {
     if (!dirty) return
@@ -511,7 +514,7 @@ export function ShipmentDrawer({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            {stored && (
+            {stored && access.can('deleteShipments') && (
               <Button variant="danger" size="sm" onClick={remove}>
                 <Trash2 size={14} /> Delete shipment
               </Button>
@@ -521,12 +524,16 @@ export function ShipmentDrawer({
             <Button variant="secondary" onClick={close}>
               Close
             </Button>
-            <Button variant="secondary" onClick={() => save()}>
-              Save shipment
-            </Button>
-            <Button onClick={() => save(true)}>
-              Save & close <ArrowRight size={15} />
-            </Button>
+            {!readOnly && (
+              <>
+                <Button variant="secondary" onClick={() => save()}>
+                  Save shipment
+                </Button>
+                <Button onClick={() => save(true)}>
+                  Save & close <ArrowRight size={15} />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       }
@@ -541,6 +548,11 @@ export function ShipmentDrawer({
           }
         />
       </div>
+      {access.user && readOnly && (
+        <div className="mb-5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs text-slate-600">
+          View only. {roleInfo[access.user.role].label} profiles can't change shipments.
+        </div>
+      )}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           ['Total units', quantity(shipmentQuantity(lines))],
@@ -585,151 +597,153 @@ export function ShipmentDrawer({
         </button>
       </div>
       {tab === 'details' && (
-        <form onSubmit={submit} noValidate className="space-y-6">
-          <div>
-            <h3 className="section-title mb-3">Identity & schedule</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Shipment / invoice number" required error={form.errors.number}>
-                <Input
-                  value={draft.number}
-                  onChange={(e) => update('number', e.target.value)}
-                  placeholder="INV-SEA-1053"
-                />
-              </Field>
-              <Field label="Vessel / flight" required error={form.errors.vessel}>
-                <Input
-                  value={draft.vessel}
-                  onChange={(e) => update('vessel', e.target.value)}
-                  placeholder="Vessel, flight, or carrier"
-                />
-              </Field>
-              <Field label="ETD">
-                <Input
-                  type="date"
-                  value={draft.etd}
-                  onChange={(e) => update('etd', e.target.value)}
-                />
-              </Field>
-              <Field label="Original planned ETA" error={form.errors.plannedEta}>
-                <Input
-                  type="date"
-                  value={draft.plannedEta}
-                  onChange={(e) => update('plannedEta', e.target.value)}
-                />
-              </Field>
-              <Field label="Current revised ETA" error={form.errors.revisedEta}>
-                <Input
-                  type="date"
-                  value={draft.revisedEta}
-                  onChange={(e) => update('revisedEta', e.target.value)}
-                />
-              </Field>
-              <Field label="Actual warehouse arrival" error={form.errors.actualArrival}>
-                <Input
-                  type="date"
-                  max={today()}
-                  value={draft.actualArrival}
-                  onChange={(e) => update('actualArrival', e.target.value)}
-                />
-              </Field>
-              <Field label="Current stage" error={form.errors.stage}>
-                <SearchSelect
-                  value={draft.stage}
-                  options={lookup('shipmentStage')}
-                  onChange={(v) => update('stage', v)}
-                />
-              </Field>
-              <Field
-                label="ETA change reason"
-                help="Saved with each committed effective ETA change."
-              >
-                <Input
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Optional reason"
-                />
-              </Field>
-            </div>
-          </div>
-          <div>
-            <h3 className="section-title mb-3">Product lines</h3>
-            <div className="space-y-3" data-invalid={form.errors.lines ? true : undefined}>
-              {form.errors.lines && (
-                <p role="alert" className="text-xs font-medium text-rose-700">
-                  {form.errors.lines}
-                </p>
-              )}
-              {lines.map((line, index) => (
-                <Card key={line.id} className="flex flex-wrap items-start gap-3 p-3">
-                  <Field
-                    label={`Product ${index + 1}`}
-                    required
-                    error={form.errors[lineField(line.id, 'productId')]}
-                    className="min-w-52 flex-1"
-                  >
-                    <SearchSelect
-                      value={line.productId}
-                      options={productOptions}
-                      onChange={(id) => updateLine(line.id, { productId: id })}
-                    />
-                  </Field>
-                  <Field
-                    label="Quantity"
-                    required
-                    error={form.errors[lineField(line.id, 'quantity')]}
-                    className="w-32"
-                  >
-                    <Input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={line.quantity}
-                      onChange={(e) => updateLine(line.id, { quantity: Number(e.target.value) })}
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="mt-6 text-rose-700"
-                    aria-label={`Remove line ${index + 1}`}
-                    onClick={() => setLines(lines.filter((x) => x.id !== line.id))}
-                  >
-                    <Trash2 size={17} />
-                  </Button>
-                </Card>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <Button type="button" variant="secondary" size="sm" onClick={addLine}>
-                <Plus size={14} /> Add product line
-              </Button>
-              <div className="text-sm font-bold text-[#173b3d]">
-                Total: {quantity(shipmentQuantity(lines))} units
+        <form onSubmit={submit} noValidate>
+          <fieldset disabled={readOnly} className="min-w-0 space-y-6">
+            <div>
+              <h3 className="section-title mb-3">Identity & schedule</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Shipment / invoice number" required error={form.errors.number}>
+                  <Input
+                    value={draft.number}
+                    onChange={(e) => update('number', e.target.value)}
+                    placeholder="INV-SEA-1053"
+                  />
+                </Field>
+                <Field label="Vessel / flight" required error={form.errors.vessel}>
+                  <Input
+                    value={draft.vessel}
+                    onChange={(e) => update('vessel', e.target.value)}
+                    placeholder="Vessel, flight, or carrier"
+                  />
+                </Field>
+                <Field label="ETD">
+                  <Input
+                    type="date"
+                    value={draft.etd}
+                    onChange={(e) => update('etd', e.target.value)}
+                  />
+                </Field>
+                <Field label="Original planned ETA" error={form.errors.plannedEta}>
+                  <Input
+                    type="date"
+                    value={draft.plannedEta}
+                    onChange={(e) => update('plannedEta', e.target.value)}
+                  />
+                </Field>
+                <Field label="Current revised ETA" error={form.errors.revisedEta}>
+                  <Input
+                    type="date"
+                    value={draft.revisedEta}
+                    onChange={(e) => update('revisedEta', e.target.value)}
+                  />
+                </Field>
+                <Field label="Actual warehouse arrival" error={form.errors.actualArrival}>
+                  <Input
+                    type="date"
+                    max={today()}
+                    value={draft.actualArrival}
+                    onChange={(e) => update('actualArrival', e.target.value)}
+                  />
+                </Field>
+                <Field label="Current stage" error={form.errors.stage}>
+                  <SearchSelect
+                    value={draft.stage}
+                    options={lookup('shipmentStage')}
+                    onChange={(v) => update('stage', v)}
+                  />
+                </Field>
+                <Field
+                  label="ETA change reason"
+                  help="Saved with each committed effective ETA change."
+                >
+                  <Input
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Optional reason"
+                  />
+                </Field>
               </div>
             </div>
-          </div>
-          <Field label="Remarks">
-            <Textarea
-              value={draft.remarks}
-              onChange={(e) => update('remarks', e.target.value)}
-              placeholder="Shipment context and next steps"
-            />
-          </Field>
-          {draft.stage === 'Arrived at Warehouse' && !draft.actualArrival && (
-            <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
-              The stage says Arrived at Warehouse, but no actual arrival date is set, so this
-              shipment still counts as in transit.
+            <div>
+              <h3 className="section-title mb-3">Product lines</h3>
+              <div className="space-y-3" data-invalid={form.errors.lines ? true : undefined}>
+                {form.errors.lines && (
+                  <p role="alert" className="text-xs font-medium text-rose-700">
+                    {form.errors.lines}
+                  </p>
+                )}
+                {lines.map((line, index) => (
+                  <Card key={line.id} className="flex flex-wrap items-start gap-3 p-3">
+                    <Field
+                      label={`Product ${index + 1}`}
+                      required
+                      error={form.errors[lineField(line.id, 'productId')]}
+                      className="min-w-52 flex-1"
+                    >
+                      <SearchSelect
+                        value={line.productId}
+                        options={productOptions}
+                        onChange={(id) => updateLine(line.id, { productId: id })}
+                      />
+                    </Field>
+                    <Field
+                      label="Quantity"
+                      required
+                      error={form.errors[lineField(line.id, 'quantity')]}
+                      className="w-32"
+                    >
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={line.quantity}
+                        onChange={(e) => updateLine(line.id, { quantity: Number(e.target.value) })}
+                      />
+                    </Field>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="mt-6 text-rose-700"
+                      aria-label={`Remove line ${index + 1}`}
+                      onClick={() => setLines(lines.filter((x) => x.id !== line.id))}
+                    >
+                      <Trash2 size={17} />
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <Button type="button" variant="secondary" size="sm" onClick={addLine}>
+                  <Plus size={14} /> Add product line
+                </Button>
+                <div className="text-sm font-bold text-[#173b3d]">
+                  Total: {quantity(shipmentQuantity(lines))} units
+                </div>
+              </div>
             </div>
-          )}
-          <div className="rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
-            An arrival is counted only when Actual warehouse arrival is set. The stage remains a
-            separately editable operational label.
-          </div>
-          {/* Lets Enter submit the form; hidden from assistive tech to avoid a duplicate Save. */}
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
-            Save shipment
-          </button>
+            <Field label="Remarks">
+              <Textarea
+                value={draft.remarks}
+                onChange={(e) => update('remarks', e.target.value)}
+                placeholder="Shipment context and next steps"
+              />
+            </Field>
+            {draft.stage === 'Arrived at Warehouse' && !draft.actualArrival && (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                The stage says Arrived at Warehouse, but no actual arrival date is set, so this
+                shipment still counts as in transit.
+              </div>
+            )}
+            <div className="rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
+              An arrival is counted only when Actual warehouse arrival is set. The stage remains a
+              separately editable operational label.
+            </div>
+            {/* Lets Enter submit the form; hidden from assistive tech to avoid a duplicate Save. */}
+            <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
+              Save shipment
+            </button>
+          </fieldset>
         </form>
       )}
       {tab === 'history' && (
@@ -760,29 +774,34 @@ export function ShipmentDrawer({
           </div>
           <div>
             <h3 className="section-title mb-3">Activity & notes</h3>
-            <Textarea
-              aria-label="Shipment update note"
-              placeholder="Record a shipment update..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-            <div className="mt-2 flex justify-end">
-              <Button
-                size="sm"
-                disabled={!stored || !note.trim()}
-                onClick={async () => {
-                  if (await run(() => addNote('shipment', shipment.id, note))) setNote('')
-                }}
-              >
-                Post update
-              </Button>
-            </div>
+            {!readOnly && (
+              <>
+                <Textarea
+                  aria-label="Shipment update note"
+                  placeholder="Record a shipment update..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    disabled={!stored || !note.trim()}
+                    onClick={async () => {
+                      if (await run(() => addNote('shipment', shipment.id, note))) setNote('')
+                    }}
+                  >
+                    Post update
+                  </Button>
+                </div>
+              </>
+            )}
             <div className="mt-4 space-y-3">
               {logs.map((a) => (
                 <div key={a.id} className="border-b border-slate-200 pb-3">
                   <div className="text-sm text-slate-700">{a.message}</div>
                   <div className="mt-1 text-xs text-slate-500">
                     {new Date(a.createdAt).toLocaleString()}
+                    {a.actor && ` · ${a.actor}`}
                   </div>
                 </div>
               ))}
