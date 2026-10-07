@@ -14,7 +14,19 @@ import type { DataSet, LookupKind, LookupValue } from './models'
 import { isSystemLookup } from './models'
 import { SCHEMA_VERSION } from './db'
 import { deleteLookup, resetData, saveLookup } from './repository'
-import { Badge, Button, Card, Empty, Field, Input, Modal } from './ui'
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Field,
+  FormError,
+  Input,
+  Modal,
+  useFormErrors,
+  type Run,
+} from './ui'
+import { validateLookupValue } from './validation'
 
 const kinds: { kind: LookupKind; label: string; help: string }[] = [
   { kind: 'segment', label: 'Segments', help: 'Product families used for grouping and filtering.' },
@@ -36,7 +48,7 @@ export default function Settings({
   onReset,
 }: {
   data: DataSet
-  run: (fn: () => Promise<unknown>) => Promise<boolean>
+  run: Run
   onImport: () => void
   onExport: () => void
   onReset: () => void
@@ -45,10 +57,18 @@ export default function Settings({
     [value, setValue] = useState(''),
     [editing, setEditing] = useState<LookupValue | null>(null),
     [editValue, setEditValue] = useState('')
+  const addForm = useFormErrors(),
+    renameForm = useFormErrors()
   const current = kinds.find((k) => k.kind === kind)!,
     items = data.lookupValues.filter((v) => v.kind === kind).sort((a, b) => a.sort - b.sort)
   const add = async () => {
-    if (await run(() => saveLookup(kind, value))) setValue('')
+    if (!addForm.check(validateLookupValue(value))) return
+    if (await run(() => saveLookup(kind, value), addForm.fail)) setValue('')
+  }
+  const rename = async () => {
+    if (!editing || !renameForm.check(validateLookupValue(editValue))) return
+    if (await run(() => saveLookup(editing.kind, editValue, editing), renameForm.fail))
+      setEditing(null)
   }
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
@@ -66,7 +86,10 @@ export default function Settings({
               {kinds.map((k) => (
                 <button
                   key={k.kind}
-                  onClick={() => setKind(k.kind)}
+                  onClick={() => {
+                    setKind(k.kind)
+                    addForm.reset()
+                  }}
                   className={`rounded-lg px-3 py-2 text-left text-xs font-semibold whitespace-nowrap ${kind === k.kind ? 'bg-teal-50 text-teal-800' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   {k.label}
@@ -76,17 +99,25 @@ export default function Settings({
             <div className="min-w-0 flex-1 p-5">
               <h3 className="font-bold text-[#173b3d]">{current.label}</h3>
               <p className="mt-1 text-xs text-slate-500">{current.help}</p>
-              <div className="mt-4 flex gap-2">
-                <Input
-                  aria-label={`New ${current.label.toLowerCase()} value`}
-                  placeholder={`Add ${current.label.toLowerCase().replace(/s$/, '')}...`}
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') add()
-                  }}
-                />
-                <Button onClick={add} disabled={!value.trim()}>
+              <div className="mt-4 flex items-start gap-2">
+                <Field
+                  label={`New ${current.label.toLowerCase().replace(/s$/, '')}`}
+                  error={addForm.errors.value || addForm.errors.form}
+                  className="flex-1"
+                >
+                  <Input
+                    placeholder={`Add ${current.label.toLowerCase().replace(/s$/, '')}...`}
+                    value={value}
+                    onChange={(e) => {
+                      setValue(e.target.value)
+                      addForm.clear('value')
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') add()
+                    }}
+                  />
+                </Field>
+                <Button onClick={add} className="mt-[22px]">
                   <Plus size={15} /> Add
                 </Button>
               </div>
@@ -116,6 +147,7 @@ export default function Settings({
                             : undefined
                         }
                         onClick={() => {
+                          renameForm.reset()
                           setEditing(item)
                           setEditValue(item.value)
                         }}
@@ -265,16 +297,17 @@ export default function Settings({
       >
         {editing && (
           <div>
-            <Field label="Value">
+            <FormError message={renameForm.errors.form} />
+            <Field label="Value" required error={renameForm.errors.value}>
               <Input
+                autoFocus
                 value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (
-                    e.key === 'Enter' &&
-                    (await run(() => saveLookup(editing.kind, editValue, editing)))
-                  )
-                    setEditing(null)
+                onChange={(e) => {
+                  setEditValue(e.target.value)
+                  renameForm.clear('value')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') rename()
                 }}
               />
             </Field>
@@ -285,14 +318,7 @@ export default function Settings({
               <Button variant="secondary" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button
-                onClick={async () => {
-                  if (await run(() => saveLookup(editing.kind, editValue, editing)))
-                    setEditing(null)
-                }}
-              >
-                Save value
-              </Button>
+              <Button onClick={rename}>Save value</Button>
             </div>
           </div>
         )}
@@ -301,10 +327,7 @@ export default function Settings({
   )
 }
 
-export async function performReset(
-  run: (fn: () => Promise<unknown>) => Promise<boolean>,
-  after: () => void,
-) {
+export async function performReset(run: Run, after: () => void) {
   if (
     window.confirm(
       'Reset all products, lots, receipts, shipments, lookup values, and history in this browser? This cannot be undone. Export a JSON backup first if needed.',

@@ -22,11 +22,14 @@ Settings lets you manage dropdown values, export all records as JSON, merge or r
 - In component mode, producible quantity is the smallest received total among required components, capped at lot quantity. All RM Received mode handles a kit as a single readiness quantity.
 - Fresh production and GRN are not capped by each other or by Lot Qty; the client's data has production above Lot Qty and GRN with no production entered.
 - Completed lots show the full GRN date (latest receipt), days late or early against the planned date, and RM-to-GRN lead time. In component mode a blank RM ready date is derived from the batch that last brought a required component up to Lot Qty.
+- Each lot shows a one-line status in the client's format, e.g. `Delayed, 1d left — RM Blocker (Factory Production)`, counted from the current ETA.
+- Month-end Summary compares the Lot Qty of lots whose original planned date falls in a month with the GRN received for those lots by the last day of that month, by product and by lot. Revised ETAs do not move a lot out of the month it was planned for. "All GRN in month" separately counts every receipt dated that month.
 - Shipment status reads `Overdue Nd` from the current ETA, or `Arrived Nd late/early` against the original planned ETA.
 - Completion requires positive lot quantity and full GRN. Dates use date-only comparisons in the user's local calendar.
 - Shipment arrival means actual warehouse arrival. A stage label alone does not mark a shipment arrived.
 - Quantities are whole units. GRN receipt dates and actual warehouse arrival cannot be in the future, and shipment ETAs and arrival cannot be before ETD.
 - Lot labels are unique within a product, shipment invoice numbers are unique, and a product appears once per shipment.
+- Every form checks required fields and rules before saving and shows the message under the field; the same rules are enforced again when records are written. Drawers offer **Save** (stay open) and **Save & close**.
 - Saved records must use values that exist in Settings, so every JSON export can be imported again. The values `On Track`, `Delayed`, `Hold`, `None`, `Approval Blocker`, and `BAU` drive the summary cards and cannot be renamed or deleted.
 
 The full implementation plan is in `docs/superpowers/plans/2026-10-05-supply-chain-control-tower.md`.

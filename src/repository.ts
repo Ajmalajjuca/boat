@@ -1,6 +1,6 @@
 import { db, allTables, getData, SCHEMA_VERSION } from './db'
 import { demoData, seedLookups } from './demo'
-import { effectiveShipmentEta, sum, today, totalGrn } from './calculations'
+import { effectiveShipmentEta, sum, totalGrn } from './calculations'
 import type {
   ActivityLog,
   DataSet,
@@ -15,15 +15,22 @@ import type {
   ShipmentItem,
 } from './models'
 import { dataKeys, isSystemLookup, now, stamp, uid } from './models'
+import {
+  assertValid,
+  lineField,
+  validateBatch,
+  validateLookupValue,
+  validateLot,
+  validateProduct,
+  validateReceipt,
+  validateShipment,
+  ValidationError,
+} from './validation'
 
-// Quantities are whole units; fractions would make exact GRN completion checks unreliable.
-const nonnegative = (n: number, name: string) => {
-  if (!Number.isInteger(n) || n < 0)
-    throw new Error(`${name} must be a whole number, zero or greater.`)
-}
 const required = (s: string, name: string) => {
   if (!s.trim()) throw new Error(`${name} is required.`)
 }
+const invalid = (field: string, message: string) => new ValidationError({ [field]: message })
 const log = (
   entityType: ActivityLog['entityType'],
   entityId: string,
@@ -33,9 +40,9 @@ const log = (
 const clean = (s: string) => s.trim()
 const sameText = (a: string, b: string) => clean(a).toLowerCase() === clean(b).toLowerCase()
 // Exported backups are validated against Settings values, so saved records must use them too.
-async function requireLookup(kind: LookupKind, value: string, name: string) {
+async function requireLookup(kind: LookupKind, value: string, field: string) {
   if (value && !(await db.lookupValues.where('[kind+value]').equals([kind, value]).first()))
-    throw new Error(`${name} "${value}" is not a Settings value. Choose an existing option.`)
+    throw invalid(field, `"${value}" is no longer in Settings. Choose another option.`)
 }
 
 export async function initialize(choice: 'demo' | 'empty') {
@@ -64,8 +71,7 @@ export async function initialize(choice: 'demo' | 'empty') {
   })
 }
 export async function saveProduct(input: Product) {
-  required(input.name, 'Product name')
-  required(input.segment, 'Segment')
+  assertValid(validateProduct(input))
   const item = {
     ...input,
     name: clean(input.name),
@@ -73,7 +79,13 @@ export async function saveProduct(input: Product) {
     updatedAt: now(),
   }
   await db.transaction('rw', db.products, db.lookupValues, async () => {
-    await requireLookup('segment', item.segment, 'Segment')
+    await requireLookup('segment', item.segment, 'segment')
+    const others = await db.products.filter((p) => p.id !== item.id).toArray()
+    if (others.some((p) => sameText(p.name, item.name) && sameText(p.variant, item.variant)))
+      throw invalid(
+        'name',
+        `${item.name}${item.variant ? ` · ${item.variant}` : ''} already exists. Use a different name or variant.`,
+      )
     await db.products.put(item)
   })
   return item
@@ -116,48 +128,42 @@ const lotFields: (keyof Lot)[] = [
   'followUpNote',
 ]
 export async function saveLot(input: Lot) {
-  required(input.label, 'Lot label')
-  required(input.productId, 'Product')
-  nonnegative(input.lotQty, 'Lot quantity')
-  nonnegative(input.readyQty, 'Ready quantity')
-  nonnegative(input.freshProductionQty, 'Fresh production quantity')
-  nonnegative(input.reworkQty, 'Rework quantity')
-  if (input.reworkQty > input.freshProductionQty)
-    throw new Error('Rework quantity cannot exceed fresh production quantity.')
-  if (input.rmMode === 'components' && input.rmComponents.includes('Kit (All Together)'))
-    throw new Error(
-      'Kit is an alternative to individual components. Use All RM Received mode for a kit.',
-    )
+  assertValid(validateLot(input))
   await db.transaction(
     'rw',
     [db.lots, db.grnReceipts, db.rmBatches, db.activityLogs, db.products, db.lookupValues],
     async () => {
-      if (!(await db.products.get(input.productId))) throw new Error('Select an existing product.')
-      await requireLookup('category', input.category, 'Product category')
-      await requireLookup('ems', input.ems, 'Manufacturing partner')
-      await requireLookup('poc', input.poc, 'Point of contact')
-      await requireLookup('status', input.status, 'Status')
-      await requireLookup('stage', input.stage, 'Stage')
-      await requireLookup('blocker', input.blockerCategory, 'Blocker category')
-      await requireLookup('logistics', input.logisticsMode, 'Logistics mode')
+      if (!(await db.products.get(input.productId)))
+        throw invalid('productId', 'This product no longer exists. Choose another.')
+      await requireLookup('category', input.category, 'category')
+      await requireLookup('ems', input.ems, 'ems')
+      await requireLookup('poc', input.poc, 'poc')
+      await requireLookup('status', input.status, 'status')
+      await requireLookup('stage', input.stage, 'stage')
+      await requireLookup('blocker', input.blockerCategory, 'blockerCategory')
+      await requireLookup('logistics', input.logisticsMode, 'logisticsMode')
       for (const component of input.rmComponents)
-        await requireLookup('component', component, 'Component')
+        await requireLookup('component', component, 'rmComponents')
       const siblings = await db.lots.where('productId').equals(input.productId).toArray()
       if (siblings.some((l) => l.id !== input.id && sameText(l.label, input.label)))
-        throw new Error(`This product already has a lot labelled ${clean(input.label)}.`)
+        throw invalid('label', `This product already has a lot labelled ${clean(input.label)}.`)
       if (input.rmMode === 'components') {
         const batches = await db.rmBatches.where('lotId').equals(input.id).toArray()
         const orphaned = [...new Set(batches.map((b) => b.component))].filter(
           (c) => !input.rmComponents.includes(c),
         )
         if (orphaned.length)
-          throw new Error(
+          throw invalid(
+            'rmComponents',
             `${orphaned.join(', ')} still ha${orphaned.length > 1 ? 've' : 's'} material batches. Keep the component selected or delete its batches first.`,
           )
       }
       const receipts = await db.grnReceipts.where('lotId').equals(input.id).toArray()
       if (totalGrn(receipts) > input.lotQty)
-        throw new Error(`Lot quantity cannot be below existing GRN (${totalGrn(receipts)}).`)
+        throw invalid(
+          'lotQty',
+          `Lot quantity cannot be below the ${totalGrn(receipts)} units already received.`,
+        )
       const old = await db.lots.get(input.id)
       const item = {
         ...input,
@@ -195,17 +201,14 @@ export async function deleteLot(id: string) {
 }
 
 export async function saveBatch(item: RMBatch) {
-  required(item.component, 'Component')
-  required(item.label, 'Batch label')
-  nonnegative(item.plannedQty, 'Planned quantity')
-  nonnegative(item.receivedQty, 'Received quantity')
+  assertValid(validateBatch(item))
   await db.transaction('rw', db.rmBatches, db.lots, db.activityLogs, async () => {
     const lot = await db.lots.get(item.lotId)
     if (!lot) throw new Error('Lot no longer exists.')
     if (lot.rmMode !== 'components')
       throw new Error('Switch the lot to Track by Component before adding batches.')
     if (!lot.rmComponents.includes(item.component))
-      throw new Error('Select this component as applicable on the lot first.')
+      throw invalid('component', 'Select this component on the lot first.')
     const previous = await db.rmBatches.get(item.id)
     await db.rmBatches.put({
       ...item,
@@ -228,11 +231,7 @@ export async function deleteBatch(item: RMBatch) {
   })
 }
 export async function saveReceipt(item: GRNReceipt) {
-  required(item.label, 'Receipt label')
-  required(item.date, 'Receipt date')
-  nonnegative(item.quantity, 'Receipt quantity')
-  if (!item.quantity) throw new Error('Receipt quantity must be greater than zero.')
-  if (item.date > today()) throw new Error('Receipt date cannot be in the future.')
+  assertValid(validateReceipt(item))
   await db.transaction('rw', db.grnReceipts, db.lots, db.activityLogs, async () => {
     const lot = await db.lots.get(item.lotId)
     if (!lot) throw new Error('Lot no longer exists.')
@@ -240,7 +239,10 @@ export async function saveReceipt(item: GRNReceipt) {
     const current = await db.grnReceipts.where('lotId').equals(item.lotId).toArray()
     const next = sum(current.filter((r) => r.id !== item.id).map((r) => r.quantity)) + item.quantity
     if (next > lot.lotQty)
-      throw new Error(`Total GRN would be ${next}, above lot quantity ${lot.lotQty}.`)
+      throw invalid(
+        'quantity',
+        `Total GRN would be ${next}, above the lot quantity of ${lot.lotQty}. Only ${lot.lotQty - (next - item.quantity)} units are left to receive.`,
+      )
     await db.grnReceipts.put({
       ...item,
       label: clean(item.label),
@@ -276,24 +278,7 @@ export async function addNote(
 }
 
 export async function saveShipment(input: Shipment, lines: ShipmentItem[], reason: string) {
-  required(input.number, 'Shipment / invoice number')
-  required(input.vessel, 'Vessel')
-  if (!lines.length) throw new Error('Add at least one product line.')
-  for (const line of lines) {
-    required(line.productId, 'Product')
-    nonnegative(line.quantity, 'Line quantity')
-    if (!line.quantity) throw new Error('Line quantity must be greater than zero.')
-  }
-  if (new Set(lines.map((line) => line.productId)).size !== lines.length)
-    throw new Error('Each product can appear only once. Combine duplicate product lines.')
-  for (const [value, name] of [
-    [input.plannedEta, 'Original planned ETA'],
-    [input.revisedEta, 'Current revised ETA'],
-    [input.actualArrival, 'Actual warehouse arrival'],
-  ])
-    if (input.etd && value && value < input.etd) throw new Error(`${name} cannot be before ETD.`)
-  if (input.actualArrival > today())
-    throw new Error('Actual warehouse arrival cannot be in the future.')
+  assertValid(validateShipment(input, lines))
   await db.transaction(
     'rw',
     [
@@ -305,13 +290,13 @@ export async function saveShipment(input: Shipment, lines: ShipmentItem[], reaso
       db.lookupValues,
     ],
     async () => {
-      await requireLookup('shipmentStage', input.stage, 'Shipment stage')
+      await requireLookup('shipmentStage', input.stage, 'stage')
       const others = await db.shipments.filter((s) => s.id !== input.id).toArray()
       if (others.some((s) => sameText(s.number, input.number)))
-        throw new Error(`Shipment ${clean(input.number)} already exists.`)
+        throw invalid('number', `Shipment ${clean(input.number)} already exists.`)
       for (const line of lines)
         if (!(await db.products.get(line.productId)))
-          throw new Error('A shipment line references a missing product.')
+          throw invalid(lineField(line.id, 'productId'), 'This product no longer exists.')
       const old = await db.shipments.get(input.id)
       const oldLines = old
         ? await db.shipmentItems.where('shipmentId').equals(input.id).toArray()
@@ -425,18 +410,18 @@ export async function lookupInUse(kind: LookupKind, value: string) {
   }
 }
 export async function saveLookup(kind: LookupKind, value: string, existing?: LookupValue) {
-  required(value, 'Value')
+  assertValid(validateLookupValue(value))
   const normalized = clean(value)
   await db.transaction('rw', allTables, async () => {
     if (
       (await db.lookupValues.where('[kind+value]').equals([kind, normalized]).first()) &&
       normalized !== existing?.value
     )
-      throw new Error('This value already exists.')
+      throw invalid('value', 'This value already exists.')
     if (existing && existing.value !== normalized && isSystemLookup(kind, existing.value))
-      throw new Error(`${existing.value} is used by app calculations and cannot be renamed.`)
+      throw invalid('value', `${existing.value} is used by app calculations and cannot be renamed.`)
     if (existing && existing.value !== normalized && (await lookupInUse(kind, existing.value)))
-      throw new Error('This value is in use. Reassign records before renaming it.')
+      throw invalid('value', 'This value is in use. Reassign records before renaming it.')
     await db.lookupValues.put(
       existing
         ? { ...existing, value: normalized, updatedAt: now() }

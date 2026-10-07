@@ -20,6 +20,7 @@ import {
   grnProgress,
   leadTime,
   lotFlags,
+  lotSummary,
   planDelay,
   quantity,
   rmMetrics,
@@ -316,7 +317,14 @@ export default function Production({
       case 'label':
         return <span className="font-bold text-[#193e40]">{l.label}</span>
       case 'status':
-        return statuses(l, rs)
+        return (
+          <div>
+            {statuses(l, rs)}
+            <span className="mt-1 block min-w-48 max-w-64 whitespace-normal text-[11px] leading-4 text-slate-500">
+              {lotSummary(l, rs)}
+            </span>
+          </div>
+        )
       case 'category':
         return <Badge tone={l.category === 'BAU' ? 'slate' : 'blue'}>{l.category}</Badge>
       case 'ems':
@@ -390,6 +398,7 @@ export default function Production({
         Segment: p?.segment || '',
         Lot: l.label,
         Status: l.status,
+        StatusSummary: lotSummary(l, rs),
         Category: l.category,
         EMS: l.ems,
         POC: l.poc,
@@ -811,6 +820,7 @@ function LotTable({
                 <span className="font-bold text-[#173b3d]">{l.label}</span>
                 {statuses(l, rs)}
               </div>
+              <div className="mt-1 text-xs text-slate-500">{lotSummary(l, rs)}</div>
               {showProduct && (
                 <div className="mt-1 text-xs text-slate-500">
                   {data.products.find((p) => p.id === l.productId)?.name}

@@ -26,12 +26,16 @@ import {
   today,
 } from './calculations'
 import { addNote, deleteShipment, downloadFile, saveShipment, toCsv } from './repository'
+import { lineField, validateShipment } from './validation'
 import {
   Badge,
   Button,
   Card,
   Empty,
   Field,
+  FormError,
+  useFormErrors,
+  type Run,
   Input,
   SearchSelect,
   Select,
@@ -406,7 +410,7 @@ export function ShipmentDrawer({
   shipment: Shipment
   data: DataSet
   onClose: () => void
-  run: (fn: () => Promise<unknown>) => Promise<boolean>
+  run: Run
 }) {
   const blankLine = () => stamp({ shipmentId: shipment.id, productId: '', quantity: 1 })
   // A new shipment starts with one empty product line so it can be filled in directly.
@@ -422,6 +426,7 @@ export function ShipmentDrawer({
     [reason, setReason] = useState(''),
     [note, setNote] = useState(''),
     [tab, setTab] = useState<'details' | 'history'>('details')
+  const form = useFormErrors()
   useEffect(() => {
     const current = initialLines()
     setDraft(shipment)
@@ -431,6 +436,13 @@ export function ShipmentDrawer({
   }, [shipment.id])
   const stored = !!data.shipments.find((s) => s.id === shipment.id),
     dirty = JSON.stringify({ shipment: draft, lines }) !== baseline
+  // Warns before a reload or tab close would discard unsaved shipment edits.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
   const close = () => {
     if (dirty && !window.confirm('Discard unsaved shipment changes?')) return
     onClose()
@@ -441,19 +453,36 @@ export function ShipmentDrawer({
       .filter((v) => v.kind === kind)
       .sort((a, b) => a.sort - b.sort)
       .map((v) => v.value)
-  const update = <K extends keyof Shipment>(key: K, value: Shipment[K]) =>
+  const update = <K extends keyof Shipment>(key: K, value: Shipment[K]) => {
     setDraft((d) => ({ ...d, [key]: value }))
-  const addLine = () => setLines([...lines, blankLine()])
-  const updateLine = (id: string, patch: Partial<ShipmentItem>) =>
+    // ETD changes can resolve the date-order errors on the other date fields.
+    form.clear(key, ...(key === 'etd' ? ['plannedEta', 'revisedEta', 'actualArrival'] : []))
+  }
+  const addLine = () => {
+    setLines([...lines, blankLine()])
+    form.clear('lines')
+  }
+  const updateLine = (id: string, patch: Partial<ShipmentItem>) => {
     setLines(lines.map((line) => (line.id === id ? { ...line, ...patch } : line)))
-  const save = async (e?: FormEvent) => {
-    e?.preventDefault()
-    if (await run(() => saveShipment(draft, lines, reason))) {
-      const next = { ...draft, updatedAt: new Date().toISOString() }
-      setDraft(next)
-      setBaseline(JSON.stringify({ shipment: next, lines }))
-      setReason('')
-    }
+    // Duplicate-product errors involve other lines, so a product change clears them all.
+    form.clear(
+      ...Object.keys(patch).map((key) => lineField(id, key as 'productId' | 'quantity')),
+      ...(patch.productId !== undefined ? lines.map((l) => lineField(l.id, 'productId')) : []),
+    )
+  }
+  const save = async (closeAfter = false) => {
+    setTab('details')
+    if (!form.check(validateShipment(draft, lines))) return
+    if (!(await run(() => saveShipment(draft, lines, reason), form.fail))) return
+    if (closeAfter) return onClose()
+    const next = { ...draft, updatedAt: new Date().toISOString() }
+    setDraft(next)
+    setBaseline(JSON.stringify({ shipment: next, lines }))
+    setReason('')
+  }
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    save()
   }
   const remove = async () => {
     if (
@@ -462,7 +491,7 @@ export function ShipmentDrawer({
       )
     )
       return
-    if (await run(() => deleteShipment(draft.id))) onClose()
+    if (await run(() => deleteShipment(draft.id), form.fail)) onClose()
   }
   const revisions = data.etaRevisions
     .filter((r) => r.shipmentId === shipment.id)
@@ -479,7 +508,7 @@ export function ShipmentDrawer({
       title={stored ? draft.number || 'Shipment details' : 'New shipment'}
       subtitle="Finished goods · Multiple product lines · Actual warehouse arrival"
       footer={
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             {stored && (
               <Button variant="danger" size="sm" onClick={remove}>
@@ -487,17 +516,30 @@ export function ShipmentDrawer({
               </Button>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" onClick={close}>
               Close
             </Button>
-            <Button onClick={() => save()}>
-              Save shipment <ArrowRight size={15} />
+            <Button variant="secondary" onClick={() => save()}>
+              Save shipment
+            </Button>
+            <Button onClick={() => save(true)}>
+              Save & close <ArrowRight size={15} />
             </Button>
           </div>
         </div>
       }
     >
+      <div className="mb-5 empty:hidden">
+        <FormError
+          message={
+            form.errors.form ||
+            (Object.keys(form.errors).length > 1
+              ? `Fix the ${Object.keys(form.errors).length} highlighted fields to save this shipment.`
+              : undefined)
+          }
+        />
+      </div>
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           ['Total units', quantity(shipmentQuantity(lines))],
@@ -521,33 +563,43 @@ export function ShipmentDrawer({
           </Card>
         ))}
       </div>
-      <div className="mb-5 flex border-b border-slate-200">
-        <button className="tab" data-active={tab === 'details'} onClick={() => setTab('details')}>
+      <div className="mb-5 flex flex-wrap border-b border-slate-200" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'details'}
+          className="tab"
+          data-active={tab === 'details'}
+          onClick={() => setTab('details')}
+        >
           Shipment details
         </button>
-        <button className="tab" data-active={tab === 'history'} onClick={() => setTab('history')}>
+        <button
+          role="tab"
+          aria-selected={tab === 'history'}
+          className="tab"
+          data-active={tab === 'history'}
+          onClick={() => setTab('history')}
+        >
           ETA revisions & history <Badge tone="slate">{revisions.length}</Badge>
         </button>
       </div>
       {tab === 'details' && (
-        <form onSubmit={save} className="space-y-6">
+        <form onSubmit={submit} noValidate className="space-y-6">
           <div>
             <h3 className="section-title mb-3">Identity & schedule</h3>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Shipment / invoice number">
+              <Field label="Shipment / invoice number" required error={form.errors.number}>
                 <Input
-                  required
                   value={draft.number}
                   onChange={(e) => update('number', e.target.value)}
                   placeholder="INV-SEA-1053"
                 />
               </Field>
-              <Field label="Vessel">
+              <Field label="Vessel / flight" required error={form.errors.vessel}>
                 <Input
-                  required
                   value={draft.vessel}
                   onChange={(e) => update('vessel', e.target.value)}
-                  placeholder="Vessel or carrier"
+                  placeholder="Vessel, flight, or carrier"
                 />
               </Field>
               <Field label="ETD">
@@ -557,21 +609,21 @@ export function ShipmentDrawer({
                   onChange={(e) => update('etd', e.target.value)}
                 />
               </Field>
-              <Field label="Original planned ETA">
+              <Field label="Original planned ETA" error={form.errors.plannedEta}>
                 <Input
                   type="date"
                   value={draft.plannedEta}
                   onChange={(e) => update('plannedEta', e.target.value)}
                 />
               </Field>
-              <Field label="Current revised ETA">
+              <Field label="Current revised ETA" error={form.errors.revisedEta}>
                 <Input
                   type="date"
                   value={draft.revisedEta}
                   onChange={(e) => update('revisedEta', e.target.value)}
                 />
               </Field>
-              <Field label="Actual warehouse arrival">
+              <Field label="Actual warehouse arrival" error={form.errors.actualArrival}>
                 <Input
                   type="date"
                   max={today()}
@@ -579,7 +631,7 @@ export function ShipmentDrawer({
                   onChange={(e) => update('actualArrival', e.target.value)}
                 />
               </Field>
-              <Field label="Current stage">
+              <Field label="Current stage" error={form.errors.stage}>
                 <SearchSelect
                   value={draft.stage}
                   options={lookup('shipmentStage')}
@@ -600,17 +652,32 @@ export function ShipmentDrawer({
           </div>
           <div>
             <h3 className="section-title mb-3">Product lines</h3>
-            <div className="space-y-3">
+            <div className="space-y-3" data-invalid={form.errors.lines ? true : undefined}>
+              {form.errors.lines && (
+                <p role="alert" className="text-xs font-medium text-rose-700">
+                  {form.errors.lines}
+                </p>
+              )}
               {lines.map((line, index) => (
-                <Card key={line.id} className="flex flex-wrap items-end gap-3 p-3">
-                  <Field label={`Product ${index + 1}`} className="min-w-52 flex-1">
+                <Card key={line.id} className="flex flex-wrap items-start gap-3 p-3">
+                  <Field
+                    label={`Product ${index + 1}`}
+                    required
+                    error={form.errors[lineField(line.id, 'productId')]}
+                    className="min-w-52 flex-1"
+                  >
                     <SearchSelect
                       value={line.productId}
                       options={productOptions}
                       onChange={(id) => updateLine(line.id, { productId: id })}
                     />
                   </Field>
-                  <Field label="Quantity" className="w-28">
+                  <Field
+                    label="Quantity"
+                    required
+                    error={form.errors[lineField(line.id, 'quantity')]}
+                    className="w-32"
+                  >
                     <Input
                       type="number"
                       min="1"
@@ -623,7 +690,7 @@ export function ShipmentDrawer({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="text-rose-700"
+                    className="mt-6 text-rose-700"
                     aria-label={`Remove line ${index + 1}`}
                     onClick={() => setLines(lines.filter((x) => x.id !== line.id))}
                   >

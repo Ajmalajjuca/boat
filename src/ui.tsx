@@ -2,11 +2,14 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { fieldErrors, type FieldErrors } from './validation'
+import { Check, ChevronDown, CircleAlert, X } from 'lucide-react'
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -15,9 +18,69 @@ import {
 } from 'react'
 
 export const cn = (...values: ClassValue[]) => twMerge(clsx(values))
+// Runs a save; on failure it calls onError (forms show field errors) or shows a toast.
+export type Run = (fn: () => Promise<unknown>, onError?: (e: unknown) => void) => Promise<boolean>
+export function useFormErrors() {
+  const [errors, setErrors] = useState<FieldErrors>({})
+  return {
+    errors,
+    // Applies client-side validation results; returns true when the form may be saved.
+    check(found: FieldErrors) {
+      setErrors(found)
+      if (!Object.keys(found).length) return true
+      focusFirstError()
+      return false
+    },
+    fail(e: unknown) {
+      setErrors(fieldErrors(e))
+      focusFirstError()
+    },
+    clear(...fields: string[]) {
+      setErrors((prev) => {
+        if (!prev.form && !fields.some((f) => prev[f])) return prev
+        const next = { ...prev }
+        for (const f of fields) delete next[f]
+        delete next.form
+        return next
+      })
+    },
+    reset: () => setErrors({}),
+  }
+}
 // Radix listens for Escape in the capture phase, so an open SearchSelect must veto closing its dialog.
 const keepOpenForSearch = (e: KeyboardEvent) => {
   if (e.target instanceof Element && e.target.closest('[data-search-open]')) e.preventDefault()
+}
+// Toasts sit above dialogs; interacting with one must not dismiss the dialog underneath.
+const keepOpenForToast = (e: Event) => {
+  if (e.target instanceof Element && e.target.closest('[data-toast]')) e.preventDefault()
+}
+// Moves focus to the first invalid field in the top-most dialog (or the page) after a failed save.
+export function focusFirstError() {
+  // Waits a moment so a tab switch triggered by the same failure has rendered.
+  setTimeout(() => {
+    const dialogs = document.querySelectorAll('[role=dialog]')
+    const scope = dialogs[dialogs.length - 1] || document
+    const field = scope.querySelector<HTMLElement>(
+      '[data-invalid] input, [data-invalid] textarea, [data-invalid] select, [data-invalid] button',
+    )
+    const target = field || scope.querySelector<HTMLElement>('[data-form-error]')
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    field?.focus({ preventScroll: true })
+  }, 60)
+}
+export function FormError({ message }: { message?: string }) {
+  if (!message) return null
+  return (
+    <div
+      role="alert"
+      data-form-error
+      className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800"
+    >
+      <CircleAlert size={16} className="mt-0.5 shrink-0" />
+      <span>{message}</span>
+    </div>
+  )
 }
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
@@ -59,20 +122,44 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 export function Field({
   label,
   help,
+  error,
+  required,
   children,
   className,
 }: {
   label: string
   help?: string
+  error?: string
+  required?: boolean
   children: ReactNode
   className?: string
 }) {
   return (
-    <label className={cn('block min-w-0', className)}>
-      <span className="field-label">{label}</span>
-      {children}
-      {help && <span className="mt-1 block text-xs text-slate-500">{help}</span>}
-    </label>
+    // Error and help text sit outside the <label> so they are not read as part of the field name.
+    <div className={cn('block min-w-0', className)} data-invalid={error ? true : undefined}>
+      <label className="block">
+        <span className="field-label">
+          {label}
+          {required && (
+            <span className="ml-0.5 text-rose-600" aria-hidden="true">
+              *
+            </span>
+          )}
+        </span>
+        {children}
+      </label>
+      {error ? (
+        <span
+          role="alert"
+          className="mt-1 flex items-start gap-1 text-xs font-medium text-rose-700"
+        >
+          <CircleAlert size={13} className="mt-px shrink-0" />
+          {error}
+        </span>
+      ) : (
+        help && <span className="mt-1 block text-xs text-slate-500">{help}</span>
+      )}
+    </div>
   )
 }
 export function Badge({
@@ -158,6 +245,8 @@ export function Sheet({
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[#092a2d]/50 backdrop-blur-[2px]" />
         <DialogPrimitive.Content
           onEscapeKeyDown={keepOpenForSearch}
+          onPointerDownOutside={keepOpenForToast}
+          onInteractOutside={keepOpenForToast}
           className={cn(
             'fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-[#f8faf9] shadow-2xl outline-none',
             width === 'wide' ? 'max-w-[780px]' : 'max-w-[560px]',
@@ -206,23 +295,29 @@ export function Modal({
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-[#092a2d]/50" />
-        <DialogPrimitive.Content
-          onEscapeKeyDown={keepOpenForSearch}
-          className="fixed left-1/2 top-1/2 z-[71] max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none"
-        >
-          <div className="mb-5 flex items-start justify-between">
-            <DialogPrimitive.Title className="text-lg font-bold text-[#173b3d]">
-              {title}
-            </DialogPrimitive.Title>
-            <DialogPrimitive.Close asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="Close">
-                <X size={18} />
-              </Button>
-            </DialogPrimitive.Close>
-          </div>
-          {children}
-          {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
-        </DialogPrimitive.Content>
+        {/* Centred with flexbox, not a transform, so fixed-position dropdowns are not clipped. */}
+        <div className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center p-4">
+          <DialogPrimitive.Content
+            onEscapeKeyDown={keepOpenForSearch}
+            onPointerDownOutside={keepOpenForToast}
+            onInteractOutside={keepOpenForToast}
+            className="pointer-events-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl outline-none sm:p-6"
+          >
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <DialogPrimitive.Title className="text-lg font-bold text-[#173b3d]">
+                {title}
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Close asChild>
+                <Button type="button" variant="ghost" size="icon" aria-label="Close">
+                  <X size={18} />
+                </Button>
+              </DialogPrimitive.Close>
+            </div>
+            <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
+            {children}
+            {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
+          </DialogPrimitive.Content>
+        </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )
@@ -245,7 +340,9 @@ export function SearchSelect({
   const [open, setOpen] = useState(false),
     [term, setTerm] = useState(''),
     [active, setActive] = useState(0)
-  const root = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLDivElement>(null),
+    trigger = useRef<HTMLButtonElement>(null),
+    [position, setPosition] = useState<CSSProperties>({})
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) setOpen(false)
@@ -253,6 +350,28 @@ export function SearchSelect({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+  // The list is fixed to the viewport so scrolling modals and drawers cannot clip it. It opens
+  // upward when there is not enough room below the field.
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const rect = trigger.current?.getBoundingClientRect()
+      if (!rect) return
+      const below = window.innerHeight - rect.bottom
+      setPosition(
+        below < 280 && rect.top > below
+          ? { left: rect.left, width: rect.width, bottom: window.innerHeight - rect.top + 4 }
+          : { left: rect.left, width: rect.width, top: rect.bottom + 4 },
+      )
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
   const normalized = options.map((option) =>
     typeof option === 'string' ? { value: option, label: option } : option,
   )
@@ -263,8 +382,11 @@ export function SearchSelect({
   return (
     <div ref={root} className="relative" data-search-open={open || undefined}>
       <button
+        ref={trigger}
         type="button"
         disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => {
           setOpen(!open)
           setTerm('')
@@ -272,13 +394,18 @@ export function SearchSelect({
         }}
         className="field flex w-full items-center justify-between text-left disabled:opacity-50"
       >
-        <span className={value ? 'text-slate-800' : 'text-slate-400'}>
+        <span className={cn('truncate', value ? 'text-slate-800' : 'text-slate-400')}>
           {selected?.label || value || placeholder}
         </span>
-        <ChevronDown size={15} className="text-slate-400" />
+        <ChevronDown size={15} className="shrink-0 text-slate-400" />
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+        <div
+          style={position}
+          // Inside a <label>, clicks on non-button areas would re-trigger the toggle button.
+          onClick={(e) => e.preventDefault()}
+          className="fixed z-[80] rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+        >
           <input
             autoFocus
             aria-label="Search options"
@@ -310,7 +437,7 @@ export function SearchSelect({
               }
             }}
           />
-          <div className="max-h-48 overflow-y-auto">
+          <div className="max-h-56 overflow-y-auto" role="listbox">
             {clearable && value && (
               <button
                 type="button"
@@ -327,6 +454,8 @@ export function SearchSelect({
               matches.map((option, index) => (
                 <button
                   type="button"
+                  role="option"
+                  aria-selected={option.value === value}
                   key={option.value}
                   onClick={() => {
                     onChange(option.value)

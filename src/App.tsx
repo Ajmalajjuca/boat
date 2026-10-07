@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Activity,
   Archive,
   ArrowDownToLine,
   Box,
+  CalendarCheck,
   Check,
   CircleAlert,
   Database,
@@ -31,13 +33,26 @@ import {
   deleteProduct,
 } from './repository'
 import Production from './Production'
+import MonthEnd from './MonthEnd'
 import LotDrawer from './LotDrawer'
 import Shipments, { newShipment, ShipmentDrawer } from './Shipments'
 import Settings, { performReset } from './Settings'
-import { Badge, Button, Card, Field, Input, Modal, SearchSelect } from './ui'
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  FormError,
+  Input,
+  Modal,
+  SearchSelect,
+  useFormErrors,
+  type Run,
+} from './ui'
+import { validateProduct } from './validation'
 import { defaultLookup, newLot } from './demo'
 
-type Screen = 'production' | 'completed' | 'shipments' | 'settings'
+type Screen = 'production' | 'completed' | 'monthEnd' | 'shipments' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 const screenInfo: Record<Screen, { title: string; description: string }> = {
   production: {
@@ -47,6 +62,10 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
   completed: {
     title: 'Completed',
     description: 'Lots with full GRN, including their dates, receipts, and history.',
+  },
+  monthEnd: {
+    title: 'Month-end Summary',
+    description: 'Units planned for a month against GRN received by the end of that month.',
   },
   shipments: {
     title: 'Finished Goods',
@@ -76,11 +95,22 @@ export default function App() {
     [importError, setImportError] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('idle'),
     [message, setMessage] = useState('')
-  const csvRef = useRef<(() => void) | null>(null)
+  const csvRef = useRef<(() => void) | null>(null),
+    busy = useRef(false),
+    productForm = useFormErrors()
   useEffect(() => {
     db.open().catch((e) => setDbError(e instanceof Error ? e.message : 'Could not open IndexedDB.'))
   }, [])
-  const run = async (fn: () => Promise<unknown>) => {
+  // Success messages fade; errors stay until dismissed or the next action.
+  useEffect(() => {
+    if (!message || saveState === 'failed') return
+    const timer = setTimeout(() => setMessage(''), 4000)
+    return () => clearTimeout(timer)
+  }, [message, saveState])
+  const run: Run = async (fn, onError) => {
+    // Ignores repeat clicks while a save is still in flight.
+    if (busy.current) return false
+    busy.current = true
     setSaveState('saving')
     setMessage('')
     try {
@@ -90,12 +120,16 @@ export default function App() {
       return true
     } catch (e) {
       setSaveState('failed')
-      setMessage(e instanceof Error ? e.message : 'Save failed. Please try again.')
+      if (onError) onError(e)
+      else setMessage(e instanceof Error ? e.message : 'Save failed. Please try again.')
       return false
+    } finally {
+      busy.current = false
     }
   }
   const openProduct = (value?: Product) => {
     const next = value || productBlank(data?.lookupValues || [])
+    productForm.reset()
     setProduct(next)
     setProductBase(JSON.stringify(next))
   }
@@ -110,7 +144,11 @@ export default function App() {
   }
   const saveProductForm = async (e: FormEvent) => {
     e.preventDefault()
-    if (product && (await run(() => saveProduct(product)))) setProduct(null)
+    if (!product || !productForm.check(validateProduct(product))) return
+    if (await run(() => saveProduct(product), productForm.fail)) {
+      setProduct(null)
+      setMessage(`Product ${product.name.trim()} saved.`)
+    }
   }
   const removeProduct = async () => {
     if (!product) return
@@ -121,7 +159,7 @@ export default function App() {
       )
     )
       return
-    if (await run(() => deleteProduct(product.id))) setProduct(null)
+    if (await run(() => deleteProduct(product.id), productForm.fail)) setProduct(null)
   }
   const exportJson = async () => {
     try {
@@ -169,7 +207,10 @@ export default function App() {
       )
     )
       return
-    const ok = await run(() => importData(importRaw, importMode))
+    const ok = await run(
+      () => importData(importRaw, importMode),
+      (e) => setImportError(e instanceof Error ? e.message : 'Import failed.'),
+    )
     if (ok) {
       setImportOpen(false)
       setMessage(
@@ -192,6 +233,7 @@ export default function App() {
   const navItems: [Screen, typeof Factory][] = [
     ['production', Factory],
     ['completed', Archive],
+    ['monthEnd', CalendarCheck],
     ['shipments', Ship],
     ['settings', Settings2],
   ]
@@ -421,17 +463,28 @@ export default function App() {
                     : 'Local data'}
             </div>
           </div>
-          {message && (
-            <div
-              role="alert"
-              className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${saveState === 'failed' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-teal-200 bg-teal-50 text-teal-800'}`}
-            >
-              <span>{message}</span>
-              <button aria-label="Dismiss message" onClick={() => setMessage('')}>
-                <X size={15} />
-              </button>
-            </div>
-          )}
+          {message &&
+            // Portaled toast stays visible and clickable above open drawers and modals.
+            createPortal(
+              <div
+                data-toast
+                role={saveState === 'failed' ? 'alert' : 'status'}
+                className={`pointer-events-auto fixed left-1/2 top-4 z-[90] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl ${saveState === 'failed' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-teal-200 bg-teal-50 text-teal-800'}`}
+              >
+                <span className="flex items-start gap-2">
+                  {saveState === 'failed' ? (
+                    <CircleAlert size={16} className="mt-0.5 shrink-0" />
+                  ) : (
+                    <Check size={16} className="mt-0.5 shrink-0" />
+                  )}
+                  {message}
+                </span>
+                <button aria-label="Dismiss message" onClick={() => setMessage('')}>
+                  <X size={15} />
+                </button>
+              </div>,
+              document.body,
+            )}
           {(screen === 'production' || screen === 'completed') && (
             <Production
               data={data}
@@ -441,6 +494,9 @@ export default function App() {
               onEditProduct={openProduct}
               csvRef={csvRef}
             />
+          )}
+          {screen === 'monthEnd' && (
+            <MonthEnd data={data} onOpenLot={setSelectedLot} csvRef={csvRef} />
           )}
           {screen === 'shipments' && (
             <Shipments data={data} onOpen={setSelectedShipment} csvRef={csvRef} />
@@ -484,31 +540,40 @@ export default function App() {
         }
       >
         {product && (
-          <form onSubmit={saveProductForm} className="space-y-4">
-            <Field label="Product name">
+          <form onSubmit={saveProductForm} noValidate className="space-y-4">
+            <FormError message={productForm.errors.form} />
+            <Field label="Product name" required error={productForm.errors.name}>
               <Input
-                required
                 autoFocus
                 value={product.name}
-                onChange={(e) => setProduct({ ...product, name: e.target.value })}
+                onChange={(e) => {
+                  setProduct({ ...product, name: e.target.value })
+                  productForm.clear('name')
+                }}
                 placeholder="e.g. Auralite TWS Pro"
               />
             </Field>
             <Field label="Variant">
               <Input
                 value={product.variant}
-                onChange={(e) => setProduct({ ...product, variant: e.target.value })}
+                onChange={(e) => {
+                  setProduct({ ...product, variant: e.target.value })
+                  productForm.clear('name')
+                }}
                 placeholder="e.g. Midnight Black"
               />
             </Field>
-            <Field label="Segment">
+            <Field label="Segment" required error={productForm.errors.segment}>
               <SearchSelect
                 value={product.segment}
                 options={data.lookupValues
                   .filter((v) => v.kind === 'segment')
                   .sort((a, b) => a.sort - b.sort)
                   .map((v) => v.value)}
-                onChange={(v) => setProduct({ ...product, segment: v })}
+                onChange={(v) => {
+                  setProduct({ ...product, segment: v })
+                  productForm.clear('segment')
+                }}
               />
             </Field>
             <div className="flex items-center justify-between pt-2">

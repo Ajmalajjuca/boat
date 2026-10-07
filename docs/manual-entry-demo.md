@@ -94,7 +94,7 @@ Open **Finished Goods → Add Shipment**. Enter the shipment details, leaving re
 | Field | Value |
 | --- | --- |
 | Shipment / invoice number | `DEMO-INV-001` |
-| Vessel | MV Practice Star |
+| Vessel / flight | MV Practice Star |
 | ETD | `2026-09-28` |
 | Original planned ETA | `2026-10-04` |
 | Current stage | In Transit |

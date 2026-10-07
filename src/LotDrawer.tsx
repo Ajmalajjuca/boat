@@ -17,6 +17,7 @@ import {
   fullGrnDate,
   grnProgress,
   leadTime,
+  lotSummary,
   planDelay,
   quantity,
   signedDays,
@@ -44,14 +45,40 @@ import {
   Select,
   Sheet,
   Textarea,
+  FormError,
+  useFormErrors,
+  type Run,
 } from './ui'
+import {
+  fieldErrors,
+  validateBatch,
+  validateLot,
+  validateReceipt,
+  type FieldErrors,
+} from './validation'
 
 type Props = {
   lot: Lot
   data: DataSet
   onClose: () => void
-  run: (fn: () => Promise<unknown>) => Promise<boolean>
+  run: Run
 }
+// Fields edited on the Overview tab; a failed save switches there so the error is visible.
+const overviewFields = [
+  'productId',
+  'label',
+  'category',
+  'ems',
+  'poc',
+  'status',
+  'stage',
+  'lotQty',
+  'freshProductionQty',
+  'reworkQty',
+  'readyQty',
+  'logisticsMode',
+  'blockerCategory',
+]
 const number = (s: string) => (s === '' ? 0 : Number(s))
 export default function LotDrawer({ lot, data, onClose, run }: Props) {
   const [draft, setDraft] = useState(lot),
@@ -60,6 +87,9 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
   const [batch, setBatch] = useState<RMBatch | null>(null),
     [receipt, setReceipt] = useState<GRNReceipt | null>(null),
     [note, setNote] = useState('')
+  const lotForm = useFormErrors(),
+    batchForm = useFormErrors(),
+    receiptForm = useFormErrors()
   useEffect(() => {
     setDraft(lot)
     setBaseline(JSON.stringify(lot))
@@ -67,6 +97,13 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
   }, [lot.id])
   const dirty = JSON.stringify(draft) !== baseline,
     stored = !!data.lots.find((l) => l.id === lot.id)
+  // Warns before a reload or tab close would discard unsaved lot edits.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
   const close = () => {
     if (dirty && !window.confirm('Discard unsaved lot changes?')) return
     onClose()
@@ -83,17 +120,34 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
       .filter((v) => v.kind === kind)
       .sort((a, b) => a.sort - b.sort)
       .map((v) => v.value)
-  const update = <K extends keyof Lot>(key: K, value: Lot[K]) =>
+  const update = <K extends keyof Lot>(key: K, value: Lot[K]) => {
     setDraft((d) => ({ ...d, [key]: value }))
-  const setMode = (mode: Lot['rmMode']) =>
+    lotForm.clear(key)
+  }
+  const setMode = (mode: Lot['rmMode']) => {
     setDraft((d) => ({ ...d, rmMode: mode, rmComponents: mode === 'all' ? [] : d.rmComponents }))
-  const save = async () => {
-    const ok = await run(() => saveLot(draft))
-    if (ok) {
-      const next = { ...draft, updatedAt: new Date().toISOString() }
-      setDraft(next)
-      setBaseline(JSON.stringify(next))
-    }
+    lotForm.clear('rmComponents', 'readyQty')
+  }
+  const showTabFor = (errors: FieldErrors) => {
+    const keys = Object.keys(errors)
+    if (keys.some((k) => overviewFields.includes(k))) setTab('overview')
+    else if (keys.includes('rmComponents')) setTab('rm')
+  }
+  const save = async (closeAfter = false) => {
+    const found = validateLot(draft)
+    if (!lotForm.check(found)) return showTabFor(found)
+    const ok = await run(
+      () => saveLot(draft),
+      (e) => {
+        lotForm.fail(e)
+        showTabFor(fieldErrors(e))
+      },
+    )
+    if (!ok) return
+    if (closeAfter) return onClose()
+    const next = { ...draft, updatedAt: new Date().toISOString() }
+    setDraft(next)
+    setBaseline(JSON.stringify(next))
   }
   const remove = async () => {
     if (!stored) {
@@ -106,9 +160,10 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
       )
     )
       return
-    if (await run(() => deleteLot(lot.id))) onClose()
+    if (await run(() => deleteLot(lot.id), lotForm.fail)) onClose()
   }
-  const openBatch = (value?: RMBatch) =>
+  const openBatch = (value?: RMBatch) => {
+    batchForm.reset()
     setBatch(
       value ||
         stamp({
@@ -123,15 +178,30 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
           notes: '',
         }),
     )
-  const openReceipt = (value?: GRNReceipt) =>
+  }
+  const openReceipt = (value?: GRNReceipt) => {
+    receiptForm.reset()
     setReceipt(value || stamp({ lotId: lot.id, label: '', date: today(), quantity: 0, note: '' }))
+  }
+  const editBatch = (patch: Partial<RMBatch>) => {
+    setBatch((b) => (b ? { ...b, ...patch } : b))
+    batchForm.clear(...Object.keys(patch))
+  }
+  const editReceipt = (patch: Partial<GRNReceipt>) => {
+    setReceipt((r) => (r ? { ...r, ...patch } : r))
+    receiptForm.clear(...Object.keys(patch))
+  }
+  const available = (r: GRNReceipt) =>
+    draft.lotQty - totalGrn(rs) + (rs.find((x) => x.id === r.id)?.quantity || 0)
   const saveBatchForm = async (e: FormEvent) => {
     e.preventDefault()
-    if (batch && (await run(() => saveBatch(batch)))) setBatch(null)
+    if (!batch || !batchForm.check(validateBatch(batch))) return
+    if (await run(() => saveBatch(batch), batchForm.fail)) setBatch(null)
   }
   const saveReceiptForm = async (e: FormEvent) => {
     e.preventDefault()
-    if (receipt && (await run(() => saveReceipt(receipt)))) setReceipt(null)
+    if (!receipt || !receiptForm.check(validateReceipt(receipt, available(receipt)))) return
+    if (await run(() => saveReceipt(receipt), receiptForm.fail)) setReceipt(null)
   }
   const toggleComponent = (component: string) =>
     update(
@@ -157,7 +227,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
           if (!open) close()
         }}
         title={stored ? `${draft.label || 'Lot details'}` : 'New production lot'}
-        subtitle={`${data.products.find((p) => p.id === draft.productId)?.name || 'Product'} · ${draft.category} · GRN means Goods Received Note`}
+        subtitle={`${data.products.find((p) => p.id === draft.productId)?.name || 'Product'} · ${draft.category}${stored ? ` · ${lotSummary(lot, rs)}` : ''}`}
         footer={
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -167,17 +237,30 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Button>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="secondary" onClick={close}>
                 Close
               </Button>
-              <Button onClick={save}>
-                {dirty ? 'Save changes' : 'Save lot'} <ArrowRight size={15} />
+              <Button variant="secondary" onClick={() => save()}>
+                Save lot
+              </Button>
+              <Button onClick={() => save(true)}>
+                Save & close <ArrowRight size={15} />
               </Button>
             </div>
           </div>
         }
       >
+        <div className="mb-5 empty:hidden">
+          <FormError
+            message={
+              lotForm.errors.form ||
+              (Object.keys(lotForm.errors).length > 1
+                ? `Fix the ${Object.keys(lotForm.errors).length} highlighted fields to save this lot.`
+                : undefined)
+            }
+          />
+        </div>
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map((s) => (
             <Card key={s.label} className="p-3">
@@ -195,7 +278,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             style={{ width: `${grnProgress(draft, rs)}%` }}
           />
         </div>
-        <div className="mb-5 flex overflow-x-auto border-b border-slate-200">
+        <div className="mb-5 flex flex-wrap border-b border-slate-200" role="tablist">
           {(
             [
               ['overview', 'Overview'],
@@ -204,7 +287,14 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
               ['history', 'Updates & History'],
             ] as const
           ).map(([id, label]) => (
-            <button key={id} className="tab" data-active={tab === id} onClick={() => setTab(id)}>
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              className="tab"
+              data-active={tab === id}
+              onClick={() => setTab(id)}
+            >
               {label}
             </button>
           ))}
@@ -214,14 +304,14 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             <div>
               <h3 className="section-title mb-3">Identification & ownership</h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Product">
+                <Field label="Product" required error={lotForm.errors.productId}>
                   <SearchSelect
                     value={draft.productId}
                     options={products}
                     onChange={(id) => update('productId', id)}
                   />
                 </Field>
-                <Field label="Lot label">
+                <Field label="Lot label" required error={lotForm.errors.label}>
                   <Input
                     required
                     value={draft.label}
@@ -229,14 +319,18 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     placeholder="e.g. TWS-2403"
                   />
                 </Field>
-                <Field label="Product category">
+                <Field label="Product category" required error={lotForm.errors.category}>
                   <SearchSelect
                     value={draft.category}
                     options={lookup('category')}
                     onChange={(v) => update('category', v)}
                   />
                 </Field>
-                <Field label="Manufacturing partner (EMS)" help="EMS means manufacturing partner.">
+                <Field
+                  label="Manufacturing partner (EMS)"
+                  error={lotForm.errors.ems}
+                  help="EMS means manufacturing partner."
+                >
                   <SearchSelect
                     value={draft.ems}
                     options={lookup('ems')}
@@ -244,7 +338,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     clearable
                   />
                 </Field>
-                <Field label="Point of contact">
+                <Field label="Point of contact" error={lotForm.errors.poc}>
                   <SearchSelect
                     value={draft.poc}
                     options={lookup('poc')}
@@ -270,7 +364,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             <div>
               <h3 className="section-title mb-3">Production & material</h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Overall status">
+                <Field label="Overall status" required error={lotForm.errors.status}>
                   <SearchSelect
                     value={draft.status}
                     options={lookup('status')}
@@ -279,6 +373,8 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Field>
                 <Field
                   label="Current stage"
+                  required
+                  error={lotForm.errors.stage}
                   help="PDI is the quality check before warehouse dispatch."
                 >
                   <SearchSelect
@@ -289,6 +385,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Field>
                 <Field
                   label="Lot quantity"
+                  error={lotForm.errors.lotQty}
                   help="Client-defined arrived raw material, expressed as finished-product-equivalent units."
                 >
                   <Input
@@ -299,7 +396,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     onChange={(e) => update('lotQty', number(e.target.value))}
                   />
                 </Field>
-                <Field label="Fresh production quantity">
+                <Field label="Fresh production quantity" error={lotForm.errors.freshProductionQty}>
                   <Input
                     type="number"
                     min="0"
@@ -310,6 +407,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 </Field>
                 <Field
                   label="Rework quantity"
+                  error={lotForm.errors.reworkQty}
                   help="A subset of produced units; it is not added to fresh production."
                 >
                   <Input
@@ -339,6 +437,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 {draft.rmMode === 'all' && (
                   <Field
                     label="Ready quantity"
+                    error={lotForm.errors.readyQty}
                     help="Producible units when tracking all RM together."
                   >
                     <Input
@@ -393,7 +492,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     onChange={(e) => update('actualDate', e.target.value)}
                   />
                 </Field>
-                <Field label="Logistics mode">
+                <Field label="Logistics mode" error={lotForm.errors.logisticsMode}>
                   <SearchSelect
                     value={draft.logisticsMode}
                     options={lookup('logistics')}
@@ -427,7 +526,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             <div>
               <h3 className="section-title mb-3">Blockers & follow-up</h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Blocker category">
+                <Field label="Blocker category" error={lotForm.errors.blockerCategory}>
                   <SearchSelect
                     value={draft.blockerCategory}
                     options={lookup('blocker')}
@@ -497,7 +596,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                   </Select>
                 </Field>
                 {draft.rmMode === 'all' && (
-                  <Field label="Ready quantity">
+                  <Field label="Ready quantity" error={lotForm.errors.readyQty}>
                     <Input
                       type="number"
                       min="0"
@@ -529,7 +628,10 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                   >
                     Use Kit (All Together)
                   </Button>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div
+                    className="mt-3 flex flex-wrap gap-2"
+                    data-invalid={lotForm.errors.rmComponents ? true : undefined}
+                  >
                     {lookup('component')
                       .filter((c) => c !== 'Kit (All Together)')
                       .map((component) => (
@@ -548,6 +650,11 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                       ))}
                   </div>
                 </>
+              )}
+              {lotForm.errors.rmComponents && (
+                <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
+                  {lotForm.errors.rmComponents}
+                </p>
               )}
               {dirty && (
                 <p className="mt-3 text-xs text-amber-700">
@@ -756,62 +863,60 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
         }
       >
         {batch && (
-          <form onSubmit={saveBatchForm} className="space-y-4">
-            <Field label="Component">
+          <form onSubmit={saveBatchForm} noValidate className="space-y-4">
+            <FormError message={batchForm.errors.form} />
+            <Field label="Component" required error={batchForm.errors.component}>
               <SearchSelect
                 value={batch.component}
                 options={draft.rmComponents}
-                onChange={(v) => setBatch({ ...batch, component: v })}
+                onChange={(v) => editBatch({ component: v })}
               />
             </Field>
-            <Field label="Batch label">
+            <Field label="Batch label" required error={batchForm.errors.label}>
               <Input
                 required
                 value={batch.label}
-                onChange={(e) => setBatch({ ...batch, label: e.target.value })}
+                onChange={(e) => editBatch({ label: e.target.value })}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Planned quantity">
+              <Field label="Planned quantity" error={batchForm.errors.plannedQty}>
                 <Input
                   type="number"
                   min="0"
                   step="1"
                   required
                   value={batch.plannedQty}
-                  onChange={(e) => setBatch({ ...batch, plannedQty: number(e.target.value) })}
+                  onChange={(e) => editBatch({ plannedQty: number(e.target.value) })}
                 />
               </Field>
-              <Field label="Received quantity">
+              <Field label="Received quantity" error={batchForm.errors.receivedQty}>
                 <Input
                   type="number"
                   min="0"
                   step="1"
                   required
                   value={batch.receivedQty}
-                  onChange={(e) => setBatch({ ...batch, receivedQty: number(e.target.value) })}
+                  onChange={(e) => editBatch({ receivedQty: number(e.target.value) })}
                 />
               </Field>
               <Field label="Planned date">
                 <Input
                   type="date"
                   value={batch.plannedDate}
-                  onChange={(e) => setBatch({ ...batch, plannedDate: e.target.value })}
+                  onChange={(e) => editBatch({ plannedDate: e.target.value })}
                 />
               </Field>
-              <Field label="Received date">
+              <Field label="Received date" error={batchForm.errors.receivedDate}>
                 <Input
                   type="date"
                   value={batch.receivedDate}
-                  onChange={(e) => setBatch({ ...batch, receivedDate: e.target.value })}
+                  onChange={(e) => editBatch({ receivedDate: e.target.value })}
                 />
               </Field>
             </div>
             <Field label="Status">
-              <Select
-                value={batch.status}
-                onChange={(e) => setBatch({ ...batch, status: e.target.value })}
-              >
+              <Select value={batch.status} onChange={(e) => editBatch({ status: e.target.value })}>
                 <option>Pending</option>
                 <option>Partial</option>
                 <option>Received</option>
@@ -821,7 +926,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
             <Field label="Notes">
               <Textarea
                 value={batch.notes}
-                onChange={(e) => setBatch({ ...batch, notes: e.target.value })}
+                onChange={(e) => editBatch({ notes: e.target.value })}
               />
             </Field>
             <div className="flex justify-end gap-2">
@@ -843,25 +948,26 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
         }
       >
         {receipt && (
-          <form onSubmit={saveReceiptForm} className="space-y-4">
-            <Field label="Receipt label">
+          <form onSubmit={saveReceiptForm} noValidate className="space-y-4">
+            <FormError message={receiptForm.errors.form} />
+            <Field label="Receipt label" required error={receiptForm.errors.label}>
               <Input
                 required
                 value={receipt.label}
-                onChange={(e) => setReceipt({ ...receipt, label: e.target.value })}
+                onChange={(e) => editReceipt({ label: e.target.value })}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Receipt date">
+              <Field label="Receipt date" required error={receiptForm.errors.date}>
                 <Input
                   type="date"
                   required
                   max={today()}
                   value={receipt.date}
-                  onChange={(e) => setReceipt({ ...receipt, date: e.target.value })}
+                  onChange={(e) => editReceipt({ date: e.target.value })}
                 />
               </Field>
-              <Field label="Quantity">
+              <Field label="Quantity" required error={receiptForm.errors.quantity}>
                 <Input
                   type="number"
                   min="1"
@@ -873,14 +979,14 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                   }
                   required
                   value={receipt.quantity}
-                  onChange={(e) => setReceipt({ ...receipt, quantity: number(e.target.value) })}
+                  onChange={(e) => editReceipt({ quantity: number(e.target.value) })}
                 />
               </Field>
             </div>
             <Field label="Optional note">
               <Textarea
                 value={receipt.note}
-                onChange={(e) => setReceipt({ ...receipt, note: e.target.value })}
+                onChange={(e) => editReceipt({ note: e.target.value })}
               />
             </Field>
             <p className="text-xs text-slate-500">

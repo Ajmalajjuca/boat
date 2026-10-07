@@ -164,3 +164,73 @@ export function dateLabel(value: string) {
   const [y, m, d] = value.split('-')
   return `${d} ${new Date(Date.UTC(Number(y), Number(m) - 1, 1)).toLocaleString('en', { month: 'short' })} ${y}`
 }
+// One-line lot summary in the client's format: "Delayed, 1d left — RM Blocker (Factory Production)".
+export function lotSummary(lot: Lot, receipts: GRNReceipt[], date = today()) {
+  if (completed(lot, receipts)) return `Completed (${lot.stage})`
+  const eta = effectiveLotEta(lot),
+    days = eta ? dayDiff(eta, date) : null
+  const timing =
+    days === null
+      ? 'no ETA'
+      : days < 0
+        ? `${-days}d overdue`
+        : days === 0
+          ? 'due today'
+          : `${days}d left`
+  const blocker =
+    lot.blockerCategory && lot.blockerCategory !== 'None' ? ` — ${lot.blockerCategory}` : ''
+  return `${lot.status || 'No status'}, ${timing}${blocker}${lot.stage ? ` (${lot.stage})` : ''}`
+}
+export const monthOf = (date: string) => date.slice(0, 7)
+export function monthEnd(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+}
+export function monthLabel(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+// Month-end status: lots planned for the month (by original planned date) against the GRN
+// received for those lots by the last day of the month.
+export function monthSummary(lots: Lot[], receipts: GRNReceipt[], month: string) {
+  const end = monthEnd(month)
+  const lotRows = lots
+    .filter((lot) => monthOf(lot.plannedDate) === month)
+    .map((lot) => {
+      const received = totalGrn(receipts.filter((r) => r.lotId === lot.id && r.date <= end))
+      return { lot, planned: lot.lotQty, received, shortfall: Math.max(0, lot.lotQty - received) }
+    })
+  const products = new Map<
+    string,
+    { productId: string; lots: number; planned: number; received: number; shortfall: number }
+  >()
+  for (const row of lotRows) {
+    const p = products.get(row.lot.productId) || {
+      productId: row.lot.productId,
+      lots: 0,
+      planned: 0,
+      received: 0,
+      shortfall: 0,
+    }
+    p.lots++
+    p.planned += row.planned
+    p.received += row.received
+    p.shortfall += row.shortfall
+    products.set(p.productId, p)
+  }
+  const planned = sum(lotRows.map((r) => r.planned)),
+    received = sum(lotRows.map((r) => r.received))
+  return {
+    lots: lotRows.sort((a, b) => b.shortfall - a.shortfall),
+    products: [...products.values()].sort((a, b) => b.shortfall - a.shortfall),
+    planned,
+    received,
+    shortfall: sum(lotRows.map((r) => r.shortfall)),
+    percent: planned ? clampPercent((received / planned) * 100) : 0,
+    grnInMonth: totalGrn(receipts.filter((r) => monthOf(r.date) === month)),
+  }
+}

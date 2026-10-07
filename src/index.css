@@ -56,6 +56,14 @@
     border-color: #d77a43;
     box-shadow: 0 0 0 3px rgba(219, 109, 50, 0.14);
   }
+  [data-invalid] .field {
+    border-color: #e11d48;
+  }
+  [data-invalid] .field:focus,
+  [data-invalid] .field:focus-visible {
+    border-color: #e11d48;
+    box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.14);
+  }
   .field::placeholder {
     color: #94a3a8;
   }

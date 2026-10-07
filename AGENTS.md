@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a frontend-only React application. `src/App.tsx` owns navigation and global data actions. `src/Production.tsx`, `src/LotDrawer.tsx`, `src/Shipments.tsx`, and `src/Settings.tsx` contain the operational views and editors. Keep domain types in `src/models.ts`, date and quantity rules in `src/calculations.ts`, and IndexedDB writes and import validation in `src/repository.ts`. `src/db.ts` defines the versioned Dexie schema; `src/demo.ts` holds first-use lookup values and fictional records. Shared shadcn-style primitives live in `src/ui.tsx`; global Tailwind and component styles are in `src/index.css`.
+This is a frontend-only React application. `src/App.tsx` owns navigation and global data actions. `src/Production.tsx`, `src/LotDrawer.tsx`, `src/MonthEnd.tsx`, `src/Shipments.tsx`, and `src/Settings.tsx` contain the operational views and editors. Keep domain types in `src/models.ts`, date and quantity rules in `src/calculations.ts`, field validation rules shared by forms and saves in `src/validation.ts`, and IndexedDB writes and import validation in `src/repository.ts`. `src/db.ts` defines the versioned Dexie schema; `src/demo.ts` holds first-use lookup values and fictional records. Shared shadcn-style primitives live in `src/ui.tsx`; global Tailwind and component styles are in `src/index.css`.
 
 ## Build and Development Commands
 
@@ -14,7 +14,7 @@ Use strict TypeScript and functional React components. Keep storage, calculation
 
 ## Verification Guidelines
 
-This initial scope deliberately has no test framework or test files. Before review, run `npm run typecheck` and `npm run build`, then manually exercise product and lot creation, RM batches, partial and full GRN, completion reversal, shipments, ETA history, filters, JSON backup and restore, and mobile layouts. Check that data survives refresh in the same browser profile.
+This initial scope deliberately has no test framework or test files. Before review, run `npm run typecheck` and `npm run build`, then manually exercise product and lot creation, RM batches, partial and full GRN, completion reversal, month-end summary, shipments, ETA history, filters, JSON backup and restore, and mobile layouts. Check that data survives refresh in the same browser profile.
 
 ## Commits and Pull Requests
 
