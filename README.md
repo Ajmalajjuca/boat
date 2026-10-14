@@ -5,11 +5,23 @@ A frontend-only operational dashboard for production lots, material readiness, p
 ## Run locally
 
 ```bash
-npm install
-npm run dev
+nvm use            # Node 24, from .nvmrc
+corepack enable    # pnpm 10.33.2, from package.json
+pnpm install
+pnpm dev
 ```
 
-Open the URL shown by Vite. On first use, choose fictional demo data or an empty workspace. Use `npm run typecheck` for TypeScript checks, `npm run format:check` for formatting, and `npm run build` for the production bundle. `npm run preview` serves that bundle locally.
+Open the URL shown by Vite. On first use, choose fictional demo data or an empty workspace. `pnpm typecheck` checks TypeScript in every package, `pnpm test` runs the unit tests, `pnpm format:check` checks formatting, and `pnpm build` builds the web app and the API.
+
+The API is being built alongside the demo; the web app does not use it yet. To run it locally:
+
+```bash
+docker compose up -d db
+cp apps/api/.env.example apps/api/.env
+pnpm --filter @boat/api db:migrate
+pnpm --filter @boat/api dev      # http://localhost:3000/api/v1/health/ready
+pnpm --filter @boat/api test:int # needs Docker
+```
 
 ## Data and backups
 
