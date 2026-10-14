@@ -71,6 +71,19 @@ describe('errors', () => {
     expect(res.status).toBe(413)
     expect(res.body).toEqual({ error: 'payload_too_large' })
   })
+  it('answers a malformed URL with 400, not 500', async () => {
+    const res = await request(app(fakeWebBuild())).get('/%E0%A4%A')
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({ error: 'bad_request' })
+  })
+  it('answers an unsupported JSON charset with 415, not 500', async () => {
+    const res = await request(app())
+      .post('/api/v1/health/live')
+      .set('content-type', 'application/json; charset=latin1')
+      .send('{}')
+    expect(res.status).toBe(415)
+    expect(res.body).toEqual({ error: 'unsupported_media_type' })
+  })
   it('answers unknown API paths with JSON 404 even when the web app is served', async () => {
     const server = app(fakeWebBuild())
     for (const url of ['/api/v1/lotz', '/api/other']) {

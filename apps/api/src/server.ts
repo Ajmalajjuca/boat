@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { pino } from 'pino'
 import { createApp } from './app'
 import { loadConfig } from './config'
+import { listen } from './core/listen'
 import { createPrisma, databaseCheck } from './core/prisma'
 
 const config = loadConfig(process.env)
@@ -13,7 +14,11 @@ const prisma = createPrisma(config.DATABASE_URL)
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist')
 
 const app = createApp({ logger, webDist, checkDatabase: databaseCheck(prisma) })
-const server = app.listen(config.PORT, () => logger.info({ port: config.PORT }, 'listening'))
+const server = await listen(app, config.PORT).catch((err: unknown) => {
+  logger.fatal({ err }, 'could not start')
+  process.exit(1)
+})
+logger.info({ port: config.PORT }, 'listening')
 
 function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down')

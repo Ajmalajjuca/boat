@@ -3,7 +3,10 @@ import { PrismaClient } from '../generated/prisma/client'
 import type { ReadinessCheck } from '../modules/health/health.router'
 
 export function createPrisma(connectionString: string) {
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
+  // pg waits forever for a connection by default, which would hang readiness checks and requests.
+  return new PrismaClient({
+    adapter: new PrismaPg({ connectionString, connectionTimeoutMillis: 5000 }),
+  })
 }
 
 export const databaseCheck =
