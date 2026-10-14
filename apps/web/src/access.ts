@@ -1,72 +1,28 @@
 import { createContext, useContext } from 'react'
-import type { Lot, Role, UserProfile } from './models'
+import {
+  actionVerbs,
+  actorLotAccess,
+  deniedMessage,
+  lotEditDenial,
+  PermissionError,
+  roleCan,
+  type Action,
+  type LotAccess,
+} from '@boat/domain/permissions'
+import type { Lot, UserProfile } from './models'
+
+export {
+  actionVerbs,
+  planFields,
+  PermissionError,
+  roleInfo,
+  roles,
+  type Action,
+  type LotAccess,
+} from '@boat/domain/permissions'
 
 // UI role modes. They prevent accidental changes on a shared browser; they are not a security
 // boundary, because anyone with developer tools can edit IndexedDB directly.
-export const roleInfo: Record<Role, { label: string; description: string }> = {
-  admin: {
-    label: 'Admin',
-    description: 'Everything, including Settings, profiles, import, restore, reset, and deletes.',
-  },
-  planner: {
-    label: 'Planner',
-    description:
-      'Adds and edits products, lots, and shipments, and corrects RM batches and GRN receipts. No Settings, restore, reset, or record deletes.',
-  },
-  poc: {
-    label: 'POC',
-    description:
-      'Updates progress on lots assigned to them: status, quantities, ETAs, blockers, RM batches, GRN receipts, and notes.',
-  },
-  viewer: {
-    label: 'Viewer',
-    description: 'Read-only. Can browse every screen and download CSV files.',
-  },
-}
-export const roles = Object.keys(roleInfo) as Role[]
-
-export type Action =
-  | 'manageSettings'
-  | 'manageData'
-  | 'exportBackup'
-  | 'editProducts'
-  | 'deleteProducts'
-  | 'createLots'
-  | 'deleteLots'
-  | 'editShipments'
-  | 'deleteShipments'
-  | 'deleteEntries'
-const verbs: Record<Action, string> = {
-  manageSettings: 'change Settings or profiles',
-  manageData: 'import, restore, or reset data',
-  exportBackup: 'export a JSON backup',
-  editProducts: 'add or edit products',
-  deleteProducts: 'delete products',
-  createLots: 'create lots',
-  deleteLots: 'delete lots',
-  editShipments: 'add or edit shipments',
-  deleteShipments: 'delete shipments',
-  deleteEntries: 'delete RM batches or GRN receipts',
-}
-const grants: Record<Role, Action[]> = {
-  admin: Object.keys(verbs) as Action[],
-  planner: ['exportBackup', 'editProducts', 'createLots', 'editShipments', 'deleteEntries'],
-  poc: [],
-  viewer: [],
-}
-// Lot fields that set the plan. A POC can update progress on their lots but not these.
-export const planFields: (keyof Lot)[] = [
-  'productId',
-  'label',
-  'category',
-  'directFg',
-  'ems',
-  'poc',
-  'rmMode',
-  'rmComponents',
-  'lotQty',
-  'plannedDate',
-]
 
 // enabled is false until the first profile is created; the app then works as before.
 export type AccessState = { enabled: boolean; user: UserProfile | null }
@@ -80,38 +36,20 @@ export const actorName = () => (current.enabled ? current.user?.name : undefined
 
 export function can(action: Action, state = current) {
   if (!state.enabled) return true
-  return !!state.user && grants[state.user.role].includes(action)
+  return !!state.user && roleCan(state.user.role, action)
 }
-// full: every field. progress: everything except plan fields. none: read-only.
-export type LotAccess = 'full' | 'progress' | 'none'
 export function lotAccess(lot: Pick<Lot, 'poc'>, state = current): LotAccess {
-  if (!state.enabled) return 'full'
-  const user = state.user
-  if (!user) return 'none'
-  if (user.role === 'admin' || user.role === 'planner') return 'full'
-  return user.role === 'poc' && !!user.poc && lot.poc === user.poc ? 'progress' : 'none'
+  return state.enabled ? actorLotAccess(state.user, lot) : 'full'
 }
 
-export class PermissionError extends Error {}
 const denied = (what: string) =>
-  new PermissionError(
-    current.user
-      ? `${roleInfo[current.user.role].label} profiles can't ${what}. Ask an admin.`
-      : 'Sign in to make changes.',
-  )
+  new PermissionError(deniedMessage(current.user?.role ?? null, what))
 export function requireAction(action: Action) {
-  if (!can(action)) throw denied(verbs[action])
+  if (!can(action)) throw denied(actionVerbs[action])
 }
 export function requireLotEdit(lot: Lot, next?: Lot) {
-  const level = lotAccess(lot)
-  if (level === 'none')
-    throw denied(lot.poc ? `edit lots owned by ${lot.poc}` : 'edit lots without a POC')
-  if (
-    level === 'progress' &&
-    next &&
-    planFields.some((k) => JSON.stringify(lot[k]) !== JSON.stringify(next[k]))
-  )
-    throw denied('change plan fields such as product, lot quantity, planned date, or POC')
+  const what = current.enabled ? lotEditDenial(current.user, lot, next) : undefined
+  if (what) throw denied(what)
 }
 
 export const AccessContext = createContext<AccessState>(openAccess)
