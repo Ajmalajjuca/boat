@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { createClock } from './core/clock'
 import type { Mailer } from './core/mailer'
 import type { PrismaClient } from './generated/prisma/client'
 import { authRouter } from './modules/auth/auth.router'
@@ -7,6 +8,7 @@ import { healthRouter, type ReadinessCheck } from './modules/health/health.route
 import { settingsRouter } from './modules/settings/settings.router'
 import { createSettingsService } from './modules/settings/settings.service'
 import { lookupsRouter } from './modules/lookups/lookups.router'
+import { lotsRouter } from './modules/lots/lots.router'
 import { productsRouter } from './modules/products/products.router'
 import { usersRouter } from './modules/users/users.router'
 
@@ -20,6 +22,8 @@ export type ApiDeps = {
   // Secure cookies need HTTPS: true in production.
   secureCookies: boolean
   mailer: Mailer
+  // The time for "today". Tests pass a fixed one; production uses the real time.
+  now?: () => Date
 }
 
 const mountPaths = new WeakMap<object, string>()
@@ -34,6 +38,7 @@ export const mountPathOf = (router: object) => mountPaths.get(router)
 export function buildApiRouter(deps: ApiDeps) {
   const api = Router()
   const settings = createSettingsService(deps.db)
+  const records = { db: deps.db, clock: createClock(settings, deps.now) }
   api.use(loadSession({ db: deps.db, settings, sessionSecret: deps.sessionSecret }))
   mount(api, '/health', healthRouter(deps.checkDatabase))
   mount(api, '/auth', authRouter({ ...deps, settings }))
@@ -41,5 +46,6 @@ export function buildApiRouter(deps: ApiDeps) {
   mount(api, '/settings', settingsRouter(settings))
   mount(api, '/lookups', lookupsRouter(deps.db))
   mount(api, '/products', productsRouter(deps.db))
+  mount(api, '/lots', lotsRouter(records))
   return api
 }

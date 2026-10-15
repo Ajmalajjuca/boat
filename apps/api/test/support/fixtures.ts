@@ -110,3 +110,54 @@ export async function makeLot(
     },
   })
 }
+
+// Users of every role, the dropdown values lots need, and one product, for the lot test files.
+// Values have fixed names (status lines quote them), so call it once per test file.
+export async function makeRecordsWorld(db: PrismaClient, app: Express) {
+  const lookups = {
+    bau: await systemLookup(db, 'bau'),
+    npi: await makeLookup(db, 'category', 'NPI'),
+    onTrack: await systemLookup(db, 'on_track'),
+    delayed: await systemLookup(db, 'delayed'),
+    hold: await systemLookup(db, 'hold'),
+    none: await systemLookup(db, 'none'),
+    approval: await systemLookup(db, 'approval_blocker'),
+    rmBlocker: await makeLookup(db, 'blocker', 'RM Blocker'),
+    stage: await makeLookup(db, 'stage', 'Factory Production'),
+    ems: await makeLookup(db, 'ems', 'Orion EMS'),
+    road: await makeLookup(db, 'logistics', 'Road'),
+    pcb: await makeLookup(db, 'component', 'PCB'),
+    enclosure: await makeLookup(db, 'component', 'Enclosure'),
+    kit: await makeLookup(db, 'component', 'Kit (All Together)'),
+    pocA: await makeLookup(db, 'poc', 'Maya Shah'),
+    pocB: await makeLookup(db, 'poc', 'Rohit Mehta'),
+    segment: await makeLookup(db, 'segment', 'Soundbars'),
+  }
+  const product = await makeProduct(db, {
+    name: 'Soundbar',
+    variant: 'X1',
+    segmentId: lookups.segment.id,
+  })
+  const signedInAs = async (role: Role, pocId: string | null = null) =>
+    signIn(app, (await makeUser(db, { role, pocId, name: `Test ${role}` })).email)
+  return {
+    lookups,
+    product,
+    admin: await signedInAs('admin'),
+    planner: await signedInAs('planner'),
+    poc: await signedInAs('poc', lookups.pocA.id),
+    viewer: await signedInAs('viewer'),
+  }
+}
+export type RecordsWorld = Awaited<ReturnType<typeof makeRecordsWorld>>
+
+// A valid POST /lots body; override any field.
+export const lotBody = (w: RecordsWorld, overrides: Record<string, unknown> = {}) => ({
+  productId: w.product.id,
+  label: unique('Lot'),
+  categoryId: w.lookups.bau.id,
+  statusId: w.lookups.onTrack.id,
+  stageId: w.lookups.stage.id,
+  lotQty: 100,
+  ...overrides,
+})

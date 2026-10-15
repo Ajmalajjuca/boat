@@ -63,6 +63,10 @@ describe('API routes', () => {
         'POST /products editProducts',
         'PATCH /products/:id editProducts',
         'DELETE /products/:id deleteProducts',
+        'GET /lots/:id signedIn',
+        'POST /lots createLots',
+        'PATCH /lots/:id lotAccess',
+        'DELETE /lots/:id deleteLots',
       ].sort(),
     )
   })

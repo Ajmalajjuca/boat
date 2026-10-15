@@ -1,4 +1,5 @@
 import { today } from '@boat/domain/calculations'
+import type { PrismaClient } from '../generated/prisma/client'
 import type { SettingsService } from '../modules/settings/settings.service'
 
 // "Today" as YYYY-MM-DD in the company time zone, for the no-future-date rules and lot flags.
@@ -13,3 +14,6 @@ export const createClock = (
     return today((await settings.get()).timeZone, now())
   },
 })
+
+// What every record module takes: the database and today's company date.
+export type RecordsDeps = { db: PrismaClient; clock: Clock }
