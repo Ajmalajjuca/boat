@@ -5,7 +5,7 @@ import type { ApiDeps } from '../../src/api'
 import { createApp } from '../../src/app'
 import { testDeps } from '../../src/test-deps'
 import type { Role } from '@boat/domain/models'
-import type { LookupKind, PrismaClient } from '../../src/generated/prisma/client'
+import type { LookupKind, Prisma, PrismaClient } from '../../src/generated/prisma/client'
 import { hashPassword } from '../../src/modules/auth/password'
 
 export const password = 'correct horse battery staple'
@@ -71,3 +71,42 @@ export const makeLookup = (db: PrismaClient, kind: LookupKind, value = unique(ki
 // One of the six values the system_lookups migration creates.
 export const systemLookup = (db: PrismaClient, systemKey: string) =>
   db.lookupValue.findFirstOrThrow({ where: { systemKey, deletedAt: null } })
+
+// A business date as Prisma stores it: UTC midnight.
+export const day = (s: string) => new Date(`${s}T00:00:00Z`)
+
+// The tests' "now". 06:30 UTC is midday in India, so the company date is the same everywhere.
+export const testToday = '2026-10-15'
+export const fixedNow = () => new Date(`${testToday}T06:30:00Z`)
+
+export async function makeProduct(
+  db: PrismaClient,
+  fields: { name?: string; variant?: string; segmentId?: string } = {},
+) {
+  return db.product.create({
+    data: {
+      name: fields.name ?? unique('Product'),
+      variant: fields.variant ?? '',
+      segmentId: fields.segmentId ?? (await makeLookup(db, 'segment')).id,
+    },
+  })
+}
+
+// A lot written straight to the database, for tests about reading, filtering or deleting lots.
+// Pass grnTotal and completedOn together with matching receipts, or use the API instead.
+export async function makeLot(
+  db: PrismaClient,
+  fields: Partial<Prisma.LotUncheckedCreateInput> = {},
+) {
+  return db.lot.create({
+    data: {
+      productId: fields.productId ?? (await makeProduct(db)).id,
+      label: fields.label ?? unique('Lot'),
+      categoryId: fields.categoryId ?? (await systemLookup(db, 'bau')).id,
+      statusId: fields.statusId ?? (await systemLookup(db, 'on_track')).id,
+      stageId: fields.stageId ?? (await makeLookup(db, 'stage')).id,
+      lotQty: 100,
+      ...fields,
+    },
+  })
+}

@@ -59,6 +59,10 @@ describe('API routes', () => {
         'POST /lookups manageSettings',
         'PATCH /lookups/:id manageSettings',
         'DELETE /lookups/:id manageSettings',
+        'GET /products signedIn',
+        'POST /products editProducts',
+        'PATCH /products/:id editProducts',
+        'DELETE /products/:id deleteProducts',
       ].sort(),
     )
   })
