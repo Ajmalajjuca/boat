@@ -9,6 +9,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app'
 import { createPrisma, databaseCheck } from '../src/core/prisma'
+import { testDeps } from '../src/test-deps'
 
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const suffix = () => randomUUID().slice(0, 8)
@@ -172,7 +173,7 @@ describe('readiness', () => {
     try {
       const server = createApp({
         logger: pino({ level: 'silent' }),
-        checkDatabase: databaseCheck(db),
+        api: testDeps({ db, checkDatabase: databaseCheck(db) }),
       })
       const res = await request(server).get('/api/v1/health/ready')
       expect(res.status).toBe(200)

@@ -22,3 +22,17 @@ services:
       # Neon direct URL, connecting as the owner role; used only by the pre-deploy migration.
       - key: DIRECT_URL
         sync: false
+      # Signs CSRF tokens. Render generates a random value once.
+      - key: SESSION_SECRET
+        generateValue: true
+      # This service's public https URL. Invite and reset links point here.
+      - key: APP_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      # A sender on the domain verified in Resend, e.g. "BOAT <noreply@example.com>".
+      - key: MAIL_FROM
+        sync: false
+      # Render's proxy sits in front of the app. Rate limits need the client IP behind it.
+      - key: TRUST_PROXY
+        value: '1'

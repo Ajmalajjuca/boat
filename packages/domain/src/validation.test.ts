@@ -11,9 +11,12 @@ import {
   assertValid,
   fieldErrors,
   lineField,
+  normalizeEmail,
+  validateAccount,
   validateBatch,
   validateLookupValue,
   validateLot,
+  validatePassword,
   validateProduct,
   validateReceipt,
   validateShipment,
@@ -174,5 +177,60 @@ describe('validateShipment', () => {
       'line:l3:productId': 'Choose a product.',
       'line:l3:quantity': 'Quantity must be a whole number, zero or more.',
     })
+  })
+})
+
+describe('normalizeEmail', () => {
+  it('trims and lowercases', () => {
+    expect(normalizeEmail('  Asha.Rao@Example.COM ')).toBe('asha.rao@example.com')
+  })
+})
+
+describe('validatePassword', () => {
+  it('needs at least 12 characters', () => {
+    expect(validatePassword('a'.repeat(11))).toEqual({ password: 'Use at least 12 characters.' })
+    expect(validatePassword('a'.repeat(12))).toEqual({})
+  })
+  it('caps the length at 128 characters', () => {
+    expect(validatePassword('a'.repeat(128))).toEqual({})
+    expect(validatePassword('a'.repeat(129))).toEqual({
+      password: 'Keep the password to 128 characters or fewer.',
+    })
+  })
+  it('reports under the field it is given', () => {
+    expect(validatePassword('short', 'newPassword')).toEqual({
+      newPassword: 'Use at least 12 characters.',
+    })
+  })
+})
+
+describe('validateAccount', () => {
+  const ok = { email: 'asha@example.com', name: 'Asha', role: 'planner', pocId: null }
+  it('accepts a complete account', () => {
+    expect(validateAccount(ok)).toEqual({})
+  })
+  it('needs a valid email address', () => {
+    expect(validateAccount({ ...ok, email: ' ' })).toEqual({ email: 'Enter an email address.' })
+    expect(validateAccount({ ...ok, email: 'asha@example' })).toEqual({
+      email: 'Enter a valid email address.',
+    })
+    expect(validateAccount({ ...ok, email: `${'a'.repeat(250)}@x.io` })).toEqual({
+      email: 'Enter a valid email address.',
+    })
+  })
+  it('needs a name of 40 characters or fewer', () => {
+    expect(validateAccount({ ...ok, name: '  ' })).toEqual({ name: 'Enter a name.' })
+    expect(validateAccount({ ...ok, name: 'a'.repeat(41) })).toEqual({
+      name: 'Keep the name to 40 characters or fewer.',
+    })
+  })
+  it('needs a known role', () => {
+    expect(validateAccount({ ...ok, role: 'owner' })).toEqual({ role: 'Choose a role.' })
+  })
+  it('needs a point of contact for POC users only', () => {
+    expect(validateAccount({ ...ok, role: 'poc' })).toEqual({
+      pocId: 'Choose the point of contact this user owns.',
+    })
+    expect(validateAccount({ ...ok, role: 'poc', pocId: 'p1' })).toEqual({})
   })
 })

@@ -7,6 +7,7 @@
     "postinstall": "prisma generate",
     "generate": "prisma generate",
     "dev": "tsx watch src/server.ts",
+    "create-admin": "tsx src/cli/create-admin.ts",
     "build": "prisma generate && tsup",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
@@ -16,16 +17,20 @@
   },
   "dependencies": {
     "@boat/domain": "workspace:*",
+    "@node-rs/argon2": "2.2.1",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "cookie-parser": "1.4.7",
     "dotenv": "18.0.7",
     "express": "5.3.0",
+    "express-rate-limit": "8.7.0",
     "pino": "10.4.0",
     "pino-http": "11.0.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "12.2.1",
+    "@types/cookie-parser": "1.4.10",
     "@types/express": "5.0.6",
     "@types/node": "^24.19.2",
     "@types/pg": "8.23.1",

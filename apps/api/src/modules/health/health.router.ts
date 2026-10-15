@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { publicRoute } from '../../core/access'
 
 // Throws when a dependency is not ready.
 export type ReadinessCheck = () => Promise<void>
@@ -6,10 +7,10 @@ export type ReadinessCheck = () => Promise<void>
 // Public routes: Render's health check calls /ready, uptime monitors call /live.
 export function healthRouter(checkDatabase: ReadinessCheck) {
   const router = Router()
-  router.get('/live', (_req, res) => {
+  router.get('/live', publicRoute(), (_req, res) => {
     res.json({ status: 'ok' })
   })
-  router.get('/ready', async (req, res) => {
+  router.get('/ready', publicRoute(), async (req, res) => {
     try {
       await checkDatabase()
       res.json({ status: 'ok' })

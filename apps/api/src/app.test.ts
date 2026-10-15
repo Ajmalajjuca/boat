@@ -5,11 +5,12 @@ import { pino } from 'pino'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { createApp } from './app'
+import { testDeps } from './test-deps'
 
 const logger = pino({ level: 'silent' })
 const ready = async () => {}
 const app = (webDist?: string, checkDatabase = ready) =>
-  createApp({ logger, webDist, checkDatabase })
+  createApp({ logger, webDist, api: testDeps({ checkDatabase }) })
 
 function fakeWebBuild() {
   const dir = mkdtempSync(path.join(tmpdir(), 'boat-web-'))
@@ -108,5 +109,18 @@ describe('web app', () => {
   it('serves only the API when there is no web build', async () => {
     const res = await request(app(path.join(tmpdir(), 'no-such-build'))).get('/')
     expect(res.status).toBe(404)
+  })
+})
+
+describe('HSTS', () => {
+  it('is sent when enabled', async () => {
+    const res = await request(createApp({ logger, hsts: true, api: testDeps() })).get(
+      '/api/v1/health/live',
+    )
+    expect(res.headers['strict-transport-security']).toBe('max-age=31536000')
+  })
+  it('is off by default, for local HTTP', async () => {
+    const res = await request(app()).get('/api/v1/health/live')
+    expect(res.headers['strict-transport-security']).toBeUndefined()
   })
 })
