@@ -16,7 +16,7 @@ import type {
 } from './models'
 
 // Version of the JSON backup format; the IndexedDB version below moves independently.
-export const SCHEMA_VERSION = 1
+export { SCHEMA_VERSION } from '@boat/domain/backup'
 class ControlTowerDB extends Dexie {
   products!: Table<Product, string>
   lots!: Table<Lot, string>
