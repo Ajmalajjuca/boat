@@ -218,15 +218,13 @@ const duplicateLabel =
     throw err
   }
 
-// FR-3.3: in component mode, a component can't be unselected while it still has batches.
+// FR-3.3: in component mode, every component that still has batches must stay selected. This
+// checks all active batches, not just this edit's removals, so switching to "all received" and
+// back can't strand a batch on an unselected component (the demo's saveLot does the same).
 async function assertComponentsFree(db: Db, current: LotRow, input: LotInput) {
   if (input.rmMode !== 'components') return
-  const removed = current.components
-    .map((c) => c.component.id)
-    .filter((cid) => !input.componentIds.includes(cid))
-  if (!removed.length) return
   const batches = await db.rmBatch.findMany({
-    where: { lotId: current.id, deletedAt: null, componentId: { in: removed } },
+    where: { lotId: current.id, deletedAt: null, componentId: { notIn: input.componentIds } },
     include: batchInclude,
   })
   const names = [...new Set(batches.map((b) => b.component.value))].sort()

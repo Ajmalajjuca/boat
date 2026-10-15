@@ -69,6 +69,11 @@ async function lockProduct(db: Db, id: string) {
   return rows[0].version
 }
 
+const lockProductLots = (db: Db, productId: string) =>
+  db.$queryRaw`
+    SELECT id FROM lots WHERE product_id = ${productId}::uuid AND deleted_at IS NULL
+    ORDER BY id FOR UPDATE`
+
 export async function createProduct(db: PrismaClient, input: ProductInput) {
   return db.$transaction(async (tx) => {
     const data = await checkProduct(tx, input)
@@ -104,7 +109,13 @@ export async function updateProduct(db: PrismaClient, id: string, patch: Product
 
 export async function deleteProduct(db: PrismaClient, user: SessionUser, id: string) {
   await db.$transaction(async (tx) => {
+    // Lots first, then the product: the order every lot write uses (lot row, then the product
+    // FOR SHARE), so a delete and a lot change queue instead of deadlocking. Holding the lot rows
+    // also keeps a batch or receipt from landing on them after the cascade below has run.
+    await lockProductLots(tx, id)
     await lockProduct(tx, id)
+    // A lot created while this waited for the product is locked now too.
+    await lockProductLots(tx, id)
     const onShipment = await tx.shipmentItem.count({
       where: { productId: id, deletedAt: null, shipment: { is: { deletedAt: null } } },
     })

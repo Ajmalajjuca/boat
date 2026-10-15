@@ -1,5 +1,6 @@
+import { Client } from 'pg'
 import request from 'supertest'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { PrismaClient } from '../src/generated/prisma/client'
 import { createTestDatabase } from './support/db'
 import {
@@ -15,13 +16,14 @@ import {
 
 let db: PrismaClient
 let close: () => Promise<void>
+let url: string
 let app: ReturnType<typeof testApp>
 let admin: Awaited<ReturnType<typeof signIn>>
 let planner: Awaited<ReturnType<typeof signIn>>
 let segmentId: string
 
 beforeAll(async () => {
-  ;({ db, close } = await createTestDatabase())
+  ;({ db, url, close } = await createTestDatabase())
   app = testApp(db)
   admin = await signIn(app, (await makeUser(db, { role: 'admin' })).email)
   planner = await signIn(app, (await makeUser(db, { role: 'planner' })).email)
@@ -97,6 +99,44 @@ describe('creating and editing products', () => {
 })
 
 describe('deleting products', () => {
+  // A lot write in progress holds the lot row and then reads the product (as updateLot and
+  // createReceipt do). A product delete at the same moment must wait for it, not deadlock, and
+  // must not miss the receipt that write adds.
+  it('FR-1.2 waits for a lot write in progress and deletes what it added', async () => {
+    const product = await makeProduct(db, { segmentId })
+    const lot = await makeLot(db, { productId: product.id })
+    const other = new Client({ connectionString: url })
+    await other.connect()
+    try {
+      await other.query('BEGIN')
+      await other.query('SELECT id FROM lots WHERE id = $1 FOR UPDATE', [lot.id])
+      await other.query(
+        `INSERT INTO grn_receipts (id, lot_id, label, date, quantity, updated_at)
+         VALUES (gen_random_uuid(), $1, 'G-race', DATE '2026-10-01', 5, now())`,
+        [lot.id],
+      )
+      // Supertest sends a request only when it is awaited; then() starts it now.
+      const deleting = admin.send('delete', `/api/v1/products/${product.id}`).then((res) => res)
+      // Wait until the delete is blocked on a row lock, so the order of events is certain.
+      await vi.waitFor(
+        async () => {
+          const { rows } = await other.query(
+            `SELECT count(*)::int AS n FROM pg_stat_activity
+           WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+          )
+          expect(rows[0].n).toBeGreaterThan(0)
+        },
+        { timeout: 5000, interval: 50 },
+      )
+      await other.query('SELECT id FROM products WHERE id = $1 FOR SHARE', [product.id])
+      await other.query('COMMIT')
+      expect((await deleting).status).toBe(204)
+    } finally {
+      await other.end()
+    }
+    const receipts = await db.grnReceipt.findMany({ where: { lotId: lot.id } })
+    expect(receipts.map((r) => r.deletedAt !== null)).toEqual([true])
+  })
   it('FR-1.2 soft-deletes the product with its lots, batches and receipts, keeping history', async () => {
     const product = await makeProduct(db, { segmentId })
     const lot = await makeLot(db, { productId: product.id, label: 'Lot 1' })

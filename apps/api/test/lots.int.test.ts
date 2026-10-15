@@ -124,6 +124,9 @@ describe('creating lots', () => {
       [{ revisedEta: '20/10/2026' }, 'revisedEta'],
       [{ lotQty: 3_000_000_000 }, 'lotQty'],
       [{ lotQty: '100' }, 'lotQty'],
+      // validateLot checks readyQty only in "all received" mode; the shape check covers both.
+      [{ rmMode: 'components', readyQty: -5 }, 'readyQty'],
+      [{ rmMode: 'components', readyQty: 2.5 }, 'readyQty'],
     ]
     for (const [overrides, field] of cases) {
       const res = await create(overrides)
@@ -318,6 +321,30 @@ describe('editing lots', () => {
       version: 1,
     })
     expect(dropEnclosure.body.components).toEqual([{ id: w.lookups.pcb.id, value: 'PCB' }])
+  })
+})
+
+describe('component choices and batches', () => {
+  it('FR-3.3 keeps batches tied to selected components through a switch to all-received and back', async () => {
+    const created = await create({ rmMode: 'components', componentIds: [w.lookups.pcb.id] })
+    await db.rmBatch.create({
+      data: { lotId: created.body.id, componentId: w.lookups.pcb.id, label: 'B1', receivedQty: 10 },
+    })
+    const toAll = await w.planner.send('patch', `/api/v1/lots/${created.body.id}`, {
+      rmMode: 'all',
+      componentIds: [],
+      version: 1,
+    })
+    expect(toAll.status).toBe(200)
+    const back = await w.planner.send('patch', `/api/v1/lots/${created.body.id}`, {
+      rmMode: 'components',
+      version: 2,
+    })
+    expect(back.status).toBe(422)
+    expect(back.body.fields).toEqual({
+      componentIds:
+        'PCB still has material batches. Keep the component selected or delete its batches first.',
+    })
   })
 })
 
