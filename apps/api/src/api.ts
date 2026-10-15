@@ -12,6 +12,7 @@ import { lookupsRouter } from './modules/lookups/lookups.router'
 import { lotsRouter } from './modules/lots/lots.router'
 import { grnReceiptRouters } from './modules/grn-receipts/grn-receipts.router'
 import { productsRouter } from './modules/products/products.router'
+import { reportsRouter } from './modules/reports/reports.router'
 import { rmBatchRouters } from './modules/rm-batches/rm-batches.router'
 import { shipmentsRouter } from './modules/shipments/shipments.router'
 import { usersRouter } from './modules/users/users.router'
@@ -59,5 +60,6 @@ export function buildApiRouter(deps: ApiDeps) {
   mount(api, '/grn-receipts', receipts.receipts)
   mount(api, '/lots', activityRouter(deps.db))
   mount(api, '/shipments', shipmentsRouter(records))
+  mount(api, '/reports', reportsRouter(records))
   return api
 }
