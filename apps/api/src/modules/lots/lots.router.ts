@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authOf, requireLotAccess, requirePermission, requireSignedIn } from '../../core/access'
 import type { RecordsDeps } from '../../core/clock'
 import { optionalDate } from '../../core/dates'
+import { quantity, text } from '../../core/fields'
 import { pageQuery } from '../../core/pagination'
 import { parseId, parseInput } from '../../core/parse'
 import { type LotFilters, lotFlagNames, lotSorts } from './lot-list'
@@ -10,14 +11,6 @@ import { getLotDetail } from './lot-view'
 import { createLot, deleteLot, exportLotsCsv, listLots, lotCards, updateLot } from './lots.service'
 
 const choose = (label: string) => z.guid({ error: `Choose ${label} from the list.` })
-// Whole-number and sign rules come from validateLot; this keeps values inside Postgres integer.
-const qty = (label: string) =>
-  z
-    .number({ error: `Enter the ${label} as a number.` })
-    .max(1_000_000_000, { error: 'Enter 1,000,000,000 or less.' })
-const text = (max: number) =>
-  z.string({ error: 'Enter text.' }).max(max, { error: `Keep this to ${max} characters or fewer.` })
-
 const fields = {
   productId: z.guid({ error: 'Choose a product.' }),
   label: z
@@ -31,10 +24,10 @@ const fields = {
   stageId: choose('a stage'),
   rmMode: z.enum(['all', 'components'], { error: 'Choose how RM is tracked.' }),
   componentIds: z.array(choose('components')).max(50, { error: 'Choose 50 components or fewer.' }),
-  readyQty: qty('ready quantity'),
-  lotQty: qty('lot quantity'),
-  freshProductionQty: qty('fresh production quantity'),
-  reworkQty: qty('rework quantity'),
+  readyQty: quantity('ready quantity'),
+  lotQty: quantity('lot quantity'),
+  freshProductionQty: quantity('fresh production quantity'),
+  reworkQty: quantity('rework quantity'),
   reworkReason: text(500),
   rmReadyDate: optionalDate,
   plannedDate: optionalDate,

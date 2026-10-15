@@ -10,6 +10,7 @@ import { createSettingsService } from './modules/settings/settings.service'
 import { lookupsRouter } from './modules/lookups/lookups.router'
 import { lotsRouter } from './modules/lots/lots.router'
 import { productsRouter } from './modules/products/products.router'
+import { rmBatchRouters } from './modules/rm-batches/rm-batches.router'
 import { usersRouter } from './modules/users/users.router'
 
 export type ApiDeps = {
@@ -47,5 +48,8 @@ export function buildApiRouter(deps: ApiDeps) {
   mount(api, '/lookups', lookupsRouter(deps.db))
   mount(api, '/products', productsRouter(deps.db))
   mount(api, '/lots', lotsRouter(records))
+  const batches = rmBatchRouters(records)
+  mount(api, '/lots', batches.underLots)
+  mount(api, '/rm-batches', batches.batches)
   return api
 }
