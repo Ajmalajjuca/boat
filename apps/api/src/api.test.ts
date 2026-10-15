@@ -16,8 +16,10 @@ function routesOf(router: { stack?: Layer[] }, prefix = ''): string[] {
   for (const layer of router.stack ?? []) {
     if (layer.route) {
       const access = accessOf(layer.route.stack[0]?.handle) ?? 'NONE'
+      // A router's "/" route is the mount path itself: /users, not /users/.
+      const path = prefix && layer.route.path === '/' ? prefix : prefix + layer.route.path
       for (const method of Object.keys(layer.route.methods))
-        found.push(`${method.toUpperCase()} ${prefix}${layer.route.path} ${access}`)
+        found.push(`${method.toUpperCase()} ${path} ${access}`)
     } else if (layer.handle.stack) {
       const mountPath = mountPathOf(layer.handle) ?? '/(mounted without mount())'
       found.push(...routesOf(layer.handle, prefix + mountPath))
@@ -42,6 +44,11 @@ describe('API routes', () => {
         'POST /auth/login public',
         'POST /auth/logout signedIn',
         'GET /auth/me signedIn',
+        'GET /users manageSettings',
+        'POST /users manageSettings',
+        'POST /users/:id/invite manageSettings',
+        'PATCH /users/:id manageSettings',
+        'DELETE /users/:id manageSettings',
       ].sort(),
     )
   })

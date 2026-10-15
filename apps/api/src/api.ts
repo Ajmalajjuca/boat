@@ -1,9 +1,11 @@
 import { Router } from 'express'
+import type { Mailer } from './core/mailer'
 import type { PrismaClient } from './generated/prisma/client'
 import { authRouter } from './modules/auth/auth.router'
 import { loadSession } from './modules/auth/sessions'
 import { healthRouter, type ReadinessCheck } from './modules/health/health.router'
 import { createSettingsService } from './modules/settings/settings.service'
+import { usersRouter } from './modules/users/users.router'
 
 export type ApiDeps = {
   db: PrismaClient
@@ -14,6 +16,7 @@ export type ApiDeps = {
   appUrl: string
   // Secure cookies need HTTPS: true in production.
   secureCookies: boolean
+  mailer: Mailer
 }
 
 const mountPaths = new WeakMap<object, string>()
@@ -31,5 +34,6 @@ export function buildApiRouter(deps: ApiDeps) {
   api.use(loadSession({ db: deps.db, settings, sessionSecret: deps.sessionSecret }))
   mount(api, '/health', healthRouter(deps.checkDatabase))
   mount(api, '/auth', authRouter({ ...deps, settings }))
+  mount(api, '/users', usersRouter(deps))
   return api
 }

@@ -5,6 +5,7 @@ import { createApp } from './app'
 import { loadConfig } from './config'
 import { listen } from './core/listen'
 import { createLogger } from './core/logger'
+import { createMailer } from './core/mailer'
 import { createPrisma, databaseCheck } from './core/prisma'
 
 const config = loadConfig(process.env)
@@ -24,6 +25,7 @@ const app = createApp({
     sessionSecret: config.SESSION_SECRET,
     appUrl: config.APP_URL,
     secureCookies: config.NODE_ENV === 'production',
+    mailer: createMailer(config, logger),
   },
 })
 const server = await listen(app, config.PORT).catch((err: unknown) => {
