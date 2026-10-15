@@ -10,15 +10,20 @@ import {
 import type { SessionUser } from '../../core/access'
 import { type Actor, actorOf, recordActivity } from '../../core/audit'
 import type { RecordsDeps } from '../../core/clock'
+import { toCsv } from '../../core/csv'
 import { fromDbDate, toDbDate } from '../../core/dates'
 import { ConflictError, NotFoundError } from '../../core/errors'
+import { type Page, pageOf } from '../../core/pagination'
 import type { Db } from '../../core/prisma'
-import { Prisma } from '../../generated/prisma/client'
+import { Prisma, type PrismaClient } from '../../generated/prisma/client'
+import { entryView } from '../activity/activity.service'
 import { resolveLookups } from '../lookups/resolve'
 import {
   getShipmentDetail,
   shipmentInclude,
   type ShipmentRow,
+  shipmentView,
+  type ShipmentView,
   toDomainShipment,
 } from './shipment-view'
 
@@ -305,5 +310,136 @@ export async function deleteShipment({ db }: RecordsDeps, user: SessionUser, id:
       kind: 'deleted',
       message: `Shipment ${current.number} deleted`,
     })
+  })
+}
+
+export const shipmentFlagNames = ['open', 'soon', 'overdue', 'revised', 'arrived'] as const
+export type ShipmentFlag = (typeof shipmentFlagNames)[number]
+export const shipmentSorts = ['eta-asc', 'eta-desc', 'qty-desc', 'number-asc'] as const
+export type ShipmentSort = (typeof shipmentSorts)[number]
+export type ShipmentFilters = {
+  q: string
+  stageId?: string
+  vessel?: string
+  flag?: ShipmentFlag
+  sort: ShipmentSort
+}
+
+const compareText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+const eta = (v: ShipmentView) => v.computed.currentEta ?? '9999'
+// The demo's sorts; a shipment with no ETA sorts as 9999, last going up.
+const sorts: Record<ShipmentSort, (a: ShipmentView, b: ShipmentView) => number> = {
+  'eta-asc': (a, b) => compareText(eta(a), eta(b)),
+  'eta-desc': (a, b) => compareText(eta(b), eta(a)),
+  'qty-desc': (a, b) => b.computed.totalQty - a.computed.totalQty,
+  'number-asc': (a, b) => compareText(a.number, b.number),
+}
+
+// Shipments are few (one per invoice), so they are filtered in memory with the domain's own
+// flags. Lots run to tens of thousands and need SQL; shipments don't.
+async function matchingShipments(db: Db, f: ShipmentFilters, date: string) {
+  const rows = await db.shipment.findMany({
+    where: {
+      deletedAt: null,
+      ...(f.stageId && { stageId: f.stageId }),
+      ...(f.vessel && { vessel: f.vessel }),
+    },
+    include: shipmentInclude,
+  })
+  const term = f.q.trim().toLowerCase()
+  return rows
+    .map((row) => shipmentView(row, date))
+    .filter(
+      (v) =>
+        (!term ||
+          `${v.number} ${v.vessel} ${v.items.map((i) => i.product.name).join(' ')}`
+            .toLowerCase()
+            .includes(term)) &&
+        (!f.flag || v.computed.flags[f.flag]),
+    )
+    .sort(sorts[f.sort])
+}
+
+export async function listShipments(
+  { db, clock }: RecordsDeps,
+  filters: ShipmentFilters,
+  page: Page,
+) {
+  const all = await matchingShipments(db, filters, await clock.today())
+  const start = (page.page - 1) * page.pageSize
+  return pageOf(all.slice(start, start + page.pageSize), all.length, page)
+}
+
+// The demo's cards, over every active shipment.
+export async function shipmentCards({ db, clock }: RecordsDeps) {
+  const all = await matchingShipments(db, { q: '', sort: 'eta-asc' }, await clock.today())
+  const count = (flag: ShipmentFlag) => all.filter((v) => v.computed.flags[flag]).length
+  return {
+    open: count('open'),
+    soon: count('soon'),
+    overdue: count('overdue'),
+    revised: count('revised'),
+    arrived: count('arrived'),
+    openUnits: all
+      .filter((v) => v.computed.flags.open)
+      .reduce((n, v) => n + v.computed.totalQty, 0),
+  }
+}
+
+// The demo's CSV columns (Shipments.tsx).
+const csvHeaders = [
+  'Invoice',
+  'Vessel',
+  'Products',
+  'TotalQty',
+  'ETD',
+  'PlannedETA',
+  'CurrentETA',
+  'ActualWarehouseArrival',
+  'Stage',
+  'Status',
+  'ETASlipDays',
+  'ActualArrivalDelayDays',
+  'Remarks',
+]
+
+export async function exportShipmentsCsv({ db, clock }: RecordsDeps, filters: ShipmentFilters) {
+  const date = await clock.today()
+  const rows = (await matchingShipments(db, filters, date)).map((v) => ({
+    Invoice: v.number,
+    Vessel: v.vessel,
+    Products: v.items.map((i) => `${i.product.name} (${i.quantity})`).join('; '),
+    TotalQty: v.computed.totalQty,
+    ETD: v.etd ?? '',
+    PlannedETA: v.plannedEta ?? '',
+    CurrentETA: v.computed.currentEta ?? '',
+    ActualWarehouseArrival: v.actualArrival ?? '',
+    Stage: v.stage?.value ?? '',
+    Status: v.computed.status,
+    ETASlipDays: v.computed.etaSlip ?? '',
+    ActualArrivalDelayDays: v.computed.arrivalDelay ?? '',
+    Remarks: v.remarks,
+  }))
+  return { filename: `shipments-${date}.csv`, body: toCsv(csvHeaders, rows) }
+}
+
+// FR-7.2 for shipments: users who may edit shipments may add a note.
+export async function addShipmentNote(
+  db: PrismaClient,
+  user: SessionUser,
+  id: string,
+  message: string,
+) {
+  const text = message.trim()
+  if (!text) throw new ValidationError({ message: 'Write a note first.' })
+  return db.$transaction(async (tx) => {
+    await lockShipment(tx, id)
+    const entry = await recordActivity(tx, actorOf(user), {
+      entityType: 'shipment',
+      entityId: id,
+      kind: 'note',
+      message: text,
+    })
+    return entryView(entry)
   })
 }

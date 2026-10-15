@@ -82,6 +82,11 @@ describe('API routes', () => {
         'POST /shipments editShipments',
         'PATCH /shipments/:id editShipments',
         'DELETE /shipments/:id deleteShipments',
+        'GET /shipments signedIn',
+        'GET /shipments/summary signedIn',
+        'GET /shipments/export.csv signedIn',
+        'GET /shipments/:id/activity signedIn',
+        'POST /shipments/:id/notes editShipments',
       ].sort(),
     )
   })

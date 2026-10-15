@@ -4,9 +4,21 @@ import { authOf, requirePermission, requireSignedIn } from '../../core/access'
 import type { RecordsDeps } from '../../core/clock'
 import { optionalDate } from '../../core/dates'
 import { quantity, text } from '../../core/fields'
+import { pageQuery } from '../../core/pagination'
 import { parseId, parseInput } from '../../core/parse'
+import { entityActivity } from '../activity/activity.service'
 import { getShipmentDetail } from './shipment-view'
-import { createShipment, deleteShipment, updateShipment } from './shipments.service'
+import {
+  addShipmentNote,
+  createShipment,
+  deleteShipment,
+  exportShipmentsCsv,
+  listShipments,
+  shipmentCards,
+  shipmentFlagNames,
+  shipmentSorts,
+  updateShipment,
+} from './shipments.service'
 
 const item = z.strictObject({
   productId: z.guid({ error: 'Choose a product.' }),
@@ -46,10 +58,53 @@ const patchBody = z
     etaChangeReason: text(500).optional(),
   })
 
+const listQuery = z.object({
+  q: z.string().max(100, { error: 'Keep the search to 100 characters or fewer.' }).default(''),
+  stageId: z.guid({ error: 'Choose a value from the list.' }).optional(),
+  vessel: z.string().max(100).optional(),
+  flag: z.enum(shipmentFlagNames, { error: 'Choose a known quick filter.' }).optional(),
+  sort: z.enum(shipmentSorts, { error: 'Choose a known sort.' }).default('eta-asc'),
+})
+const noteBody = z.strictObject({
+  message: z
+    .string({ error: 'Write a note first.' })
+    .max(2000, { error: 'Keep the note to 2,000 characters or fewer.' }),
+})
+
 export function shipmentsRouter(deps: RecordsDeps) {
   const router = Router()
 
-  // List, summary and CSV routes (Task 4) go above /:id, which would otherwise match them.
+  router.get('/', requireSignedIn(), async (req, res) => {
+    const { page, pageSize, ...filters } = parseInput(listQuery.extend(pageQuery.shape), req.query)
+    res.json(await listShipments(deps, filters, { page, pageSize }))
+  })
+
+  router.get('/summary', requireSignedIn(), async (_req, res) => {
+    res.json(await shipmentCards(deps))
+  })
+
+  router.get('/export.csv', requireSignedIn(), async (req, res) => {
+    const { filename, body } = await exportShipmentsCsv(deps, parseInput(listQuery, req.query))
+    res.type('text/csv; charset=utf-8').attachment(filename).send(body)
+  })
+
+  router.get('/:id/activity', requireSignedIn(), async (req, res) => {
+    res.json(
+      await entityActivity(
+        deps.db,
+        'shipment',
+        parseId(req.params.id),
+        parseInput(pageQuery, req.query),
+      ),
+    )
+  })
+
+  router.post('/:id/notes', requirePermission('editShipments'), async (req, res) => {
+    const { message } = parseInput(noteBody, req.body)
+    res
+      .status(201)
+      .json(await addShipmentNote(deps.db, authOf(req).user, parseId(req.params.id), message))
+  })
 
   router.get('/:id', requireSignedIn(), async (req, res) => {
     res.json(await getShipmentDetail(deps.db, parseId(req.params.id), await deps.clock.today()))
