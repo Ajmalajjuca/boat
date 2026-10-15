@@ -8,8 +8,8 @@ The build runs in the PRD's six phases. Each phase ends in something that can be
 | - | ----- | -------- | ---------------- | ---- |
 | 1 | Foundation | pnpm monorepo; `packages/domain` with unit tests; Express API skeleton with health checks; Prisma schema, migrations and database grants; Docker Compose Postgres; CI; `render.yaml` | Web app builds from the shared package; domain coverage ≥ 95%; schema integration tests and CI green | [2026-10-14-phase-1-foundation.md](2026-10-14-phase-1-foundation.md) |
 | 2 | Auth and users | Sign-in, server sessions, invites and password reset via Resend, `requirePermission` middleware with the route-walk test, CSRF, `create-admin` CLI, users and settings modules | Each role can sign in, and `/auth/me` returns the right allowed actions | [2026-10-15-phase-2-auth-and-users.md](2026-10-15-phase-2-auth-and-users.md) |
-| 3 | Core records | Soft-delete Prisma extension, audit service, version conflicts; lookups, products, lots, RM batches, GRN receipts, activity and notes | Every FR-1 to FR-4, FR-7 and FR-8 rule has a passing integration or API test | Written after Phase 2 merges |
-| 4 | Shipments and reports | Shipments with items and ETA revisions, month-end report, CSV export, JSON export, import (merge/replace), reset | `docs/sample-test-backup.json` imports, and its month-end figures match the demo app's | Written after Phase 3 merges |
+| 3 | Core records | Soft-delete Prisma extension, audit service, version conflicts; lookups, products, lots, RM batches, GRN receipts, activity and notes | Every FR-1 to FR-4, FR-7 and FR-8 rule has a passing integration or API test | [2026-10-15-phase-3-core-records.md](2026-10-15-phase-3-core-records.md) |
+| 4 | Shipments and reports | Shipments with items and ETA revisions, month-end report, shipments CSV export, JSON export, import (merge/replace), reset | `docs/sample-test-backup.json` imports, and its month-end figures match the demo app's | Written after Phase 3 merges |
 | 5 | Frontend switch | API client with TanStack Query replaces `repository.ts` and `db.ts`; sign-in replaces PIN profiles; 409 shown as "someone else changed this"; Playwright suite | Every Playwright flow passes against the API, on desktop Chromium and a 390 px viewport | Written after Phase 4 merges |
 | 6 | Launch | Render staging on a Neon branch, backup and restore drill, OWASP review, client data import, production cut-over | Client signs off on staging with their own data | Written after Phase 5 merges |
 
@@ -46,6 +46,22 @@ These follow from the versions available on 14 Oct 2026 or close gaps the PRD le
 9. **Tokens in the URL fragment.** Emailed links are `/invite#token=…` and `/reset-password#token=…`, so tokens stay out of server and proxy logs. Phase 5 builds the two pages.
 10. **No audit trail for user changes yet.** `activity_logs.entity_type` covers lots and shipments only (FR-7.1). Phase 2 logs user changes through pino. If an audit of user administration is wanted, it needs a schema change.
 11. **Rate-limit counts in memory.** Enough for one Render instance; a restart clears them.
+
+## Where Phase 3 departs from the PRD
+
+1. **Soft delete is explicit, not a Prisma extension.** Every query filters `deleted_at IS NULL`, deletes go through helpers that set `deleted_at` and `deleted_by` (`softDeleteLots`), and the database refuses real deletes anyway. Prisma query extensions don't reach nested relation reads, so the extension would give only a partial guarantee. It would also change the client's type throughout Phase 2's code. Tests check that deleted records leave lists, dropdowns and summaries.
+2. **No expression index on `COALESCE(revised_eta, planned_date)`.** Prisma can't declare one, so a later migration would drop it as drift. At 20,000 lots a scan takes milliseconds, and Phase 3 Task 10 measures the PRD's 300 ms p95 target. The plain `follow_up_date` index is added.
+3. **The lots CSV export moves into Phase 3**, because FR-2.5 lists it and Phase 3's gate covers FR-2. Phase 4 keeps the shipments export.
+4. **Reference lists aren't paged.** `GET /lookups` and `GET /products` return every active row as `{ items }`, because dropdowns need all of them. Lots and history are paged.
+5. **System values can be reordered.** Only renaming and deleting them is refused. Renaming any other value is allowed even while records use it, as the PRD says.
+6. **System values come from a migration**, with a `system_key`. Phase 4's import must link the backup's "On Track", "Delayed", "Hold", "None", "Approval Blocker" and "BAU" to these rows rather than create new ones. "Kit (All Together)" is still recognised by its text, as in the demo.
+7. **Batches and receipts have no version column** (the PRD versions products, lots and shipments). Two people editing the same entry at once is last-write-wins. Every rule that spans the lot (over-receipt, completion, component choices) is still guarded by the lot row lock.
+8. **The lot list keeps the demo's extra filters:** segment, logistics, blocker and the quick filters RM incomplete, NPI and On Track. `flag` can repeat, and repeated flags combine with AND.
+
+## Notes for later phases
+
+- **Phase 4:** import must map system values by `system_key` (departure 6), and compute `grn_total` and `completed_on` with `refreshCompletion`.
+- **Phase 5:** every request with a session moves its idle timer, including `GET /auth/me`. A client that polls `/auth/me` would keep sessions alive forever, so poll something else or not at all.
 
 ## Still open in the PRD (no effect on Phases 1–4)
 
