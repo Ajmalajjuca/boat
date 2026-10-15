@@ -9,6 +9,7 @@ import { settingsRouter } from './modules/settings/settings.router'
 import { createSettingsService } from './modules/settings/settings.service'
 import { lookupsRouter } from './modules/lookups/lookups.router'
 import { lotsRouter } from './modules/lots/lots.router'
+import { grnReceiptRouters } from './modules/grn-receipts/grn-receipts.router'
 import { productsRouter } from './modules/products/products.router'
 import { rmBatchRouters } from './modules/rm-batches/rm-batches.router'
 import { usersRouter } from './modules/users/users.router'
@@ -51,5 +52,8 @@ export function buildApiRouter(deps: ApiDeps) {
   const batches = rmBatchRouters(records)
   mount(api, '/lots', batches.underLots)
   mount(api, '/rm-batches', batches.batches)
+  const receipts = grnReceiptRouters(records)
+  mount(api, '/lots', receipts.underLots)
+  mount(api, '/grn-receipts', receipts.receipts)
   return api
 }

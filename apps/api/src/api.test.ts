@@ -73,6 +73,9 @@ describe('API routes', () => {
         'POST /lots/:id/rm-batches lotAccess',
         'PATCH /rm-batches/:id lotAccess',
         'DELETE /rm-batches/:id deleteEntries',
+        'POST /lots/:id/grn-receipts lotAccess',
+        'PATCH /grn-receipts/:id lotAccess',
+        'DELETE /grn-receipts/:id deleteEntries',
       ].sort(),
     )
   })
