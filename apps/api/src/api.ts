@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import type { PrismaClient } from './generated/prisma/client'
+import { loadSession } from './modules/auth/sessions'
 import { healthRouter, type ReadinessCheck } from './modules/health/health.router'
+import { createSettingsService } from './modules/settings/settings.service'
 
 export type ApiDeps = {
   db: PrismaClient
@@ -24,6 +26,8 @@ export const mountPathOf = (router: object) => mountPaths.get(router)
 
 export function buildApiRouter(deps: ApiDeps) {
   const api = Router()
+  const settings = createSettingsService(deps.db)
+  api.use(loadSession({ db: deps.db, settings, sessionSecret: deps.sessionSecret }))
   mount(api, '/health', healthRouter(deps.checkDatabase))
   return api
 }

@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient } from '../generated/prisma/client'
+import { type Prisma, PrismaClient } from '../generated/prisma/client'
 import type { ReadinessCheck } from '../modules/health/health.router'
 
 export function createPrisma(connectionString: string) {
@@ -14,3 +14,6 @@ export const databaseCheck =
   async () => {
     await db.$queryRaw`SELECT 1`
   }
+
+// Either the client or the client inside $transaction, so helpers work in both.
+export type Db = PrismaClient | Prisma.TransactionClient
