@@ -3,9 +3,11 @@ import { z } from 'zod'
 import { authOf, requireLotAccess, requirePermission, requireSignedIn } from '../../core/access'
 import type { RecordsDeps } from '../../core/clock'
 import { optionalDate } from '../../core/dates'
+import { pageQuery } from '../../core/pagination'
 import { parseId, parseInput } from '../../core/parse'
+import { type LotFilters, lotFlagNames, lotSorts } from './lot-list'
 import { getLotDetail } from './lot-view'
-import { createLot, deleteLot, updateLot } from './lots.service'
+import { createLot, deleteLot, exportLotsCsv, listLots, lotCards, updateLot } from './lots.service'
 
 const choose = (label: string) => z.guid({ error: `Choose ${label} from the list.` })
 // Whole-number and sign rules come from validateLot; this keeps values inside Postgres integer.
@@ -72,10 +74,47 @@ const patchBody = z
   .partial()
   .extend({ version: z.number({ error: 'Reload the lot and try again.' }).int() })
 
+const filterId = z.guid({ error: 'Choose a value from the list.' }).optional()
+const listQuery = z.object({
+  view: z.enum(['active', 'completed'], { error: 'Choose active or completed.' }).default('active'),
+  q: z.string().max(100, { error: 'Keep the search to 100 characters or fewer.' }).default(''),
+  segmentId: filterId,
+  categoryId: filterId,
+  emsId: filterId,
+  pocId: filterId,
+  statusId: filterId,
+  stageId: filterId,
+  logisticsId: filterId,
+  blockerId: filterId,
+  // ?flag=overdue&flag=rm arrives as an array, a single ?flag=overdue as a string.
+  flag: z.preprocess(
+    (v) => (v === undefined ? [] : [v].flat()),
+    z.array(z.enum(lotFlagNames, { error: 'Choose a known quick filter.' })),
+  ),
+  sort: z.enum(lotSorts, { error: 'Choose a known sort.' }).default('eta-asc'),
+})
+const toFilters = ({ flag, ...rest }: z.output<typeof listQuery>): LotFilters => ({
+  ...rest,
+  flags: flag,
+})
+
 export function lotsRouter(deps: RecordsDeps) {
   const router = Router()
 
-  // List, summary and CSV routes (Task 6) go above /:id, which would otherwise match them.
+  router.get('/', requireSignedIn(), async (req, res) => {
+    const { page, pageSize, ...query } = parseInput(listQuery.extend(pageQuery.shape), req.query)
+    res.json(await listLots(deps, authOf(req).user, toFilters(query), { page, pageSize }))
+  })
+
+  router.get('/summary', requireSignedIn(), async (_req, res) => {
+    res.json(await lotCards(deps))
+  })
+
+  router.get('/export.csv', requireSignedIn(), async (req, res) => {
+    const filters = toFilters(parseInput(listQuery, req.query))
+    const { filename, body } = await exportLotsCsv(deps, authOf(req).user, filters)
+    res.type('text/csv; charset=utf-8').attachment(filename).send(body)
+  })
 
   router.get('/:id', requireSignedIn(), async (req, res) => {
     const date = await deps.clock.today()

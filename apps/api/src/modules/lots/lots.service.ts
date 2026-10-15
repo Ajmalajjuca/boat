@@ -4,15 +4,26 @@ import { changedPlanFields, deniedMessage, PermissionError } from '@boat/domain/
 import { assertValid, validateLot, ValidationError } from '@boat/domain/validation'
 import type { SessionUser } from '../../core/access'
 import { actorOf, recordActivity } from '../../core/audit'
+import { toCsv } from '../../core/csv'
 import type { RecordsDeps } from '../../core/clock'
 import { fromDbDate, toDbDate } from '../../core/dates'
 import { ConflictError } from '../../core/errors'
+import { type Page, pageArgs, pageOf } from '../../core/pagination'
 import type { Db } from '../../core/prisma'
 import { type LookupKind, Prisma } from '../../generated/prisma/client'
 import { renameFields, resolveLookups } from '../lookups/resolve'
 import { softDeleteLots } from './lot-deletion'
+import { countLots, findLotIds, lotCardCounts, type LotFilters } from './lot-list'
 import { lockLot, lockLotForEdit, refreshCompletion } from './lot-lock'
-import { batchInclude, getLotDetail, lotAccess, type LotRow, toDomainLot } from './lot-view'
+import {
+  batchInclude,
+  getLotDetail,
+  loadLotViews,
+  lotAccess,
+  type LotRow,
+  type LotView,
+  toDomainLot,
+} from './lot-view'
 
 export type LotInput = {
   productId: string
@@ -316,4 +327,91 @@ export async function deleteLot({ db }: RecordsDeps, user: SessionUser, id: stri
     const lot = await lockLot(tx, id)
     await softDeleteLots(tx, actorOf(user), [{ id, label: lot.label }])
   })
+}
+
+export async function listLots(
+  { db, clock }: RecordsDeps,
+  user: SessionUser,
+  filters: LotFilters,
+  page: Page,
+) {
+  const date = await clock.today()
+  const [ids, total] = await Promise.all([
+    findLotIds(db, filters, date, pageArgs(page)),
+    countLots(db, filters, date),
+  ])
+  return pageOf(await loadLotViews(db, ids, date, user), total, page)
+}
+
+export async function lotCards({ db, clock }: RecordsDeps) {
+  return lotCardCounts(db, await clock.today())
+}
+
+// The demo's CSV columns (Production.tsx).
+const csvHeaders = [
+  'Product',
+  'Variant',
+  'Segment',
+  'Lot',
+  'Status',
+  'StatusSummary',
+  'Category',
+  'EMS',
+  'POC',
+  'Stage',
+  'Mode',
+  'LotQty',
+  'Produced',
+  'Rework',
+  'GRN',
+  'Balance',
+  'RMReadyPercent',
+  'PlannedDate',
+  'CurrentETA',
+  'Blocker',
+  'FollowUp',
+  'FullGRNDate',
+  'DaysVsPlan',
+  'RMToGRNDays',
+]
+const csvRow = (v: LotView) => ({
+  Product: v.product.name,
+  Variant: v.product.variant,
+  Segment: v.product.segment.value,
+  Lot: v.label,
+  Status: v.status.value,
+  StatusSummary: v.computed.summary,
+  Category: v.category.value,
+  EMS: v.ems?.value ?? '',
+  POC: v.poc?.value ?? '',
+  Stage: v.stage.value,
+  Mode: v.logistics?.value ?? '',
+  LotQty: v.lotQty,
+  Produced: v.freshProductionQty,
+  Rework: v.reworkQty,
+  GRN: v.computed.grnTotal,
+  Balance: v.computed.balance,
+  RMReadyPercent: Math.round(v.computed.rm.percent),
+  PlannedDate: v.plannedDate ?? '',
+  CurrentETA: v.revisedEta ?? v.plannedDate ?? '',
+  Blocker: v.blocker?.value ?? '',
+  FollowUp: v.followUpDate ?? '',
+  FullGRNDate: v.computed.fullGrnDate ?? '',
+  DaysVsPlan: v.computed.planDelay ?? '',
+  RMToGRNDays: v.computed.leadTime ?? '',
+})
+
+// Every matching lot, loaded 500 at a time.
+export async function exportLotsCsv(
+  { db, clock }: RecordsDeps,
+  user: SessionUser,
+  filters: LotFilters,
+) {
+  const date = await clock.today()
+  const ids = await findLotIds(db, filters, date)
+  const rows: Record<string, unknown>[] = []
+  for (let i = 0; i < ids.length; i += 500)
+    for (const view of await loadLotViews(db, ids.slice(i, i + 500), date, user))
+      rows.push(csvRow(view))
+  return { filename: `${filters.view}-lots-${date}.csv`, body: toCsv(csvHeaders, rows) }
 }
