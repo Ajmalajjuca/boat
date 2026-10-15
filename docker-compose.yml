@@ -1,0 +1,15 @@
+# Local Postgres for development. Tests start their own throwaway container.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: boat
+      POSTGRES_PASSWORD: boat
+      POSTGRES_DB: boat
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./apps/api/prisma/init-local.sql:/docker-entrypoint-initdb.d/init-local.sql:ro
+volumes:
+  db-data:

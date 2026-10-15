@@ -1,17 +1,8 @@
 import { today } from './calculations'
-import { roles, validatePin } from './access'
-import type {
-  GRNReceipt,
-  Lot,
-  Product,
-  RMBatch,
-  Shipment,
-  ShipmentItem,
-  UserProfile,
-} from './models'
+import type { GRNReceipt, Lot, Product, RMBatch, Shipment, ShipmentItem } from './models'
 
-// Field name → message. Forms show each message under its field; the repository throws the
-// same errors so a save that slips past the form is still rejected with field detail.
+// Field name → message. Forms show each message under its field; the server returns the same map
+// in a 422 response, so a save that slips past the form is still rejected with field detail.
 export type FieldErrors = Record<string, string>
 export class ValidationError extends Error {
   fields: FieldErrors
@@ -35,7 +26,8 @@ const blank = (s: string) => !s.trim()
 // Quantities are whole units; fractions would make exact GRN completion checks unreliable.
 const wholeNumber = (n: number, name: string) =>
   Number.isInteger(n) && n >= 0 ? '' : `${name} must be a whole number, zero or more.`
-function collect(entries: [string, string | false | undefined][]) {
+// Keeps the first message per field, so the most basic problem is the one shown.
+export function collect(entries: [string, string | false | undefined][]) {
   const errors: FieldErrors = {}
   for (const [field, message] of entries) if (message && !errors[field]) errors[field] = message
   return errors
@@ -71,20 +63,21 @@ export const validateLot = (l: Lot) =>
     ],
   ])
 
-export const validateBatch = (b: RMBatch) =>
+// date is "today" for the no-future-date rules; the server passes the company date.
+export const validateBatch = (b: RMBatch, date = today()) =>
   collect([
     ['component', blank(b.component) && 'Choose a component.'],
     ['label', blank(b.label) && 'Enter a batch label.'],
     ['plannedQty', wholeNumber(b.plannedQty, 'Planned quantity')],
     ['receivedQty', wholeNumber(b.receivedQty, 'Received quantity')],
-    ['receivedDate', b.receivedDate > today() && 'Received date cannot be in the future.'],
+    ['receivedDate', b.receivedDate > date && 'Received date cannot be in the future.'],
   ])
 
-export const validateReceipt = (r: GRNReceipt, available?: number) =>
+export const validateReceipt = (r: GRNReceipt, available?: number, date = today()) =>
   collect([
     ['label', blank(r.label) && 'Enter a receipt label.'],
     ['date', !r.date && 'Choose the receipt date.'],
-    ['date', r.date > today() && 'Receipt date cannot be in the future.'],
+    ['date', r.date > date && 'Receipt date cannot be in the future.'],
     ['quantity', wholeNumber(r.quantity, 'Quantity')],
     ['quantity', r.quantity <= 0 && 'Quantity must be greater than zero.'],
     [
@@ -95,17 +88,17 @@ export const validateReceipt = (r: GRNReceipt, available?: number) =>
     ],
   ])
 
-export function validateShipment(s: Shipment, lines: ShipmentItem[]) {
+export function validateShipment(s: Shipment, lines: ShipmentItem[], date = today()) {
   const counts = new Map<string, number>()
   for (const line of lines) counts.set(line.productId, (counts.get(line.productId) || 0) + 1)
-  const beforeEtd = (date: string) => !!s.etd && !!date && date < s.etd
+  const beforeEtd = (value: string) => !!s.etd && !!value && value < s.etd
   return collect([
     ['number', blank(s.number) && 'Enter the shipment or invoice number.'],
     ['vessel', blank(s.vessel) && 'Enter the vessel, flight, or carrier.'],
     ['plannedEta', beforeEtd(s.plannedEta) && 'Planned ETA cannot be before ETD.'],
     ['revisedEta', beforeEtd(s.revisedEta) && 'Revised ETA cannot be before ETD.'],
     ['actualArrival', beforeEtd(s.actualArrival) && 'Arrival cannot be before ETD.'],
-    ['actualArrival', s.actualArrival > today() && 'Arrival cannot be in the future.'],
+    ['actualArrival', s.actualArrival > date && 'Arrival cannot be in the future.'],
     ['lines', !lines.length && 'Add at least one product line.'],
     ...lines.flatMap((line): [string, string | false][] => [
       [lineField(line.id, 'productId'), !line.productId && 'Choose a product.'],
@@ -123,17 +116,3 @@ export function validateShipment(s: Shipment, lines: ShipmentItem[]) {
 
 export const validateLookupValue = (value: string) =>
   collect([['value', blank(value) && 'Enter a value.']])
-
-// pin and confirm are blank when an existing PIN is kept. Viewers may have no PIN at all.
-export function validateUser(u: UserProfile, pin: string, confirm: string) {
-  const changingPin = !!(pin || confirm)
-  return collect([
-    ['name', blank(u.name) && 'Enter a name.'],
-    ['name', u.name.trim().length > 40 && 'Keep the name to 40 characters or fewer.'],
-    ['role', !roles.includes(u.role) && 'Choose a role.'],
-    ['poc', u.role === 'poc' && blank(u.poc) && 'Choose the point of contact this profile owns.'],
-    ['pin', changingPin && validatePin(pin)],
-    ['confirm', changingPin && !validatePin(pin) && validatePin(pin, confirm)],
-    ['pin', !changingPin && u.role !== 'viewer' && !u.pinHash && 'Set a PIN of 4 to 8 digits.'],
-  ])
-}

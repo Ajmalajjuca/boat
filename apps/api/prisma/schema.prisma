@@ -1,0 +1,346 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+// Connection URLs live in prisma.config.ts (CLI, owner role) and src/core/prisma.ts (app role).
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  admin
+  planner
+  poc
+  viewer
+}
+
+enum UserStatus {
+  invited
+  active
+  disabled
+}
+
+enum TokenPurpose {
+  invite
+  password_reset
+}
+
+enum RmMode {
+  all
+  components
+}
+
+enum EntityType {
+  lot
+  shipment
+}
+
+enum EtaKind {
+  planned
+  current
+}
+
+enum LookupKind {
+  segment
+  category
+  ems
+  poc
+  status
+  stage
+  blocker
+  logistics
+  component
+  shipmentStage
+}
+
+// Every business model carries deletedAt + deletedBy. Unique rules are partial indexes that ignore
+// soft-deleted rows; citext columns make them case-insensitive. CHECK constraints are in the
+// constraints migration, because Prisma cannot express them.
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @db.Citext // case-insensitive
+  name         String       @db.VarChar(40)
+  role         Role
+  pocId        String?      @map("poc_id") @db.Uuid
+  poc          LookupValue? @relation("UserPoc", fields: [pocId], references: [id])
+  passwordHash String?      @map("password_hash") // Argon2id; null until invite accepted
+  status       UserStatus   @default(invited)
+  lastLoginAt  DateTime?    @map("last_login_at") @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime?    @map("deleted_at") @db.Timestamptz(3)
+  deletedBy    String?      @map("deleted_by") @db.Uuid
+  sessions     Session[]
+  tokens       AuthToken[]
+
+  @@unique([email], map: "users_email_active_key", where: raw("deleted_at IS NULL"))
+  @@map("users")
+}
+
+model Session {
+  id         String    @id // SHA-256 of the cookie token
+  userId     String    @map("user_id") @db.Uuid
+  user       User      @relation(fields: [userId], references: [id])
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3) // sign-out ends a session without deleting it
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model AuthToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  user      User         @relation(fields: [userId], references: [id])
+  purpose   TokenPurpose
+  tokenHash String       @unique @map("token_hash")
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("auth_tokens")
+}
+
+model LookupValue {
+  id            String         @id @default(uuid()) @db.Uuid
+  kind          LookupKind
+  value         String         @db.Citext
+  systemKey     String?        @map("system_key") // on_track, delayed, hold, none, approval_blocker, bau
+  sort          Int            @default(0)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt     DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  deletedBy     String?        @map("deleted_by") @db.Uuid
+  products      Product[]      @relation("ProductSegment")
+  lotCategories Lot[]          @relation("LotCategory")
+  lotEms        Lot[]          @relation("LotEms")
+  lotPocs       Lot[]          @relation("LotPoc")
+  lotStatuses   Lot[]          @relation("LotStatus")
+  lotStages     Lot[]          @relation("LotStage")
+  lotBlockers   Lot[]          @relation("LotBlocker")
+  lotLogistics  Lot[]          @relation("LotLogistics")
+  lotComponents LotComponent[]
+  rmBatches     RmBatch[]
+  shipments     Shipment[]
+  users         User[]         @relation("UserPoc")
+
+  @@unique([kind, value], map: "lookup_values_kind_value_active_key", where: raw("deleted_at IS NULL"))
+  @@unique([kind, systemKey], map: "lookup_values_kind_system_key_active_key", where: raw("deleted_at IS NULL"))
+  @@index([kind])
+  @@map("lookup_values")
+}
+
+model Product {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String         @db.Citext
+  variant       String         @default("") @db.Citext
+  segmentId     String         @map("segment_id") @db.Uuid
+  segment       LookupValue    @relation("ProductSegment", fields: [segmentId], references: [id])
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt     DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  deletedBy     String?        @map("deleted_by") @db.Uuid
+  lots          Lot[]
+  shipmentItems ShipmentItem[]
+
+  @@unique([name, variant], map: "products_name_variant_active_key", where: raw("deleted_at IS NULL"))
+  @@index([segmentId])
+  @@map("products")
+}
+
+model Lot {
+  id                 String         @id @default(uuid()) @db.Uuid
+  productId          String         @map("product_id") @db.Uuid
+  product            Product        @relation(fields: [productId], references: [id])
+  label              String         @db.Citext
+  categoryId         String         @map("category_id") @db.Uuid
+  category           LookupValue    @relation("LotCategory", fields: [categoryId], references: [id])
+  directFg           Boolean        @default(false) @map("direct_fg")
+  emsId              String?        @map("ems_id") @db.Uuid
+  ems                LookupValue?   @relation("LotEms", fields: [emsId], references: [id])
+  pocId              String?        @map("poc_id") @db.Uuid
+  poc                LookupValue?   @relation("LotPoc", fields: [pocId], references: [id])
+  statusId           String         @map("status_id") @db.Uuid
+  status             LookupValue    @relation("LotStatus", fields: [statusId], references: [id])
+  stageId            String         @map("stage_id") @db.Uuid
+  stage              LookupValue    @relation("LotStage", fields: [stageId], references: [id])
+  rmMode             RmMode         @default(all) @map("rm_mode")
+  readyQty           Int            @default(0) @map("ready_qty") // FG-equivalent units
+  lotQty             Int            @default(0) @map("lot_qty")
+  freshProductionQty Int            @default(0) @map("fresh_production_qty")
+  reworkQty          Int            @default(0) @map("rework_qty")
+  reworkReason       String         @default("") @map("rework_reason")
+  rmReadyDate        DateTime?      @map("rm_ready_date") @db.Date
+  plannedDate        DateTime?      @map("planned_date") @db.Date
+  revisedEta         DateTime?      @map("revised_eta") @db.Date
+  actualDate         DateTime?      @map("actual_date") @db.Date
+  logisticsId        String?        @map("logistics_id") @db.Uuid
+  logistics          LookupValue?   @relation("LotLogistics", fields: [logisticsId], references: [id])
+  blockerId          String?        @map("blocker_id") @db.Uuid
+  blocker            LookupValue?   @relation("LotBlocker", fields: [blockerId], references: [id])
+  blockerDescription String         @default("") @map("blocker_description")
+  followUpDate       DateTime?      @map("follow_up_date") @db.Date
+  followUpNote       String         @default("") @map("follow_up_note")
+  grnTotal           Int            @default(0) @map("grn_total") // active receipts only, kept by grn-receipts
+  completedOn        DateTime?      @map("completed_on") @db.Date // full GRN date, or null
+  version            Int            @default(1)
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt          DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  deletedBy          String?        @map("deleted_by") @db.Uuid
+  components         LotComponent[]
+  rmBatches          RmBatch[]
+  grnReceipts        GrnReceipt[]
+
+  @@unique([productId, label], map: "lots_product_label_active_key", where: raw("deleted_at IS NULL"))
+  @@index([productId])
+  @@index([statusId])
+  @@index([pocId])
+  @@index([plannedDate])
+  @@index([completedOn])
+  @@map("lots")
+}
+
+model LotComponent {
+  id          String      @id @default(uuid()) @db.Uuid
+  lotId       String      @map("lot_id") @db.Uuid
+  lot         Lot         @relation(fields: [lotId], references: [id])
+  componentId String      @map("component_id") @db.Uuid
+  component   LookupValue @relation(fields: [componentId], references: [id])
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt   DateTime?   @map("deleted_at") @db.Timestamptz(3)
+  deletedBy   String?     @map("deleted_by") @db.Uuid
+
+  @@unique([lotId, componentId], map: "lot_components_lot_component_active_key", where: raw("deleted_at IS NULL"))
+  @@index([lotId])
+  @@map("lot_components")
+}
+
+model RmBatch {
+  id           String      @id @default(uuid()) @db.Uuid
+  lotId        String      @map("lot_id") @db.Uuid
+  lot          Lot         @relation(fields: [lotId], references: [id])
+  componentId  String      @map("component_id") @db.Uuid
+  component    LookupValue @relation(fields: [componentId], references: [id])
+  label        String
+  plannedQty   Int         @default(0) @map("planned_qty") // FG-equivalent units
+  plannedDate  DateTime?   @map("planned_date") @db.Date
+  receivedQty  Int         @default(0) @map("received_qty")
+  receivedDate DateTime?   @map("received_date") @db.Date
+  status       String      @default("")
+  notes        String      @default("")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(3)
+  deletedBy    String?     @map("deleted_by") @db.Uuid
+
+  @@index([lotId, componentId])
+  @@map("rm_batches")
+}
+
+model GrnReceipt {
+  id        String    @id @default(uuid()) @db.Uuid
+  lotId     String    @map("lot_id") @db.Uuid
+  lot       Lot       @relation(fields: [lotId], references: [id])
+  label     String
+  date      DateTime  @db.Date
+  quantity  Int
+  note      String    @default("")
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deletedBy String?   @map("deleted_by") @db.Uuid
+
+  @@index([lotId, date])
+  @@index([date])
+  @@map("grn_receipts")
+}
+
+model Shipment {
+  id            String         @id @default(uuid()) @db.Uuid
+  number        String         @db.Citext
+  vessel        String
+  etd           DateTime?      @db.Date
+  plannedEta    DateTime?      @map("planned_eta") @db.Date
+  revisedEta    DateTime?      @map("revised_eta") @db.Date
+  actualArrival DateTime?      @map("actual_arrival") @db.Date
+  stageId       String?        @map("stage_id") @db.Uuid
+  stage         LookupValue?   @relation(fields: [stageId], references: [id])
+  remarks       String         @default("")
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt     DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  deletedBy     String?        @map("deleted_by") @db.Uuid
+  items         ShipmentItem[]
+  etaRevisions  EtaRevision[]
+
+  @@unique([number], map: "shipments_number_active_key", where: raw("deleted_at IS NULL"))
+  @@index([actualArrival])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id         String    @id @default(uuid()) @db.Uuid
+  shipmentId String    @map("shipment_id") @db.Uuid
+  shipment   Shipment  @relation(fields: [shipmentId], references: [id])
+  productId  String    @map("product_id") @db.Uuid
+  product    Product   @relation(fields: [productId], references: [id])
+  quantity   Int
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deletedBy  String?   @map("deleted_by") @db.Uuid
+
+  @@unique([shipmentId, productId], map: "shipment_items_shipment_product_active_key", where: raw("deleted_at IS NULL"))
+  @@index([shipmentId])
+  @@index([productId])
+  @@map("shipment_items")
+}
+
+model EtaRevision {
+  id           String    @id @default(uuid()) @db.Uuid
+  shipmentId   String    @map("shipment_id") @db.Uuid
+  shipment     Shipment  @relation(fields: [shipmentId], references: [id])
+  kind         EtaKind
+  previousDate DateTime? @map("previous_date") @db.Date
+  newDate      DateTime? @map("new_date") @db.Date
+  reason       String    @default("")
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([shipmentId, createdAt])
+  @@map("eta_revisions")
+}
+
+model ActivityLog {
+  id         String     @id @default(uuid()) @db.Uuid
+  entityType EntityType @map("entity_type")
+  entityId   String     @map("entity_id") @db.Uuid
+  kind       String // created, updated, material, receipt, eta, lines, note, deleted, restored
+  message    String
+  changes    Json? // { field: [before, after] }
+  actorId    String?    @map("actor_id") @db.Uuid
+  actorName  String?    @map("actor_name") // snapshot of the name at the time
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([entityType, entityId, createdAt])
+  @@map("activity_logs")
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("app_settings")
+}

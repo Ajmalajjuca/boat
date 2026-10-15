@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: boat
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    # Deploy only after GitHub checks (the CI workflow) pass.
+    autoDeployTrigger: checksPass
+    # --prod=false: NODE_ENV=production would otherwise skip Vite, tsup and the Prisma CLI.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
+    # Same as `db:migrate`, called through the local binary so it doesn't depend on pnpm being on PATH.
+    preDeployCommand: cd apps/api && ./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/prisma db execute --file prisma/grants.sql
+    startCommand: node apps/api/dist/server.js
+    healthCheckPath: /api/v1/health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Neon pooled URL, connecting as boat_app.
+      - key: DATABASE_URL
+        sync: false
+      # Neon direct URL, connecting as the owner role; used only by the pre-deploy migration.
+      - key: DIRECT_URL
+        sync: false

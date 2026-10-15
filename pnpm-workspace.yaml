@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 runs dependency install scripts only for packages listed here.
+onlyBuiltDependencies:
+  - esbuild
+  - prisma
+  - '@prisma/engines'

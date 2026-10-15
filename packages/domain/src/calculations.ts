@@ -1,8 +1,22 @@
 import type { GRNReceipt, Lot, RMBatch, Shipment, ShipmentItem } from './models'
 
-export function today(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// "Today" as YYYY-MM-DD. The server passes the company time zone; the browser omits it and gets
+// the device's local date, as before.
+export function today(timeZone?: string, at = new Date()): string {
+  if (timeZone) {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+        .formatToParts(at)
+        .map((p) => [p.type, p.value]),
+    )
+    return `${parts.year}-${parts.month}-${parts.day}`
+  }
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
 }
 export function dayOffset(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number)
@@ -162,7 +176,7 @@ export function shipmentStatus(s: Shipment, date = today()) {
 export function dateLabel(value: string) {
   if (!value) return 'Not set'
   const [y, m, d] = value.split('-')
-  return `${d} ${new Date(Date.UTC(Number(y), Number(m) - 1, 1)).toLocaleString('en', { month: 'short' })} ${y}`
+  return `${d} ${new Date(Date.UTC(Number(y), Number(m) - 1, 1)).toLocaleString('en', { month: 'short', timeZone: 'UTC' })} ${y}`
 }
 // One-line lot summary in the client's format: "Delayed, 1d left — RM Blocker (Factory Production)".
 export function lotSummary(lot: Lot, receipts: GRNReceipt[], date = today()) {
