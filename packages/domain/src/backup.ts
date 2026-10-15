@@ -22,9 +22,16 @@ const isObject = (x: unknown): x is Record<string, unknown> =>
   !!x && typeof x === 'object' && !Array.isArray(x)
 // Postgres text can't hold NUL, so a backup carrying one is refused as invalid text.
 const isText = (x: unknown): x is string => typeof x === 'string' && !x.includes('\u0000')
+// Years from 1900 to 9999: Postgres refuses year 0, and nothing in this business is older.
+const sensibleYear = (y: number) => y >= 1900 && y <= 9999
+const isTimestamp = (x: unknown) =>
+  typeof x === 'string' &&
+  Number.isFinite(Date.parse(x)) &&
+  sensibleYear(new Date(x).getUTCFullYear())
 const isDate = (s: string) =>
   !s ||
   (/^\d{4}-\d{2}-\d{2}$/.test(s) &&
+    sensibleYear(Number(s.slice(0, 4))) &&
     !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) &&
     new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s)
 const folded = (s: string) => s.trim().toLowerCase()
@@ -125,10 +132,8 @@ export function parseImport(raw: unknown): DataSet {
         !isObject(row) ||
         !isText(row.id) ||
         !row.id.trim() ||
-        typeof row.createdAt !== 'string' ||
-        typeof row.updatedAt !== 'string' ||
-        !Number.isFinite(Date.parse(row.createdAt)) ||
-        !Number.isFinite(Date.parse(row.updatedAt))
+        !isTimestamp(row.createdAt) ||
+        !isTimestamp(row.updatedAt)
       )
         fail(`Invalid ${key} record ID or timestamps.`)
       const r = row as Record<string, unknown>
@@ -229,6 +234,11 @@ export function validateRelations(data: DataSet) {
       l.rmComponents.some((c) => !lookup('component', c))
     )
       fail(`Lot ${l.label} references a missing dropdown value.`)
+    if (
+      l.rmComponents.some((c) => !c.trim()) ||
+      new Set(l.rmComponents.map(folded)).size !== l.rmComponents.length
+    )
+      fail(`Lot ${l.label} lists a blank or repeated component.`)
     if (l.reworkQty > l.freshProductionQty) fail(`Lot ${l.label} has rework above production.`)
     if (l.rmMode !== 'all' && l.rmMode !== 'components')
       fail(`Lot ${l.label} has an invalid RM mode.`)
@@ -241,7 +251,12 @@ export function validateRelations(data: DataSet) {
     if (!lots.has(r.lotId) || !r.label.trim() || !r.date || r.quantity <= 0)
       fail('A GRN receipt has a missing lot or invalid receipt fields.')
   for (const b of data.rmBatches)
-    if (!lots.has(b.lotId) || !b.label.trim() || !lookup('component', b.component))
+    if (
+      !lots.has(b.lotId) ||
+      !b.label.trim() ||
+      !b.component.trim() ||
+      !lookup('component', b.component)
+    )
       fail('An RM batch has a missing lot or component.')
   for (const l of data.lots)
     if (totalGrn(data.grnReceipts.filter((r) => r.lotId === l.id)) > l.lotQty)

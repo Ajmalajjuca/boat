@@ -106,6 +106,16 @@ describe('the sample backup', () => {
             : byId(rows),
         ]),
       )
-    expect(comparable(second)).toEqual(comparable(first))
+    // The replace adds history of its own (FR-7.1): every earlier entry must survive unchanged,
+    // and the only new ones are the import's.
+    const { activityLogs: before, ...firstRest } = comparable(first)
+    const { activityLogs: after, ...secondRest } = comparable(second)
+    expect(secondRest).toEqual(firstRest)
+    expect(after).toEqual(expect.arrayContaining(before as unknown[]))
+    const added = (after as { id: string; kind?: string }[]).filter(
+      (a) => !(before as { id: string }[]).some((b) => b.id === a.id),
+    )
+    expect(added.length).toBeGreaterThan(0)
+    expect(new Set(added.map((a) => a.kind))).toEqual(new Set(['deleted', 'imported']))
   })
 })

@@ -8,7 +8,7 @@ import { monthEndCsv, monthEndReport } from './month-end.service'
 const monthQuery = z.object({
   month: z
     .string({ error: 'Choose a month.' })
-    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, { error: 'Use the format YYYY-MM.' }),
+    .regex(/^(19|[2-9]\d)\d{2}-(0[1-9]|1[0-2])$/, { error: 'Use the format YYYY-MM.' }),
 })
 
 export function reportsRouter(deps: RecordsDeps) {

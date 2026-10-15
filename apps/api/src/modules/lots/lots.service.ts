@@ -10,6 +10,7 @@ import { fromDbDate, toDbDate } from '../../core/dates'
 import { ConflictError } from '../../core/errors'
 import { type Page, pageArgs, pageOf } from '../../core/pagination'
 import type { Db } from '../../core/prisma'
+import { holdDataLockShared } from '../../core/data-lock'
 import { type LookupKind, Prisma } from '../../generated/prisma/client'
 import { renameFields, resolveLookups } from '../lookups/resolve'
 import { softDeleteLots } from './lot-deletion'
@@ -253,6 +254,7 @@ export async function createLot({ db, clock }: RecordsDeps, user: SessionUser, i
   const id = randomUUID()
   const clean = { ...input, componentIds: [...new Set(input.componentIds)] }
   await db.$transaction(async (tx) => {
+    await holdDataLockShared(tx)
     const lot = await checkLot(tx, id, clean)
     await tx.lot.create({ data: { id, ...lotData(clean, lot) } }).catch(duplicateLabel(lot.label))
     if (clean.componentIds.length)

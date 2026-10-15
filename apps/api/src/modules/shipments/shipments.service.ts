@@ -15,6 +15,7 @@ import { fromDbDate, toDbDate } from '../../core/dates'
 import { ConflictError, NotFoundError } from '../../core/errors'
 import { type Page, pageOf } from '../../core/pagination'
 import type { Db } from '../../core/prisma'
+import { holdDataLockShared } from '../../core/data-lock'
 import { Prisma, type PrismaClient } from '../../generated/prisma/client'
 import { entryView } from '../activity/activity.service'
 import { resolveLookups } from '../lookups/resolve'
@@ -41,6 +42,7 @@ export type ShipmentInput = {
 export type ShipmentPatch = Partial<ShipmentInput> & { version: number; etaChangeReason?: string }
 
 export async function lockShipment(db: Db, id: string) {
+  await holdDataLockShared(db)
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM shipments WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`
   if (!rows.length) throw new NotFoundError()
@@ -249,6 +251,7 @@ export async function createShipment(
   const date = await clock.today()
   const id = randomUUID()
   await db.$transaction(async (tx) => {
+    await holdDataLockShared(tx)
     const shipment = await checkShipment(tx, id, input, date)
     await tx.shipment
       .create({ data: { id, ...shipmentData(input, shipment) } })

@@ -1,6 +1,7 @@
 import { assertValid, validateLookupValue, ValidationError } from '@boat/domain/validation'
 import { ConflictError, NotFoundError } from '../../core/errors'
 import type { Db } from '../../core/prisma'
+import { holdDataLockShared } from '../../core/data-lock'
 import { type LookupKind, Prisma, type PrismaClient } from '../../generated/prisma/client'
 
 const lookupSelect = {
@@ -33,6 +34,7 @@ export async function listLookups(db: PrismaClient, kind?: LookupKind) {
 export async function createLookup(db: PrismaClient, kind: LookupKind, value: string) {
   assertValid(validateLookupValue(value))
   return db.$transaction(async (tx) => {
+    await holdDataLockShared(tx)
     const { _max } = await tx.lookupValue.aggregate({
       where: { kind, deletedAt: null },
       _max: { sort: true },
@@ -113,6 +115,7 @@ async function inUse(db: Db, kind: LookupKind, id: string) {
 
 export async function deleteLookup(db: PrismaClient, actorId: string, id: string) {
   await db.$transaction(async (tx) => {
+    await holdDataLockShared(tx)
     // Waits for any transaction that holds this value FOR SHARE (resolveLookups) to finish, so
     // the in-use check below sees a record saved at the same moment.
     const locked = await tx.$queryRaw<{ id: string }[]>`

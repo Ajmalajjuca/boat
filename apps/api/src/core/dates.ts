@@ -4,7 +4,12 @@ import { z } from 'zod'
 // Dates at UTC midnight, so every conversion goes through UTC.
 const realDate = (s: string) => {
   const d = new Date(`${s}T00:00:00Z`)
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s
+  // Postgres refuses year 0; nothing in this business predates 1900.
+  return (
+    !Number.isNaN(d.getTime()) &&
+    d.toISOString().slice(0, 10) === s &&
+    Number(s.slice(0, 4)) >= 1900
+  )
 }
 
 export const isoDate = z

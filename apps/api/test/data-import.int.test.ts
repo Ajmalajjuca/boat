@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { Client } from 'pg'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestDatabase } from './support/db'
-import { fixedNow, makeRecordsWorld, testApp } from './support/fixtures'
+import { fixedNow, lotBody, makeRecordsWorld, testApp } from './support/fixtures'
 
 const samplePath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -91,6 +92,13 @@ describe('POST /data/import', () => {
     const nul = sample()
     nul.data.lots[0].label = 'TEST\u0000'
     expect((await importFile(nul)).body.fields).toEqual({ file: 'Invalid lots.label.' })
+    for (const id of ['prod-1', 'C1F9D6B4-79F2-4F44-9A55-3A0F1C9B3E11']) {
+      const odd = sample()
+      odd.data.products.push({ ...odd.data.products[0], id, name: 'Odd id' })
+      expect((await importFile(odd)).body.fields).toEqual({
+        file: `Invalid products record ID ${id}.`,
+      })
+    }
     expect((await importFile({ app: 'Something else' })).body.fields).toEqual({
       file: 'Unsupported JSON backup or schema version.',
     })
@@ -202,6 +210,88 @@ describe('POST /data/import', () => {
     const { w, importFile } = await world()
     expect((await importFile(sample(), 'replace', w.planner)).status).toBe(403)
     expect((await importFile(sample(), 'append')).status).toBe(422)
+  })
+})
+
+describe('import edge cases', () => {
+  it('merges a backup that swaps two product names', async () => {
+    const { importFile } = await world()
+    await importFile(sample())
+    const swapped = sample()
+    const [a, b] = swapped.data.products
+    ;[a.name, b.name, a.variant, b.variant] = [b.name, a.name, b.variant, a.variant]
+    const res = await importFile(swapped, 'merge')
+    expect(res.status).toBe(200)
+  })
+  it('refreshes the totals of a lot a merge moves a receipt away from', async () => {
+    const { db, importFile } = await world()
+    await importFile(sample())
+    const moved = sample()
+    const from = lotId(moved, 'TEST-EP-002')
+    const receipt = moved.data.grnReceipts.find((r) => r.lotId === from && r.quantity === 200)!
+    receipt.lotId = lotId(moved, 'TEST-SD-001')
+    // The file leaves the source lot and its other receipt out, as an older partial export might.
+    moved.data.lots = moved.data.lots.filter((l) => l.id !== from)
+    moved.data.grnReceipts = moved.data.grnReceipts.filter((r) => r.lotId !== from)
+    expect((await importFile(moved, 'merge')).status).toBe(200)
+    expect(await db.lot.findUniqueOrThrow({ where: { id: from } })).toMatchObject({
+      grnTotal: 300,
+      completedOn: null,
+    })
+  })
+  it('FR-7.1 records history for records an import or reset deletes or brings in', async () => {
+    const { db, w, importFile } = await world()
+    const mine = (await w.planner.send('post', '/api/v1/lots', lotBody(w))).body
+    await importFile(sample())
+    const replaced = await db.activityLog.findMany({
+      where: { entityId: mine.id, kind: 'deleted' },
+    })
+    expect(replaced.map((e) => [e.message, e.actorName])).toEqual([
+      [`Lot ${mine.label} deleted by a replace import`, 'Test admin'],
+    ])
+    const backup = sample()
+    const lot = lotId(backup, 'TEST-EP-001')
+    const imported = await db.activityLog.findMany({ where: { entityId: lot, kind: 'imported' } })
+    expect(imported.map((e) => [e.message, e.actorName])).toEqual([
+      ['Imported from a backup (replace)', 'Test admin'],
+    ])
+    const shipment = backup.data.shipments[0].id as string
+    expect(await db.activityLog.count({ where: { entityId: shipment, kind: 'imported' } })).toBe(1)
+    await w.admin.send('post', '/api/v1/data/reset', { confirm: 'RESET ALL DATA' })
+    const reset = await db.activityLog.findMany({ where: { entityId: lot, kind: 'deleted' } })
+    expect(reset.map((e) => e.message)).toEqual(['Lot TEST-EP-001 deleted by a data reset'])
+  })
+  it('makes record changes wait while an import or reset is running', async () => {
+    const { w } = await world()
+    const lot = (await w.planner.send('post', '/api/v1/lots', lotBody(w))).body
+    const other = new Client({ connectionString: fresh.url })
+    await other.connect()
+    try {
+      await other.query('BEGIN')
+      // What an import or reset holds for its whole transaction.
+      await other.query('SELECT pg_advisory_xact_lock(4201015)')
+      const posting = w.planner
+        .send('post', `/api/v1/lots/${lot.id}/grn-receipts`, {
+          label: 'G',
+          date: '2026-10-10',
+          quantity: 5,
+        })
+        .then((res) => res)
+      await vi.waitFor(
+        async () => {
+          const { rows } = await other.query(
+            `SELECT count(*)::int AS n FROM pg_stat_activity
+             WHERE datname = current_database() AND wait_event = 'advisory'`,
+          )
+          expect(rows[0].n).toBeGreaterThan(0)
+        },
+        { timeout: 5000, interval: 50 },
+      )
+      await other.query('COMMIT')
+      expect((await posting).status).toBe(201)
+    } finally {
+      await other.end()
+    }
   })
 })
 

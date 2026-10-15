@@ -7,7 +7,16 @@ describe('isoDate', () => {
       expect(isoDate.safeParse(s).success).toBe(true)
   })
   it('refuses other formats and days that do not exist', () => {
-    for (const s of ['2026-02-30', '2025-02-29', '2026-13-01', '15/10/2026', '2026-1-5', ''])
+    for (const s of [
+      '2026-02-30',
+      '2025-02-29',
+      '2026-13-01',
+      '15/10/2026',
+      '2026-1-5',
+      '',
+      '0000-01-01',
+      '1899-12-31',
+    ])
       expect(isoDate.safeParse(s).success).toBe(false)
   })
 })

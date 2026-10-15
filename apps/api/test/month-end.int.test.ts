@@ -104,7 +104,7 @@ describe('GET /reports/month-end', () => {
     expect(res.body).toMatchObject({ inProgress: true, planned: 100 })
   })
   it('needs a valid month and a session', async () => {
-    for (const month of ['2026-13', '2026-9', ''])
+    for (const month of ['2026-13', '2026-9', '', '0000-01'])
       expect((await w.viewer.agent.get(`/api/v1/reports/month-end?month=${month}`)).status).toBe(
         422,
       )

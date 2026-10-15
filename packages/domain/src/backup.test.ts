@@ -162,6 +162,16 @@ describe('parseImport', () => {
     ],
     ['a NUL character', (d) => (d.lots[0].label = 'Lot\u00001'), 'Invalid lots.label.'],
     [
+      'a year before 1900',
+      (d) => (d.lots[0].plannedDate = '0000-01-01'),
+      'Invalid lots.plannedDate.',
+    ],
+    [
+      'a timestamp out of range',
+      (d) => (d.products[0].createdAt = '-271821-04-20T00:00:00Z'),
+      'Invalid products record ID or timestamps.',
+    ],
+    [
       'a NUL in a list',
       (d) => (d.lots[0].rmComponents = ['P\u0000']),
       'Invalid lots.rmComponents.',
@@ -231,6 +241,21 @@ describe('validateRelations', () => {
       'Lot Lot 1 has rework above production.',
     ],
     ['an unknown RM mode', (d) => (d.lots[0].rmMode = 'some'), 'Lot Lot 1 has an invalid RM mode.'],
+    [
+      'a blank component',
+      (d) => (d.lots[0].rmComponents = ['']),
+      'Lot Lot 1 lists a blank or repeated component.',
+    ],
+    [
+      'a component repeated in another case',
+      (d) => (d.lots[0].rmComponents = ['PCB', 'pcb']),
+      'Lot Lot 1 lists a blank or repeated component.',
+    ],
+    [
+      'a batch without a component',
+      (d) => (d.rmBatches[0].component = ''),
+      'An RM batch has a missing lot or component.',
+    ],
     [
       'the kit among components',
       (d) => (d.lots[0].rmComponents = ['Kit (All Together)']),

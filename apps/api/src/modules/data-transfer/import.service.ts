@@ -2,13 +2,14 @@ import { BackupError, parseImport, validateRelations } from '@boat/domain/backup
 import { type DataSet, dataKeys, type LookupKind } from '@boat/domain/models'
 import { ValidationError } from '@boat/domain/validation'
 import type { SessionUser } from '../../core/access'
+import { holdDataLockExclusive } from '../../core/data-lock'
 import { toDbDate } from '../../core/dates'
 import type { Db } from '../../core/prisma'
 import type { PrismaClient } from '../../generated/prisma/client'
 import { refreshCompletion } from '../lots/lot-lock'
 import { knownTimeZone, type SettingsService } from '../settings/settings.service'
 import { currentDataSet } from './backup-mapping'
-import { dataLock, softDeleteBusinessRecords } from './reset.service'
+import { softDeleteBusinessRecords } from './reset.service'
 
 export type ImportMode = 'merge' | 'replace'
 type Ref = (kind: LookupKind, value: string) => string | null
@@ -21,6 +22,48 @@ const times = (r: { createdAt: string; updatedAt: string }) => ({
   updatedAt: new Date(r.updatedAt),
 })
 const revive = { deletedAt: null, deletedBy: null }
+
+// Every primary key is a Postgres uuid, stored in lowercase. The demo's ids are crypto.randomUUID()
+// values; anything else would fail on insert, or slip past the duplicate-id checks.
+const canonicalUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+function checkIds(data: DataSet) {
+  for (const key of dataKeys)
+    for (const row of data[key])
+      if (!canonicalUuid.test(row.id)) throw new BackupError(`Invalid ${key} record ID ${row.id}.`)
+}
+
+// In merge mode, rows the file overwrites are soft-deleted first, so the writes below only ever
+// revive them. Unique names then can't collide halfway through (two products swapping names),
+// because validateRelations has already checked the final state.
+async function setAsideExisting(db: Db, data: DataSet, userId: string) {
+  const stamp = { deletedAt: new Date(), deletedBy: userId }
+  const by = (rows: { id: string }[]) => ({
+    where: { id: { in: rows.map((r) => r.id) }, deletedAt: null },
+    data: stamp,
+  })
+  await db.shipmentItem.updateMany(by(data.shipmentItems))
+  await db.shipment.updateMany(by(data.shipments))
+  await db.grnReceipt.updateMany(by(data.grnReceipts))
+  await db.rmBatch.updateMany(by(data.rmBatches))
+  await db.lot.updateMany(by(data.lots))
+  await db.product.updateMany(by(data.products))
+}
+
+// FR-7.1: each lot and shipment the file brings in gets a history entry naming the user.
+async function recordImported(db: Db, data: DataSet, user: SessionUser, mode: ImportMode) {
+  const entry = {
+    kind: 'imported',
+    message: `Imported from a backup (${mode})`,
+    actorId: user.id,
+    actorName: user.name,
+  }
+  await db.activityLog.createMany({
+    data: [
+      ...data.lots.map((l) => ({ ...entry, entityType: 'lot' as const, entityId: l.id })),
+      ...data.shipments.map((s) => ({ ...entry, entityType: 'shipment' as const, entityId: s.id })),
+    ],
+  })
+}
 
 // The demo's messages name the problem; the API reports them against the uploaded file.
 function asFileError(err: unknown): never {
@@ -182,6 +225,13 @@ async function writeRecords(db: Db, data: DataSet, ref: Ref, userId: string) {
     (b) => db.rmBatch.update({ where: { id: b.id }, data: { ...batch(b), ...revive } }),
   )
 
+  // A receipt the file moves to another lot leaves its old lot's totals to refresh too.
+  const movedFrom = (
+    await db.grnReceipt.findMany({
+      where: { id: { in: data.grnReceipts.map((r) => r.id) } },
+      select: { lotId: true },
+    })
+  ).map((r) => r.lotId)
   const receipt = (r: DataSet['grnReceipts'][number]) => ({
     lotId: r.lotId,
     label: r.label.trim(),
@@ -196,7 +246,7 @@ async function writeRecords(db: Db, data: DataSet, ref: Ref, userId: string) {
     (rows) => db.grnReceipt.createMany({ data: rows.map((r) => ({ id: r.id, ...receipt(r) })) }),
     (r) => db.grnReceipt.update({ where: { id: r.id }, data: { ...receipt(r), ...revive } }),
   )
-  for (const id of new Set([...lotIds, ...data.grnReceipts.map((r) => r.lotId)]))
+  for (const id of new Set([...lotIds, ...movedFrom, ...data.grnReceipts.map((r) => r.lotId)]))
     await refreshCompletion(db, id)
 
   const shipment = (s: DataSet['shipments'][number]) => ({
@@ -299,20 +349,23 @@ export async function importBackup(
   let incoming: DataSet
   try {
     incoming = parseImport(raw)
+    checkIds(incoming)
   } catch (err) {
     asFileError(err)
   }
   const imported = await db.$transaction(
     async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${dataLock})`
+      await holdDataLockExclusive(tx)
       try {
         validateRelations(afterImport(await currentDataSet(tx), incoming, mode))
       } catch (err) {
         asFileError(err)
       }
-      if (mode === 'replace') await softDeleteBusinessRecords(tx, user.id)
+      if (mode === 'replace') await softDeleteBusinessRecords(tx, user, 'a replace import')
+      else await setAsideExisting(tx, incoming, user.id)
       const ref = await importLookups(tx, incoming.lookupValues)
       await writeRecords(tx, incoming, ref, user.id)
+      await recordImported(tx, incoming, user, mode)
       await importSettings(tx, incoming.settings, user.id)
       return Object.fromEntries(dataKeys.map((key) => [key, incoming[key].length])) as Record<
         keyof DataSet,
