@@ -24,5 +24,22 @@ export function createSettingsService(db: PrismaClient, ttlMs = 60_000) {
     return value
   }
 
-  return { get }
+  async function update(patch: Partial<Settings>, actorId: string) {
+    const changed = Object.entries(patch).filter(
+      (entry): entry is [string, string | number] => entry[1] !== undefined,
+    )
+    await db.$transaction(
+      changed.map(([key, value]) =>
+        db.appSetting.upsert({
+          where: { key },
+          create: { key, value, updatedBy: actorId },
+          update: { value, updatedBy: actorId },
+        }),
+      ),
+    )
+    cached = undefined
+    return get()
+  }
+
+  return { get, update }
 }

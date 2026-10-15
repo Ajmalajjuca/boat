@@ -53,6 +53,8 @@ describe('API routes', () => {
         'POST /users/:id/invite manageSettings',
         'PATCH /users/:id manageSettings',
         'DELETE /users/:id manageSettings',
+        'GET /settings signedIn',
+        'PATCH /settings manageSettings',
       ].sort(),
     )
   })

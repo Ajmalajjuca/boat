@@ -4,6 +4,7 @@ import type { PrismaClient } from './generated/prisma/client'
 import { authRouter } from './modules/auth/auth.router'
 import { loadSession } from './modules/auth/sessions'
 import { healthRouter, type ReadinessCheck } from './modules/health/health.router'
+import { settingsRouter } from './modules/settings/settings.router'
 import { createSettingsService } from './modules/settings/settings.service'
 import { usersRouter } from './modules/users/users.router'
 
@@ -35,5 +36,6 @@ export function buildApiRouter(deps: ApiDeps) {
   mount(api, '/health', healthRouter(deps.checkDatabase))
   mount(api, '/auth', authRouter({ ...deps, settings }))
   mount(api, '/users', usersRouter(deps))
+  mount(api, '/settings', settingsRouter(settings))
   return api
 }
