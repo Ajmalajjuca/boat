@@ -194,3 +194,30 @@ export async function deleteUser(db: PrismaClient, actorId: string, id: string) 
     await tx.authToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: now } })
   })
 }
+
+// A new deployment has no one to sign in as. This refuses once an active admin exists, so the
+// command cannot quietly add admins later. Run again for a first admin who hasn't accepted yet,
+// it sends a fresh invite.
+export async function inviteFirstAdmin(
+  deps: UsersDeps,
+  input: { email: string; name: string },
+  log: Logger,
+) {
+  const active = await deps.db.user.findFirst({
+    where: { role: 'admin', status: 'active', deletedAt: null },
+    select: { id: true },
+  })
+  if (active)
+    throw new ConflictError(
+      'An active admin already exists. Sign in as that admin to invite more people.',
+    )
+  const email = normalizeEmail(input.email)
+  const existing = await deps.db.user.findFirst({
+    where: { email, deletedAt: null },
+    select: { id: true, role: true },
+  })
+  if (!existing) return createUser(deps, { ...input, role: 'admin', pocId: null }, log)
+  if (existing.role !== 'admin')
+    throw new ConflictError(`${email} already belongs to a ${existing.role} user.`)
+  return resendInvite(deps, existing.id, log)
+}

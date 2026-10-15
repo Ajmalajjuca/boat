@@ -23,6 +23,14 @@ pnpm --filter @boat/api dev      # http://localhost:3000/api/v1/health/ready
 pnpm --filter @boat/api test:int # needs Docker
 ```
 
+The first admin is invited from the command line. The link is printed, and also emailed when `RESEND_API_KEY` is set:
+
+```bash
+pnpm api create-admin --email you@example.com --name "Your Name"
+```
+
+On Render, run `node apps/api/dist/create-admin.js --email … --name …` from the service's Shell.
+
 ## Data and backups
 
 Settings lets you manage dropdown values, export all records as JSON, merge or replace from a validated JSON backup, and reset local data. Merge updates records by ID and keeps one copy of matching dropdown values and setting keys. The header also exports the current filtered production or shipment table as CSV. Browser storage can be cleared, so keep JSON exports as backups.

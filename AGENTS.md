@@ -6,11 +6,11 @@ This is a pnpm monorepo. `apps/web` is the React application: `src/App.tsx` owns
 
 `packages/domain` holds the rules shared by the browser and the server: domain types in `src/models.ts`, date and quantity rules in `src/calculations.ts`, field validation in `src/validation.ts`, and role permissions in `src/permissions.ts`. The web app's `models.ts`, `calculations.ts` and `validation.ts` re-export it, and `access.ts` keeps the browser-only PIN, session and React context helpers.
 
-`apps/api` is the Express API. `src/app.ts` builds the app, `src/server.ts` starts it, `src/core/` holds shared middleware and the Prisma client, and `src/modules/<area>/` holds one folder per business area. `prisma/schema.prisma` and `prisma/migrations/` define the PostgreSQL schema, and `prisma/grants.sql` sets the app role's privileges after every migration.
+`apps/api` is the Express API. `src/app.ts` builds the app, `src/server.ts` starts it, `src/core/` holds shared middleware and the Prisma client, and `src/modules/<area>/` holds one folder per business area. `prisma/schema.prisma` and `prisma/migrations/` define the PostgreSQL schema, and `prisma/grants.sql` sets the app role's privileges after every migration. Every API route starts with `publicRoute()`, `requireSignedIn()` or `requirePermission(action)` from `src/core/access.ts`. `src/api.test.ts` fails for a route without one, and holds the table of every route and its permission, so add a row with each new route. Integration tests use `createTestDatabase()` and the fixtures in `test/support/`.
 
 ## Build and Development Commands
 
-Use Node 24 (`nvm use`) and pnpm (`corepack enable`). Run `pnpm install` once, then `pnpm dev` for the web app. `pnpm typecheck`, `pnpm test`, `pnpm format:check` and `pnpm build` run across all packages. For the API, `docker compose up -d db` starts Postgres, `pnpm --filter @boat/api db:migrate` applies migrations and grants, `pnpm --filter @boat/api dev` starts the server, and `pnpm --filter @boat/api test:int` runs the database tests (Docker required). Copy `apps/api/.env.example` to `apps/api/.env` first.
+Use Node 24 (`nvm use`) and pnpm (`corepack enable`). Run `pnpm install` once, then `pnpm dev` for the web app. `pnpm typecheck`, `pnpm test`, `pnpm format:check` and `pnpm build` run across all packages. For the API, `docker compose up -d db` starts Postgres, `pnpm --filter @boat/api db:migrate` applies migrations and grants, `pnpm --filter @boat/api dev` starts the server, and `pnpm --filter @boat/api test:int` runs the database tests (Docker required). Copy `apps/api/.env.example` to `apps/api/.env` first. `pnpm api create-admin --email <address> --name <name>` invites the first admin of a new database.
 
 ## Coding Style & Naming Conventions
 
