@@ -1,14 +1,14 @@
 import 'dotenv/config'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { pino } from 'pino'
 import { createApp } from './app'
 import { loadConfig } from './config'
 import { listen } from './core/listen'
+import { createLogger } from './core/logger'
 import { createPrisma, databaseCheck } from './core/prisma'
 
 const config = loadConfig(process.env)
-const logger = pino({ level: config.LOG_LEVEL })
+const logger = createLogger(config.LOG_LEVEL)
 const prisma = createPrisma(config.DATABASE_URL)
 // Same relative path from src/ (tsx) and dist/ (bundle): apps/web/dist.
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist')
