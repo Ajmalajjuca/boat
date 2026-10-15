@@ -62,6 +62,6 @@ export function buildApiRouter(deps: ApiDeps) {
   mount(api, '/lots', activityRouter(deps.db))
   mount(api, '/shipments', shipmentsRouter(records))
   mount(api, '/reports', reportsRouter(records))
-  mount(api, '/data', dataRouter(records))
+  mount(api, '/data', dataRouter(records, settings))
   return api
 }

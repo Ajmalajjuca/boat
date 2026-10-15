@@ -48,7 +48,10 @@ export function createApp({
       customProps: (req) => (req.auth ? { userId: req.auth.user.id } : {}),
     }),
   )
-  app.use(express.json({ limit: '1mb' }))
+  // Every route reads JSON up to 1 MB, except a backup import, which parses its own body up to
+  // 20 MB (data.router.ts).
+  const json = express.json({ limit: '1mb' })
+  app.use((req, res, next) => (req.path === '/api/v1/data/import' ? next() : json(req, res, next)))
   app.use(cookieParser())
 
   app.use('/api/v1', buildApiRouter(deps))
