@@ -78,6 +78,10 @@ describe('API routes', () => {
         'DELETE /grn-receipts/:id deleteEntries',
         'GET /lots/:id/activity signedIn',
         'POST /lots/:id/notes lotAccess',
+        'GET /shipments/:id signedIn',
+        'POST /shipments editShipments',
+        'PATCH /shipments/:id editShipments',
+        'DELETE /shipments/:id deleteShipments',
       ].sort(),
     )
   })
