@@ -3,6 +3,7 @@ import type { Role } from './models'
 import {
   actionVerbs,
   actorLotAccess,
+  allowedActions,
   changedPlanFields,
   deniedMessage,
   lotEditDenial,
@@ -99,5 +100,32 @@ describe('lot edit rules', () => {
       "Planner profiles can't delete lots. Ask an admin.",
     )
     expect(deniedMessage(null, 'delete lots')).toBe('Sign in to make changes.')
+  })
+})
+
+describe('allowedActions', () => {
+  // Written out by hand rather than derived from roleCan, so a changed grant shows up here.
+  it('lists exactly what each role may do', () => {
+    expect(allowedActions('admin')).toEqual([
+      'manageSettings',
+      'manageData',
+      'exportBackup',
+      'editProducts',
+      'deleteProducts',
+      'createLots',
+      'deleteLots',
+      'editShipments',
+      'deleteShipments',
+      'deleteEntries',
+    ])
+    expect(allowedActions('planner')).toEqual([
+      'exportBackup',
+      'editProducts',
+      'createLots',
+      'editShipments',
+      'deleteEntries',
+    ])
+    expect(allowedActions('poc')).toEqual([])
+    expect(allowedActions('viewer')).toEqual([])
   })
 })

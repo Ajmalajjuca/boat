@@ -1,5 +1,6 @@
 import { today } from './calculations'
-import type { GRNReceipt, Lot, Product, RMBatch, Shipment, ShipmentItem } from './models'
+import type { GRNReceipt, Lot, Product, RMBatch, Role, Shipment, ShipmentItem } from './models'
+import { roles } from './permissions'
 
 // Field name → message. Forms show each message under its field; the server returns the same map
 // in a 422 response, so a save that slips past the form is still rejected with field detail.
@@ -116,3 +117,29 @@ export function validateShipment(s: Shipment, lines: ShipmentItem[], date = toda
 
 export const validateLookupValue = (value: string) =>
   collect([['value', blank(value) && 'Enter a value.']])
+
+// Emails are stored and compared in lowercase, so sign-in ignores how the address was typed.
+export const normalizeEmail = (email: string) => email.trim().toLowerCase()
+
+// At least 12 characters (PRD). The upper limit keeps hashing time bounded.
+export const validatePassword = (password: string, field = 'password') =>
+  collect([
+    [field, password.length < 12 && 'Use at least 12 characters.'],
+    [field, password.length > 128 && 'Keep the password to 128 characters or fewer.'],
+  ])
+
+export type Account = { email: string; name: string; role: string; pocId: string | null }
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+export const validateAccount = (a: Account) =>
+  collect([
+    ['email', blank(a.email) && 'Enter an email address.'],
+    [
+      'email',
+      (!emailPattern.test(a.email.trim()) || a.email.trim().length > 254) &&
+        'Enter a valid email address.',
+    ],
+    ['name', blank(a.name) && 'Enter a name.'],
+    ['name', a.name.trim().length > 40 && 'Keep the name to 40 characters or fewer.'],
+    ['role', !roles.includes(a.role as Role) && 'Choose a role.'],
+    ['pocId', a.role === 'poc' && !a.pocId && 'Choose the point of contact this user owns.'],
+  ])

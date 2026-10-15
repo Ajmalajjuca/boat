@@ -45,8 +45,9 @@ export const actionVerbs: Record<Action, string> = {
   deleteShipments: 'delete shipments',
   deleteEntries: 'delete RM batches or GRN receipts',
 }
+export const actions = Object.keys(actionVerbs) as Action[]
 const grants: Record<Role, Action[]> = {
-  admin: Object.keys(actionVerbs) as Action[],
+  admin: actions,
   planner: ['exportBackup', 'editProducts', 'createLots', 'editShipments', 'deleteEntries'],
   poc: [],
   viewer: [],
@@ -69,6 +70,8 @@ export const planFields: (keyof Lot)[] = [
 export type Actor = { role: Role; poc: string }
 
 export const roleCan = (role: Role, action: Action) => grants[role].includes(action)
+// What a role may do, in actionVerbs order. /auth/me returns it so the browser can hide controls.
+export const allowedActions = (role: Role) => actions.filter((a) => roleCan(role, a))
 
 // full: every field. progress: everything except plan fields. none: read-only.
 export type LotAccess = 'full' | 'progress' | 'none'
