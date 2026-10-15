@@ -29,6 +29,13 @@ describe('GET /settings', () => {
 })
 
 describe('PATCH /settings', () => {
+  it('accepts IANA zone names, including ones with several parts', async () => {
+    for (const timeZone of ['America/New_York', 'America/Argentina/Buenos_Aires', 'UTC']) {
+      const res = await admin.send('patch', '/api/v1/settings', { timeZone })
+      expect(res.status).toBe(200)
+    }
+    await admin.send('patch', '/api/v1/settings', { timeZone: 'Asia/Kolkata' })
+  })
   it('saves a change for admins, recording who made it', async () => {
     const res = await admin.send('patch', '/api/v1/settings', { timeZone: 'Asia/Dubai' })
     expect(res.status).toBe(200)
@@ -60,6 +67,9 @@ describe('PATCH /settings', () => {
       [{ idleTimeoutMinutes: 7.5 }, 'idleTimeoutMinutes'],
       [{ idleTimeoutMinutes: '30' }, 'idleTimeoutMinutes'],
       [{ theme: 'dark' }, 'form'],
+      [{ timeZone: '+05:30' }, 'timeZone'],
+      [{ timeZone: 'IST' }, 'timeZone'],
+      [{ timeZone: 'asia/kolkata' }, 'timeZone'],
     ]
     for (const [body, field] of cases) {
       const res = await admin.send('patch', '/api/v1/settings', body)
