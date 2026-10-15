@@ -32,7 +32,7 @@ declare global {
 // Every API route starts with one of the guards below. Each carries this tag, and the route-walk
 // test in api.test.ts fails for a route whose first handler has none.
 const accessTag = Symbol('access')
-export type Access = 'public' | 'signedIn' | Action
+export type Access = 'public' | 'signedIn' | 'lotAccess' | Action
 const tagged = (access: Access, handler: RequestHandler) =>
   Object.assign(handler, { [accessTag]: access })
 export const accessOf = (handler: unknown): Access | undefined =>
@@ -62,6 +62,15 @@ export const publicRoute = () => tagged('public', (_req, _res, next) => next())
 
 export const requireSignedIn = () =>
   tagged('signedIn', (req, _res, next) => {
+    signedIn(req)
+    next()
+  })
+
+// Lot routes that a POC may use on their own lots. The same session and CSRF checks as
+// requireSignedIn; the lot service then applies the per-lot check (full, progress or none),
+// which needs the lot itself. The separate tag shows these routes in the permission table.
+export const requireLotAccess = () =>
+  tagged('lotAccess', (req, _res, next) => {
     signedIn(req)
     next()
   })

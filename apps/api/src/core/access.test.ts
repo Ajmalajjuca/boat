@@ -6,6 +6,7 @@ import {
   accessOf,
   type AuthContext,
   publicRoute,
+  requireLotAccess,
   requirePermission,
   requireSignedIn,
 } from './access'
@@ -94,11 +95,27 @@ describe('publicRoute', () => {
 })
 
 describe('accessOf', () => {
+  it('tags lot routes separately, so the permission table shows them', () => {
+    expect(accessOf(requireLotAccess())).toBe('lotAccess')
+  })
   it('reads the tag each guard carries', () => {
     expect(accessOf(publicRoute())).toBe('public')
     expect(accessOf(requireSignedIn())).toBe('signedIn')
     expect(accessOf(requirePermission('deleteLots'))).toBe('deleteLots')
     expect(accessOf(() => {})).toBeUndefined()
     expect(accessOf(undefined)).toBeUndefined()
+  })
+})
+
+describe('requireLotAccess', () => {
+  it('needs a session and the CSRF token, like requireSignedIn', async () => {
+    expect((await request(appWith(undefined, requireLotAccess())).get('/')).status).toBe(401)
+    expect((await request(appWith(signedInAs('poc'), requireLotAccess())).post('/')).status).toBe(
+      403,
+    )
+    const res = await request(appWith(signedInAs('poc'), requireLotAccess()))
+      .post('/')
+      .set('x-csrf-token', 'csrf-1')
+    expect(res.status).toBe(200)
   })
 })
