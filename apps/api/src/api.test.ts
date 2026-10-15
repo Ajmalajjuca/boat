@@ -55,6 +55,10 @@ describe('API routes', () => {
         'DELETE /users/:id manageSettings',
         'GET /settings signedIn',
         'PATCH /settings manageSettings',
+        'GET /lookups signedIn',
+        'POST /lookups manageSettings',
+        'PATCH /lookups/:id manageSettings',
+        'DELETE /lookups/:id manageSettings',
       ].sort(),
     )
   })

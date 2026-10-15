@@ -5,7 +5,7 @@ import type { ApiDeps } from '../../src/api'
 import { createApp } from '../../src/app'
 import { testDeps } from '../../src/test-deps'
 import type { Role } from '@boat/domain/models'
-import type { PrismaClient } from '../../src/generated/prisma/client'
+import type { LookupKind, PrismaClient } from '../../src/generated/prisma/client'
 import { hashPassword } from '../../src/modules/auth/password'
 
 export const password = 'correct horse battery staple'
@@ -64,3 +64,10 @@ export async function signIn(app: Express, email: string, pw = password) {
   }
   return { agent, csrf, me: res.body, send }
 }
+
+export const makeLookup = (db: PrismaClient, kind: LookupKind, value = unique(kind)) =>
+  db.lookupValue.create({ data: { kind, value } })
+
+// One of the six values the system_lookups migration creates.
+export const systemLookup = (db: PrismaClient, systemKey: string) =>
+  db.lookupValue.findFirstOrThrow({ where: { systemKey, deletedAt: null } })
