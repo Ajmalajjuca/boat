@@ -3,6 +3,7 @@ import { createClock } from './core/clock'
 import type { Mailer } from './core/mailer'
 import type { PrismaClient } from './generated/prisma/client'
 import { authRouter } from './modules/auth/auth.router'
+import { activityRouter } from './modules/activity/activity.router'
 import { loadSession } from './modules/auth/sessions'
 import { healthRouter, type ReadinessCheck } from './modules/health/health.router'
 import { settingsRouter } from './modules/settings/settings.router'
@@ -55,5 +56,6 @@ export function buildApiRouter(deps: ApiDeps) {
   const receipts = grnReceiptRouters(records)
   mount(api, '/lots', receipts.underLots)
   mount(api, '/grn-receipts', receipts.receipts)
+  mount(api, '/lots', activityRouter(deps.db))
   return api
 }
