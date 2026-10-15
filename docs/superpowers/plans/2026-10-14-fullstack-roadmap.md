@@ -9,7 +9,7 @@ The build runs in the PRD's six phases. Each phase ends in something that can be
 | 1 | Foundation | pnpm monorepo; `packages/domain` with unit tests; Express API skeleton with health checks; Prisma schema, migrations and database grants; Docker Compose Postgres; CI; `render.yaml` | Web app builds from the shared package; domain coverage ≥ 95%; schema integration tests and CI green | [2026-10-14-phase-1-foundation.md](2026-10-14-phase-1-foundation.md) |
 | 2 | Auth and users | Sign-in, server sessions, invites and password reset via Resend, `requirePermission` middleware with the route-walk test, CSRF, `create-admin` CLI, users and settings modules | Each role can sign in, and `/auth/me` returns the right allowed actions | [2026-10-15-phase-2-auth-and-users.md](2026-10-15-phase-2-auth-and-users.md) |
 | 3 | Core records | Soft-delete Prisma extension, audit service, version conflicts; lookups, products, lots, RM batches, GRN receipts, activity and notes | Every FR-1 to FR-4, FR-7 and FR-8 rule has a passing integration or API test | [2026-10-15-phase-3-core-records.md](2026-10-15-phase-3-core-records.md) |
-| 4 | Shipments and reports | Shipments with items and ETA revisions, month-end report, shipments CSV export, JSON export, import (merge/replace), reset | `docs/sample-test-backup.json` imports, and its month-end figures match the demo app's | Written after Phase 3 merges |
+| 4 | Shipments and reports | Shipments with items and ETA revisions, month-end report, shipments CSV export, JSON export, import (merge/replace), reset | `docs/sample-test-backup.json` imports, and its month-end figures match the demo app's | [2026-10-15-phase-4-shipments-and-reports.md](2026-10-15-phase-4-shipments-and-reports.md) |
 | 5 | Frontend switch | API client with TanStack Query replaces `repository.ts` and `db.ts`; sign-in replaces PIN profiles; 409 shown as "someone else changed this"; Playwright suite | Every Playwright flow passes against the API, on desktop Chromium and a 390 px viewport | Written after Phase 4 merges |
 | 6 | Launch | Render staging on a Neon branch, backup and restore drill, OWASP review, client data import, production cut-over | Client signs off on staging with their own data | Written after Phase 5 merges |
 
@@ -57,6 +57,17 @@ These follow from the versions available on 14 Oct 2026 or close gaps the PRD le
 6. **System values come from a migration**, with a `system_key`. Phase 4's import must link the backup's "On Track", "Delayed", "Hold", "None", "Approval Blocker" and "BAU" to these rows rather than create new ones. "Kit (All Together)" is still recognised by its text, as in the demo.
 7. **Batches and receipts have no version column** (the PRD versions products, lots and shipments). Two people editing the same entry at once is last-write-wins. Every rule that spans the lot (over-receipt, completion, component choices) is still guarded by the lot row lock.
 8. **The lot list keeps the demo's extra filters:** segment, logistics, blocker and the quick filters RM incomplete, NPI and On Track. `flag` can repeat, and repeated flags combine with AND.
+
+## Where Phase 4 departs from the PRD
+
+1. **Dropdown values survive a replace import and a reset.** They are Settings rather than data, users' POC links point at them, and the system values must stay. Import matches dropdown text to existing values, ignoring case, and creates only the missing ones.
+2. **Imports keep record ids and revive soft-deleted rows.** A record whose id already exists is overwritten, so restoring a backup after a replace works. History and ETA revisions are insert-only, so an entry already present is skipped.
+3. **Backup validation moved into `@boat/domain/backup`** and is stricter than the demo's where the database would otherwise fail: a NUL character, quantities above 1,000,000,000, an ETA before the ETD, a lot without a category, status or stage, names that collide ignoring case, and a product on two lines of one shipment. The browser uses the same rules.
+4. **The ETA revision kind is inferred on import.** The backup format has no planned/current field; the demo starts every planned-ETA reason with "Original plan".
+5. **Exports carry a synthetic `initialized` setting** (the demo requires one), and the server's settings as strings with fresh ids. Only `timeZone` and `idleTimeoutMinutes` are read back on import.
+6. **The shipment list filters in memory** with the domain's flags, since shipments are few. The lot list keeps SQL.
+7. **The month-end summary runs the domain's `monthSummary`** over lots and receipts chosen in SQL, rather than one SQL aggregate, so its figures are the demo's by construction. A month-end CSV with the demo's columns is added.
+8. **Reset needs the phrase `RESET ALL DATA`.** The demo used a confirm dialog.
 
 ## Notes for later phases
 
