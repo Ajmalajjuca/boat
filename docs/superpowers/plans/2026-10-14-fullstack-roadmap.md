@@ -72,6 +72,7 @@ These follow from the versions available on 14 Oct 2026 or close gaps the PRD le
 ## Notes for later phases
 
 - **Phase 4:** import must map system values by `system_key` (departure 6), and compute `grn_total` and `completed_on` with `refreshCompletion`.
+- **Phase 6:** import writes existing rows one at a time and refreshes each lot separately. An 18 MB backup took 32 s to import and 70 s to restore again against local Docker; the transaction limit is 120 s. Measure the client's real backup against Neon before cut-over, and make the writes set-based if it comes close.
 - **Phase 5:** every request with a session moves its idle timer, including `GET /auth/me`. A client that polls `/auth/me` would keep sessions alive forever, so poll something else or not at all.
 
 ## Still open in the PRD (no effect on Phases 1–4)
