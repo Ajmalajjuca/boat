@@ -1,3 +1,4 @@
+import { Client } from 'pg'
 import request from 'supertest'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ConflictError } from '../src/core/errors'
@@ -10,12 +11,13 @@ import { makePoc, makeUser, password, signIn, testApp, unique } from './support/
 
 let db: PrismaClient
 let close: () => Promise<void>
+let url: string
 let mailer: ReturnType<typeof memoryMailer>
 let app: ReturnType<typeof testApp>
 let admin: Awaited<ReturnType<typeof signIn>>
 
 beforeAll(async () => {
-  ;({ db, close } = await createTestDatabase())
+  ;({ db, url, close } = await createTestDatabase())
   mailer = memoryMailer()
   app = testApp(db, { mailer })
   const adminUser = await makeUser(db, { role: 'admin', name: 'First Admin' })
@@ -231,6 +233,28 @@ describe('PATCH /users/:id', () => {
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ error: 'not_found' })
     }
+  })
+})
+
+describe('concurrent edits', () => {
+  // Another admin's role change is in flight and holds the row. A rename that read the row before
+  // that commit would write the old role back over it.
+  it("don't undo another admin's change made at the same moment", async () => {
+    const user = await makeUser(db, { role: 'planner', name: 'Before' })
+    const other = new Client({ connectionString: url })
+    await other.connect()
+    try {
+      await other.query('BEGIN')
+      await other.query("UPDATE users SET role = 'viewer' WHERE id = $1", [user.id])
+      const rename = updateUser(db, user.id, { name: 'After' })
+      await new Promise((r) => setTimeout(r, 300))
+      await other.query('COMMIT')
+      await rename
+    } finally {
+      await other.end()
+    }
+    const row = await db.user.findUniqueOrThrow({ where: { id: user.id } })
+    expect(row).toMatchObject({ name: 'After', role: 'viewer' })
   })
 })
 

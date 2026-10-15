@@ -43,6 +43,9 @@ export function createApp({
         res.setHeader('x-request-id', id)
         return id
       },
+      // Evaluated again when the response finishes, after loadSession has run, so the "request
+      // completed" line names the signed-in user (PRD: request and user IDs on every log line).
+      customProps: (req) => (req.auth ? { userId: req.auth.user.id } : {}),
     }),
   )
   app.use(express.json({ limit: '1mb' }))

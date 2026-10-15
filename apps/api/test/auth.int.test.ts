@@ -1,8 +1,12 @@
+import { Writable } from 'node:stream'
 import type { Role } from '@boat/domain/models'
+import { pino } from 'pino'
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PrismaClient } from '../src/generated/prisma/client'
+import { createApp } from '../src/app'
 import { hashToken } from '../src/modules/auth/tokens'
+import { testDeps } from '../src/test-deps'
 import { createTestDatabase } from './support/db'
 import { makePoc, makeUser, password, signIn, testApp } from './support/fixtures'
 
@@ -149,6 +153,28 @@ describe('sign-in rate limits', () => {
     const app = testApp(db)
     const user = await makeUser(db)
     for (let i = 0; i < 8; i++) expect((await login(app, user.email)).status).toBe(200)
+  })
+})
+
+describe('request logs', () => {
+  // PRD observability: request and user IDs on every log line, including pino-http's own
+  // "request completed" line, which is the only record of who called PATCH /users/:id.
+  it("put the signed-in user's id on the request line", async () => {
+    const lines: string[] = []
+    const stream = new Writable({
+      write(chunk, _encoding, done) {
+        lines.push(chunk.toString())
+        done()
+      },
+    })
+    const app = createApp({ logger: pino({ level: 'info' }, stream), api: testDeps({ db }) })
+    const user = await makeUser(db)
+    const { agent } = await signIn(app, user.email)
+    await agent.get('/api/v1/auth/me')
+    const completed = lines
+      .map((l) => JSON.parse(l))
+      .find((l) => l.msg === 'request completed' && l.req?.url === '/api/v1/auth/me')
+    expect(completed?.userId).toBe(user.id)
   })
 })
 

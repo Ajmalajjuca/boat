@@ -70,15 +70,22 @@ function rethrowDuplicateEmail(err: unknown): never {
   throw err
 }
 
-// Locks every active admin row, then checks that someone other than userId stays an active
-// admin. A second transaction doing the same waits for the first and then sees its result.
-async function assertAnotherActiveAdmin(db: Db, userId: string, message: string) {
-  const admins = await db.$queryRaw<{ id: string }[]>`
-    SELECT id FROM users
-    WHERE role = 'admin' AND status = 'active' AND deleted_at IS NULL
+// Every change to a user first locks that user's row and every active admin's row, in one
+// statement and in id order, so concurrent changes queue rather than deadlock. Reads that follow
+// see the latest committed values: no change is based on a stale copy, and two admins demoting
+// each other cannot both pass the last-admin check.
+async function lockForUserChange(db: Db, userId: string) {
+  const rows = await db.$queryRaw<{ id: string; active_admin: boolean }[]>`
+    SELECT id, (role = 'admin' AND status = 'active') AS active_admin
+    FROM users
+    WHERE deleted_at IS NULL
+      AND (id = ${userId}::uuid OR (role = 'admin' AND status = 'active'))
+    ORDER BY id
     FOR UPDATE`
-  if (!admins.some((a) => a.id !== userId)) throw new ConflictError(message)
+  return { anotherActiveAdmin: rows.some((r) => r.id !== userId && r.active_admin) }
 }
+const lastAdmin = (name: string) =>
+  new ConflictError(`${name} is the last active admin. Make someone else an admin first.`)
 
 async function sendInvite(deps: UsersDeps, user: UserView, token: string, log: Logger) {
   const inviteEmailSent = await sendOrLog(deps.mailer, log, {
@@ -110,6 +117,7 @@ export async function createUser(deps: UsersDeps, input: NewUser, log: Logger) {
 // brings a disabled, never-signed-in user back to "invited".
 export async function resendInvite(deps: UsersDeps, id: string, log: Logger) {
   const { user, token } = await deps.db.$transaction(async (tx) => {
+    await lockForUserChange(tx, id)
     const current = await tx.user.findFirst({
       where: { id, deletedAt: null },
       select: { name: true, passwordHash: true },
@@ -128,6 +136,7 @@ export async function resendInvite(deps: UsersDeps, id: string, log: Logger) {
 
 export async function updateUser(db: PrismaClient, id: string, patch: UserPatch) {
   return db.$transaction(async (tx) => {
+    const { anotherActiveAdmin } = await lockForUserChange(tx, id)
     const current = await tx.user.findFirst({
       where: { id, deletedAt: null },
       select: {
@@ -157,13 +166,10 @@ export async function updateUser(db: PrismaClient, id: string, patch: UserPatch)
     if (
       current.role === 'admin' &&
       current.status === 'active' &&
-      (role !== 'admin' || status !== 'active')
+      (role !== 'admin' || status !== 'active') &&
+      !anotherActiveAdmin
     )
-      await assertAnotherActiveAdmin(
-        tx,
-        id,
-        `${current.name} is the last active admin. Make someone else an admin first.`,
-      )
+      throw lastAdmin(current.name)
     const user = await tx.user.update({
       where: { id },
       data: { name: next.name, role, pocId: next.pocId, status },
@@ -177,17 +183,14 @@ export async function updateUser(db: PrismaClient, id: string, patch: UserPatch)
 
 export async function deleteUser(db: PrismaClient, actorId: string, id: string) {
   await db.$transaction(async (tx) => {
+    const { anotherActiveAdmin } = await lockForUserChange(tx, id)
     const current = await tx.user.findFirst({
       where: { id, deletedAt: null },
       select: { name: true, role: true, status: true },
     })
     if (!current) throw new NotFoundError()
-    if (current.role === 'admin' && current.status === 'active')
-      await assertAnotherActiveAdmin(
-        tx,
-        id,
-        `${current.name} is the last active admin. Make someone else an admin first.`,
-      )
+    if (current.role === 'admin' && current.status === 'active' && !anotherActiveAdmin)
+      throw lastAdmin(current.name)
     const now = new Date()
     await tx.user.update({ where: { id }, data: { deletedAt: now, deletedBy: actorId } })
     await revokeUserSessions(tx, id)
