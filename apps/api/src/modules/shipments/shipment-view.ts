@@ -17,7 +17,8 @@ export const shipmentInclude = {
   items: {
     where: { deletedAt: null },
     include: { product: { select: { id: true, name: true, variant: true } } },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    // Lines saved together share a createdAt, so the product name makes the order stable.
+    orderBy: [{ createdAt: 'asc' }, { product: { name: 'asc' } }, { id: 'asc' }],
   },
 } satisfies Prisma.ShipmentInclude
 export type ShipmentRow = Prisma.ShipmentGetPayload<{ include: typeof shipmentInclude }>
