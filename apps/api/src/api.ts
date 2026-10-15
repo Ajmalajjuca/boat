@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import type { PrismaClient } from './generated/prisma/client'
+import { authRouter } from './modules/auth/auth.router'
 import { loadSession } from './modules/auth/sessions'
 import { healthRouter, type ReadinessCheck } from './modules/health/health.router'
 import { createSettingsService } from './modules/settings/settings.service'
@@ -29,5 +30,6 @@ export function buildApiRouter(deps: ApiDeps) {
   const settings = createSettingsService(deps.db)
   api.use(loadSession({ db: deps.db, settings, sessionSecret: deps.sessionSecret }))
   mount(api, '/health', healthRouter(deps.checkDatabase))
+  mount(api, '/auth', authRouter({ ...deps, settings }))
   return api
 }

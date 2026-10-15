@@ -36,7 +36,13 @@ describe('API routes', () => {
   // permission next to the path.
   it('match the permission table', () => {
     expect([...routes].sort()).toEqual(
-      ['GET /health/live public', 'GET /health/ready public'].sort(),
+      [
+        'GET /health/live public',
+        'GET /health/ready public',
+        'POST /auth/login public',
+        'POST /auth/logout signedIn',
+        'GET /auth/me signedIn',
+      ].sort(),
     )
   })
 })
