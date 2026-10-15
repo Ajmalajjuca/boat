@@ -13,7 +13,19 @@ const prisma = createPrisma(config.DATABASE_URL)
 // Same relative path from src/ (tsx) and dist/ (bundle): apps/web/dist.
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist')
 
-const app = createApp({ logger, webDist, checkDatabase: databaseCheck(prisma) })
+const app = createApp({
+  logger,
+  webDist,
+  trustProxy: config.TRUST_PROXY,
+  hsts: config.NODE_ENV === 'production',
+  api: {
+    db: prisma,
+    checkDatabase: databaseCheck(prisma),
+    sessionSecret: config.SESSION_SECRET,
+    appUrl: config.APP_URL,
+    secureCookies: config.NODE_ENV === 'production',
+  },
+})
 const server = await listen(app, config.PORT).catch((err: unknown) => {
   logger.fatal({ err }, 'could not start')
   process.exit(1)
