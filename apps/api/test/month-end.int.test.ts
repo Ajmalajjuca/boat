@@ -57,6 +57,17 @@ beforeAll(async () => {
 afterAll(() => close())
 
 describe('GET /reports/month-end', () => {
+  it('FR-5.2 gives each lot its current ETA', async () => {
+    const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-09')
+    const eta = Object.fromEntries(
+      res.body.lots.map((r: { lot: { label: string; eta: string | null } }) => [
+        r.lot.label,
+        r.lot.eta,
+      ]),
+    )
+    expect(eta).toEqual({ L1: '2026-09-10', L2: '2026-10-10', L5: '2026-09-05' })
+  })
+
   it('FR-5.1 compares the quantity of lots planned in the month with GRN received by month end', async () => {
     const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-09')
     expect(res.status).toBe(200)
@@ -124,5 +135,26 @@ describe('GET /reports/month-end/export.csv', () => {
     )
     expect(lines).toHaveLength(4)
     expect(lines[1]).toContain('"2026-09","Woofer"')
+  })
+})
+
+describe('GET /reports/months', () => {
+  it('FR-5.1 lists planned and receipt months, newest first, with the current month', async () => {
+    const product = await makeProduct(db)
+    const lot = await makeLot(db, { productId: product.id, plannedDate: day('2025-03-14') })
+    await db.grnReceipt.create({
+      data: { lotId: lot.id, label: 'G', date: day('2025-05-02'), quantity: 1 },
+    })
+    const gone = await makeLot(db, { productId: product.id, plannedDate: day('2024-01-10') })
+    await db.lot.update({ where: { id: gone.id }, data: { deletedAt: new Date() } })
+    const res = await w.viewer.agent.get('/api/v1/reports/months')
+    expect(res.status).toBe(200)
+    const months: string[] = res.body.items
+    expect(months[0]).toBe('2026-10')
+    expect(months).toContain('2025-05')
+    expect(months).toContain('2025-03')
+    expect(months).not.toContain('2024-01')
+    expect(months).toEqual([...months].sort().reverse())
+    expect(new Set(months).size).toBe(months.length)
   })
 })

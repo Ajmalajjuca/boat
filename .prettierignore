@@ -8,3 +8,6 @@ pnpm-lock.yaml
 apps/api/src/generated
 apps/api/prisma/migrations
 10_2_2026-Meeting.*
+e2e/.run
+e2e/test-results
+e2e/playwright-report

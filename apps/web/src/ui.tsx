@@ -2,10 +2,13 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { fieldErrors, type FieldErrors } from './validation'
+import { fieldErrors, type FieldErrors } from '@boat/domain/validation'
 import { Check, ChevronDown, CircleAlert, Lock, X } from 'lucide-react'
 import {
+  createContext,
+  useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -106,15 +109,28 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants>) {
   return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />
 }
+// The caption id of the enclosing Field. Controls name themselves by the caption alone, because
+// the wrapping <label> also contains the control's own text (a textarea's value, a select's options).
+const FieldCaption = createContext<string | undefined>(undefined)
+const useCaption = (props: { 'aria-label'?: string; 'aria-labelledby'?: string }) => {
+  const caption = useContext(FieldCaption)
+  return props['aria-label'] ? props['aria-labelledby'] : (props['aria-labelledby'] ?? caption)
+}
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn('field', className)} {...props} />
+  return <input className={cn('field', className)} aria-labelledby={useCaption(props)} {...props} />
 }
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn('field min-h-20 resize-y', className)} {...props} />
+  return (
+    <textarea
+      className={cn('field min-h-20 resize-y', className)}
+      aria-labelledby={useCaption(props)}
+      {...props}
+    />
+  )
 }
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn('field', className)} {...props}>
+    <select className={cn('field', className)} aria-labelledby={useCaption(props)} {...props}>
       {children}
     </select>
   )
@@ -139,6 +155,7 @@ export function Field({
 }) {
   // A disabled fieldset disables every control inside it, including SearchSelect's button.
   const Outer = locked ? 'fieldset' : 'div'
+  const captionId = useId()
   return (
     // Error and help text sit outside the <label> so they are not read as part of the field name.
     <Outer
@@ -147,20 +164,19 @@ export function Field({
       disabled={locked || undefined}
     >
       <label className="block">
-        <span className="field-label">
+        <span
+          id={captionId}
+          className="field-label"
+          data-required={(required && !locked) || undefined}
+        >
           {label}
-          {required && !locked && (
-            <span className="ml-0.5 text-rose-600" aria-hidden="true">
-              *
-            </span>
-          )}
           {locked && (
             <span title="Your role cannot change this field" aria-hidden="true">
               <Lock size={11} className="ml-1 inline align-[-1px] text-slate-400" />
             </span>
           )}
         </span>
-        {children}
+        <FieldCaption.Provider value={captionId}>{children}</FieldCaption.Provider>
       </label>
       {error ? (
         <span
@@ -489,6 +505,78 @@ export function SearchSelect({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// A CSV button's action: false when the current view has no rows.
+export type CsvExport = () => boolean | Promise<boolean>
+
+// "1–50 of 312" with Previous and Next, for lists the server pages.
+export function Pager({
+  page,
+  pageSize,
+  total,
+  onPage,
+}: {
+  page: number
+  pageSize: number
+  total: number
+  onPage: (page: number) => void
+}) {
+  if (total <= pageSize) return null
+  const first = (page - 1) * pageSize + 1,
+    last = Math.min(total, page * pageSize)
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-5">
+      <span>
+        {first}–{last} of {total}
+      </span>
+      <div className="flex gap-2">
+        <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          Previous
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={last >= total}
+          onClick={() => onPage(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Shown when a save meets a newer version. Reload replaces the form with the server's record;
+// keeping the edits means the next save is refused again until the user reloads.
+export function ConflictBanner({
+  record,
+  onReload,
+  onDismiss,
+}: {
+  record: 'lot' | 'product' | 'shipment'
+  onReload: () => void
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+    >
+      <span>
+        Someone else changed this {record} while you were editing. Reload to see their version —
+        your unsaved changes will be lost.
+      </span>
+      <span className="flex gap-2">
+        <Button type="button" size="sm" onClick={onReload}>
+          Reload
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={onDismiss}>
+          Keep editing
+        </Button>
+      </span>
     </div>
   )
 }

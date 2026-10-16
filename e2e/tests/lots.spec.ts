@@ -1,0 +1,97 @@
+import { authFile } from '../support/env'
+import { seeder } from '../support/seed'
+import { expect, test } from '../support/test'
+import { openLot } from '../support/ui'
+
+test.use({ storageState: authFile('admin') })
+
+test('FR-2.1 adds a lot to a product, then edits and deletes it', async ({ page }) => {
+  const seed = await seeder()
+  await seed.product('Golf')
+  await seed.done()
+  await page.goto('/')
+  const golf = page.getByRole('group', { name: 'Golf' })
+  await golf.getByRole('button', { name: 'Add lot' }).click()
+  const added = page.getByRole('dialog', { name: 'New production lot' })
+  await added.getByLabel('Lot label', { exact: true }).fill('G-100')
+  await added.getByLabel('Lot quantity', { exact: true }).fill('250')
+  await added.getByRole('button', { name: 'Save lot' }).click()
+  // A saved lot reopens by id, so the drawer now carries its label.
+  const saved = page.getByRole('dialog', { name: 'G-100' })
+  await expect(saved).toBeVisible()
+  await saved.getByRole('button', { name: 'Close' }).first().click()
+  await expect(golf).toContainText('1 lots')
+
+  const edit = await openLot(page, 'G-100')
+  await edit.getByLabel('Lot quantity', { exact: true }).fill('300')
+  await edit.getByRole('button', { name: 'Save & close' }).click()
+  await expect(edit).toBeHidden()
+  await expect(golf).toContainText(/Qty\s*300/)
+
+  const remove = await openLot(page, 'G-100')
+  page.once('dialog', (d) => d.accept())
+  await remove.getByRole('button', { name: 'Delete lot' }).click()
+  await expect(remove).toBeHidden()
+  await page.getByRole('textbox', { name: 'Search product, variant, or lot' }).fill('')
+  await expect(golf).toContainText('0 lots')
+})
+
+test('FR-2.3 shows validation messages under their fields', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  await seed.lot(golf.id, 'G-1')
+  await seed.done()
+  await page.goto('/')
+  const drawer = await openLot(page, 'G-1')
+  await drawer.getByLabel('Fresh production quantity', { exact: true }).fill('10')
+  await drawer.getByLabel('Rework quantity', { exact: true }).fill('12')
+  await drawer.getByRole('button', { name: 'Save lot' }).click()
+  await expect(drawer).toContainText('Rework is part of fresh production, so it cannot be larger.')
+})
+
+test('FR-2.1 shows a duplicate lot label under the label field', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  await seed.lot(golf.id, 'G-1')
+  await seed.done()
+  await page.goto('/')
+  await page.getByRole('group', { name: 'Golf' }).getByRole('button', { name: 'Add lot' }).click()
+  const drawer = page.getByRole('dialog', { name: 'New production lot' })
+  await drawer.getByLabel('Lot label', { exact: true }).fill('g-1')
+  await drawer.getByLabel('Lot quantity', { exact: true }).fill('10')
+  await drawer.getByRole('button', { name: 'Save lot' }).click()
+  // Only the server knows the other lots, so this message comes from a 422 on `label`, and it
+  // must land in the Lot label field rather than the form-level error.
+  await expect(
+    drawer.locator('[data-invalid]').filter({ hasText: 'Lot label' }).getByRole('alert'),
+  ).toContainText('This product already has a lot labelled')
+})
+
+test('FR-7.2 posts a note and lists it in the history', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  await seed.lot(golf.id, 'G-1')
+  await seed.done()
+  await page.goto('/')
+  const drawer = await openLot(page, 'G-1')
+  await drawer.getByRole('tab', { name: 'Updates & History' }).click()
+  await drawer.getByLabel('Update note', { exact: true }).fill('EMS confirmed the line slot')
+  await drawer.getByRole('button', { name: 'Post update' }).click()
+  await expect(drawer.getByText('EMS confirmed the line slot')).toBeVisible()
+  await expect(drawer.getByText(/Ada Admin/).first()).toBeVisible()
+  await expect(drawer.getByLabel('Update note', { exact: true })).toHaveValue('')
+})
+
+test('closes the drawer when someone else deleted the lot', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  const lot = await seed.lot(golf.id, 'G-1')
+  await page.goto('/')
+  const drawer = await openLot(page, 'G-1')
+  await seed.api.delete(`/lots/${lot.id}`)
+  await seed.done()
+  await drawer.getByLabel('Lot quantity', { exact: true }).fill('120')
+  await drawer.getByRole('button', { name: 'Save lot' }).click()
+  await expect(drawer).toBeHidden()
+  await expect(page.getByText('This lot was deleted.')).toBeVisible()
+})

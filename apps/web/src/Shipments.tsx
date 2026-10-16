@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type MutableRefObject } from 'react'
+import { useEffect, useState, type FormEvent, type MutableRefObject } from 'react'
 import {
   ArrowRight,
   CalendarClock,
@@ -10,214 +10,187 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { DataSet, LookupValue, Shipment, ShipmentItem } from './models'
-import { productChoices, stamp } from './models'
-import { defaultLookup } from './demo'
+import type { LookupItem, ShipmentDetail, ShipmentFlag, ShipmentSort } from '@boat/domain/api'
+import { addNote } from './api/activity'
+import { ConflictError, NotFoundError } from './api/client'
+import { lookupId, type ShipmentRecord, values } from './api/mappers'
+import {
+  activityKey,
+  refreshShipments,
+  shipmentKey,
+  useActivity,
+  useLookups,
+  useProducts,
+  useShipment,
+  useShipments,
+  useShipmentSummary,
+} from './api/queries'
+import { queryClient } from './api/queryClient'
+import {
+  deleteShipment,
+  downloadShipmentsCsv,
+  saveShipment,
+  type ShipmentQuery,
+  shipmentPageSize,
+  type ShipmentView,
+  toShipmentView,
+} from './api/shipments'
+import type { Shipment, ShipmentItem } from '@boat/domain/models'
+import { productChoices, stamp } from '@boat/domain/models'
 import {
   arrivalDelay,
   dateLabel,
-  effectiveShipmentEta,
   etaSlip,
   quantity,
-  shipmentFlags,
   shipmentQuantity,
-  shipmentStatus,
-  sum,
   today,
-} from './calculations'
-import { addNote, deleteShipment, downloadFile, saveShipment, toCsv } from './repository'
+} from '@boat/domain/calculations'
 import { roleInfo, useAccess } from './access'
-import { lineField, validateShipment } from './validation'
+import { lineField, validateShipment } from '@boat/domain/validation'
 import {
   Badge,
   Button,
   Card,
+  ConflictBanner,
   Empty,
   Field,
   FormError,
   useFormErrors,
   type Run,
   Input,
+  Pager,
   SearchSelect,
   Select,
   Sheet,
   Textarea,
+  type CsvExport,
 } from './ui'
 
 type Props = {
-  data: DataSet
-  onOpen: (s: Shipment) => void
-  csvRef: MutableRefObject<(() => boolean) | null>
+  onOpen: (id: string) => void
+  csvRef: MutableRefObject<CsvExport | null>
 }
-export const newShipment = (lookups?: LookupValue[]): Shipment =>
-  stamp({
-    number: '',
-    vessel: '',
-    etd: '',
-    plannedEta: '',
-    revisedEta: '',
-    actualArrival: '',
-    stage: defaultLookup(lookups, 'shipmentStage', 'In Transit'),
-    remarks: '',
-  })
-export default function Shipments({ data, onOpen, csvRef }: Props) {
+const tone = (s: ShipmentRecord) =>
+  s.actualArrival
+    ? (s.computed.arrivalDelay ?? 0) > 0
+      ? 'amber'
+      : 'green'
+    : s.computed.flags.overdue
+      ? 'red'
+      : 'blue'
+export default function Shipments({ onOpen, csvRef }: Props) {
+  const lookups = useLookups().data ?? []
   const [search, setSearch] = useState(''),
     [stage, setStage] = useState(''),
     [vessel, setVessel] = useState(''),
-    [sort, setSort] = useState('eta-asc'),
-    [quick, setQuick] = useState('')
-  const items = (id: string) => data.shipmentItems.filter((i) => i.shipmentId === id)
-  const shipments = useMemo(
-    () =>
-      data.shipments
-        .filter((s) => {
-          const f = shipmentFlags(s),
-            text = `${s.number} ${s.vessel} ${items(s.id)
-              .map((i) => data.products.find((p) => p.id === i.productId)?.name || '')
-              .join(' ')}`.toLowerCase()
-          return (
-            (!search || text.includes(search.toLowerCase())) &&
-            (!stage || s.stage === stage) &&
-            (!vessel || s.vessel === vessel) &&
-            (!quick ||
-              (quick === 'overdue' && f.overdue) ||
-              (quick === 'soon' && f.soon) ||
-              (quick === 'revised' && f.revised) ||
-              (quick === 'arrived' && f.arrived) ||
-              (quick === 'open' && f.open))
-          )
-        })
-        .sort((a, b) => {
-          const [key, dir] = sort.split('-'),
-            sgn = dir === 'desc' ? -1 : 1
-          let av: string | number, bv: string | number
-          if (key === 'qty') {
-            av = shipmentQuantity(items(a.id))
-            bv = shipmentQuantity(items(b.id))
-          } else if (key === 'number') {
-            av = a.number
-            bv = b.number
-          } else {
-            av = effectiveShipmentEta(a) || '9999'
-            bv = effectiveShipmentEta(b) || '9999'
-          }
-          return av < bv ? -sgn : av > bv ? sgn : 0
-        }),
-    [data, search, stage, vessel, sort, quick],
-  )
-  const count = (p: (s: Shipment) => boolean) => data.shipments.filter(p).length
-  const cards = [
+    [sort, setSort] = useState<ShipmentSort>('eta-asc'),
+    [quick, setQuick] = useState<ShipmentFlag | ''>(''),
+    [page, setPage] = useState(1)
+  const query: ShipmentQuery = {
+    q: search,
+    stageId: lookupId(lookups, 'shipmentStage', stage) ?? undefined,
+    vessel: vessel || undefined,
+    flag: quick || undefined,
+    sort,
+  }
+  // A new filter starts again from the first page.
+  const queryText = JSON.stringify(query)
+  useEffect(() => setPage(1), [queryText])
+  const summary = useShipmentSummary().data
+  const listQuery = useShipments(query, page),
+    list = listQuery.data
+  const shipments = list?.items ?? []
+  const clear = () => {
+    setSearch('')
+    setStage('')
+    setVessel('')
+    setQuick('')
+  }
+  const cards: {
+    id: ShipmentFlag | 'units'
+    label: string
+    value: number | string
+    help: string
+    icon: typeof Ship
+  }[] = [
     {
       id: 'open',
       label: 'In Transit',
-      value: count((s) => shipmentFlags(s).open),
+      value: summary?.open ?? 0,
       help: 'All shipments not yet arrived, across pre-arrival logistics stages.',
       icon: Ship,
     },
     {
       id: 'soon',
       label: 'Arriving in 3 Days',
-      value: count((s) => shipmentFlags(s).soon),
+      value: summary?.soon ?? 0,
       help: 'Not arrived, ETA from today through three days ahead.',
       icon: CalendarClock,
     },
     {
       id: 'overdue',
       label: 'Overdue',
-      value: count((s) => shipmentFlags(s).overdue),
+      value: summary?.overdue ?? 0,
       help: 'Not arrived and effective ETA before today.',
       icon: CalendarClock,
     },
     {
       id: 'revised',
       label: 'ETA Revised',
-      value: count((s) => shipmentFlags(s).revised),
+      value: summary?.revised ?? 0,
       help: 'Shipments with a current revised ETA.',
       icon: CalendarClock,
     },
     {
       id: 'arrived',
       label: 'Arrived',
-      value: count((s) => shipmentFlags(s).arrived),
+      value: summary?.arrived ?? 0,
       help: 'Actual warehouse arrival date is present.',
       icon: PackageOpen,
     },
     {
       id: 'units',
       label: 'Units in Transit',
-      value: quantity(
-        sum(
-          data.shipments.filter((s) => !s.actualArrival).map((s) => shipmentQuantity(items(s.id))),
-        ),
-      ),
+      value: quantity(summary?.openUnits ?? 0),
       help: 'Product-line units in shipments without warehouse arrival.',
       icon: PackageOpen,
     },
   ]
-  const csv = () =>
-    shipments.length > 0 &&
-    downloadFile(
-      `shipments-${today()}.csv`,
-      toCsv(
-        shipments.map((s) => ({
-          Invoice: s.number,
-          Vessel: s.vessel,
-          Products: items(s.id)
-            .map(
-              (i) =>
-                `${data.products.find((p) => p.id === i.productId)?.name || 'Unknown'} (${i.quantity})`,
-            )
-            .join('; '),
-          TotalQty: shipmentQuantity(items(s.id)),
-          ETD: s.etd,
-          PlannedETA: s.plannedEta,
-          CurrentETA: effectiveShipmentEta(s),
-          ActualWarehouseArrival: s.actualArrival,
-          Stage: s.stage,
-          Status: shipmentStatus(s),
-          ETASlipDays: etaSlip(s) ?? '',
-          ActualArrivalDelayDays: arrivalDelay(s) ?? '',
-          Remarks: s.remarks,
-        })),
-      ),
-      'text/csv;charset=utf-8',
-    )
-  csvRef.current = csv
+  csvRef.current = async () => {
+    if (!list?.total) return false
+    await downloadShipmentsCsv(query)
+    return true
+  }
+  const names = (s: ShipmentRecord) => s.lines.map((l) => l.product.name).join(', ')
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {cards.map((card) => (
-          <button
-            key={card.id}
-            title={card.help}
-            onClick={() =>
-              setQuick(
-                quick === (card.id === 'units' ? 'open' : card.id)
-                  ? ''
-                  : card.id === 'units'
-                    ? 'open'
-                    : card.id,
-              )
-            }
-            className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-orange-300 ${quick === (card.id === 'units' ? 'open' : card.id) ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200'}`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="metric-label">{card.label}</span>
-              <card.icon size={16} className="text-[#dc713a]" />
-            </div>
-            <div className="mt-2 metric-value">{card.value}</div>
-          </button>
-        ))}
+        {cards.map((card) => {
+          const flag = card.id === 'units' ? 'open' : card.id
+          return (
+            <button
+              key={card.id}
+              title={card.help}
+              onClick={() => setQuick(quick === flag ? '' : flag)}
+              className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-orange-300 ${quick === flag ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200'}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="metric-label">{card.label}</span>
+                <card.icon size={16} className="text-[#dc713a]" />
+              </div>
+              <div className="mt-2 metric-value">{card.value}</div>
+            </button>
+          )
+        })}
       </div>
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
           <div>
             <h2 className="text-base font-bold text-[#173b3d]">Finished goods shipments</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              {shipments.length} shipments · Arrival means actual warehouse arrival
+              {list?.total ?? 0} shipments · Arrival means actual warehouse arrival
             </p>
           </div>
-          <Badge tone="teal">{data.shipments.length} total</Badge>
         </div>
         <div className="flex flex-wrap gap-2 px-4 py-3 sm:px-5">
           <div className="relative min-w-48 flex-1 sm:max-w-sm">
@@ -237,12 +210,9 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
             onChange={(e) => setStage(e.target.value)}
           >
             <option value="">All stages</option>
-            {data.lookupValues
-              .filter((v) => v.kind === 'shipmentStage')
-              .sort((a, b) => a.sort - b.sort)
-              .map((v) => (
-                <option key={v.id}>{v.value}</option>
-              ))}
+            {values(lookups, 'shipmentStage').map((v) => (
+              <option key={v}>{v}</option>
+            ))}
           </Select>
           <Select
             aria-label="Filter vessel"
@@ -251,7 +221,7 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
             onChange={(e) => setVessel(e.target.value)}
           >
             <option value="">All vessels</option>
-            {[...new Set(data.shipments.map((s) => s.vessel))].sort().map((v) => (
+            {(summary?.vessels ?? []).map((v) => (
               <option key={v}>{v}</option>
             ))}
           </Select>
@@ -259,27 +229,32 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
             aria-label="Sort shipments"
             className="max-w-44"
             value={sort}
-            onChange={(e) => setSort(e.target.value)}
+            onChange={(e) => setSort(e.target.value as ShipmentSort)}
           >
             <option value="eta-asc">ETA: soonest</option>
             <option value="eta-desc">ETA: latest</option>
             <option value="qty-desc">Qty: high to low</option>
             <option value="number-asc">Invoice: A–Z</option>
           </Select>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSearch('')
-              setStage('')
-              setVessel('')
-              setQuick('')
-            }}
-          >
+          <Button variant="ghost" size="sm" onClick={clear}>
             <X size={14} /> Clear
           </Button>
         </div>
-        {shipments.length ? (
+        {listQuery.isPending ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading shipments…</p>
+        ) : listQuery.isError && !list ? (
+          <div className="p-5">
+            <Empty
+              title="Couldn't load shipments"
+              description={listQuery.error.message}
+              action={
+                <Button variant="secondary" onClick={() => listQuery.refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          </div>
+        ) : shipments.length ? (
           <>
             <div className="table-wrap hidden md:block">
               <table className="data-table">
@@ -299,41 +274,24 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
                 </thead>
                 <tbody>
                   {shipments.map((s) => (
-                    <tr key={s.id} className="cursor-pointer" onClick={() => onOpen(s)}>
+                    <tr key={s.id} className="cursor-pointer" onClick={() => onOpen(s.id)}>
                       <td className="font-bold text-[#173b3d]">{s.number}</td>
                       <td>{s.vessel}</td>
-                      <td
-                        className="max-w-56 truncate"
-                        title={items(s.id)
-                          .map((i) => data.products.find((p) => p.id === i.productId)?.name)
-                          .join(', ')}
-                      >
-                        {items(s.id)
-                          .map((i) => data.products.find((p) => p.id === i.productId)?.name)
-                          .join(', ')}
+                      <td className="max-w-56 truncate" title={names(s)}>
+                        {names(s)}
                       </td>
-                      <td className="font-semibold">{quantity(shipmentQuantity(items(s.id)))}</td>
+                      <td className="font-semibold">{quantity(s.computed.totalQty)}</td>
                       <td>{dateLabel(s.etd)}</td>
-                      <td className={shipmentFlags(s).overdue ? 'font-bold text-rose-700' : ''}>
-                        {dateLabel(effectiveShipmentEta(s))}
+                      <td className={s.computed.flags.overdue ? 'font-bold text-rose-700' : ''}>
+                        {dateLabel(s.computed.currentEta ?? '')}
                       </td>
                       <td>
-                        {etaSlip(s) === null ? '—' : `${etaSlip(s)! > 0 ? '+' : ''}${etaSlip(s)}d`}
+                        {s.computed.etaSlip === null
+                          ? '—'
+                          : `${s.computed.etaSlip > 0 ? '+' : ''}${s.computed.etaSlip}d`}
                       </td>
                       <td>
-                        <Badge
-                          tone={
-                            s.actualArrival
-                              ? (arrivalDelay(s) ?? 0) > 0
-                                ? 'amber'
-                                : 'green'
-                              : shipmentFlags(s).overdue
-                                ? 'red'
-                                : 'blue'
-                          }
-                        >
-                          {shipmentStatus(s)}
-                        </Badge>
+                        <Badge tone={tone(s)}>{s.computed.status}</Badge>
                         {s.actualArrival && (
                           <div className="mt-1 text-[11px] text-slate-500">Stage: {s.stage}</div>
                         )}
@@ -349,33 +307,27 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
             </div>
             <div className="divide-y divide-slate-100 md:hidden">
               {shipments.map((s) => (
-                <button key={s.id} onClick={() => onOpen(s)} className="w-full p-4 text-left">
+                <button key={s.id} onClick={() => onOpen(s.id)} className="w-full p-4 text-left">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[#173b3d]">{s.number}</span>
-                    <Badge
-                      tone={
-                        s.actualArrival
-                          ? (arrivalDelay(s) ?? 0) > 0
-                            ? 'amber'
-                            : 'green'
-                          : shipmentFlags(s).overdue
-                            ? 'red'
-                            : 'blue'
-                      }
-                    >
-                      {shipmentStatus(s)}
-                    </Badge>
+                    <Badge tone={tone(s)}>{s.computed.status}</Badge>
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {s.vessel} · {quantity(shipmentQuantity(items(s.id)))} units
+                    {s.vessel} · {quantity(s.computed.totalQty)} units
                   </div>
                   <div className="mt-3 flex justify-between text-xs text-slate-600">
-                    <span>ETA {dateLabel(effectiveShipmentEta(s))}</span>
-                    <span>{items(s.id).length} product lines</span>
+                    <span>ETA {dateLabel(s.computed.currentEta ?? '')}</span>
+                    <span>{s.lines.length} product lines</span>
                   </div>
                 </button>
               ))}
             </div>
+            <Pager
+              page={page}
+              pageSize={shipmentPageSize}
+              total={list?.total ?? 0}
+              onPage={setPage}
+            />
           </>
         ) : (
           <div className="p-5">
@@ -383,15 +335,7 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
               title="No matching shipments"
               description="Try clearing filters or add a shipment with product lines."
               action={
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setSearch('')
-                    setStage('')
-                    setVessel('')
-                    setQuick('')
-                  }}
-                >
+                <Button variant="secondary" onClick={clear}>
                   Clear filters
                 </Button>
               }
@@ -403,41 +347,80 @@ export default function Shipments({ data, onOpen, csvRef }: Props) {
   )
 }
 
-export function ShipmentDrawer({
-  shipment,
-  data,
-  onClose,
-  run,
-}: {
-  shipment: Shipment
-  data: DataSet
+export type ShipmentTarget = { id: string } | { draft: Shipment }
+type DrawerProps = {
+  target: ShipmentTarget
   onClose: () => void
+  // A new shipment reopens by id after its first save.
+  onOpen: (id: string) => void
+  // The shipment was deleted by someone else.
+  onGone: () => void
   run: Run
-}) {
-  const blankLine = () => stamp({ shipmentId: shipment.id, productId: '', quantity: 1 })
+}
+type EditorProps = Omit<DrawerProps, 'target'> & {
+  view: ShipmentView | null
+  initial: Shipment
+  lookups: LookupItem[]
+}
+
+export function ShipmentDrawer({ target, ...props }: DrawerProps) {
+  const lookups = useLookups().data
+  const detail = useShipment('id' in target ? target.id : undefined)
+  const gone = detail.error instanceof NotFoundError
+  useEffect(() => {
+    if (gone) props.onGone()
+  }, [gone])
+  if (lookups && 'draft' in target)
+    return <ShipmentEditor view={null} initial={target.draft} lookups={lookups} {...props} />
+  if (lookups && detail.data)
+    return (
+      <ShipmentEditor
+        view={detail.data}
+        initial={detail.data.shipment}
+        lookups={lookups}
+        {...props}
+      />
+    )
+  return (
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+      title="Shipment details"
+    >
+      {detail.error && !gone ? (
+        <FormError message={detail.error.message} />
+      ) : (
+        <p className="text-sm text-slate-500">Loading shipment...</p>
+      )}
+    </Sheet>
+  )
+}
+
+function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: EditorProps) {
+  const blankLine = () => stamp({ shipmentId: initial.id, productId: '', quantity: 1 })
   // A new shipment starts with one empty product line so it can be filled in directly.
-  const initialLines = () => {
-    const current = data.shipmentItems.filter((i) => i.shipmentId === shipment.id)
-    return current.length || data.shipments.some((s) => s.id === shipment.id)
-      ? current
-      : [blankLine()]
-  }
-  const [draft, setDraft] = useState(shipment),
+  const initialLines = () => (view ? view.lines : [blankLine()])
+  const [draft, setDraft] = useState<Shipment & { version?: number }>(initial),
     [lines, setLines] = useState<ShipmentItem[]>(initialLines),
-    [baseline, setBaseline] = useState(() => JSON.stringify({ shipment, lines })),
+    [baseline, setBaseline] = useState(() => JSON.stringify({ shipment: initial, lines })),
+    [conflict, setConflict] = useState<ShipmentView | null>(null),
     [reason, setReason] = useState(''),
     [note, setNote] = useState(''),
     [tab, setTab] = useState<'details' | 'history'>('details')
   const form = useFormErrors()
-  useEffect(() => {
-    const current = initialLines()
-    setDraft(shipment)
-    setLines(current)
-    setBaseline(JSON.stringify({ shipment, lines: current }))
-    setTab('details')
-  }, [shipment.id])
-  const stored = !!data.shipments.find((s) => s.id === shipment.id),
+  const stored = !!view,
     dirty = JSON.stringify({ shipment: draft, lines }) !== baseline
+  const adopt = (next: ShipmentView) => {
+    setDraft(next.shipment)
+    setLines(next.lines)
+    setBaseline(JSON.stringify({ shipment: next.shipment, lines: next.lines }))
+  }
+  // Follows the server while there are no unsaved edits, as the lot drawer does.
+  useEffect(() => {
+    if (view && !dirty) adopt(view)
+  }, [view])
   const access = useAccess(),
     readOnly = !access.can('editShipments')
   // Warns before a reload or tab close would discard unsaved shipment edits.
@@ -451,12 +434,7 @@ export function ShipmentDrawer({
     if (dirty && !window.confirm('Discard unsaved shipment changes?')) return
     onClose()
   }
-  const productOptions = productChoices(data.products)
-  const lookup = (kind: string) =>
-    data.lookupValues
-      .filter((v) => v.kind === kind)
-      .sort((a, b) => a.sort - b.sort)
-      .map((v) => v.value)
+  const productOptions = productChoices(useProducts().data ?? [])
   const update = <K extends keyof Shipment>(key: K, value: Shipment[K]) => {
     setDraft((d) => ({ ...d, [key]: value }))
     // ETD changes can resolve the date-order errors on the other date fields.
@@ -474,14 +452,25 @@ export function ShipmentDrawer({
       ...(patch.productId !== undefined ? lines.map((l) => lineField(l.id, 'productId')) : []),
     )
   }
+  const failed = (e: unknown) => {
+    if (e instanceof ConflictError && e.current)
+      return setConflict(toShipmentView(e.current as ShipmentDetail))
+    if (e instanceof NotFoundError) return onGone()
+    form.fail(e)
+  }
   const save = async (closeAfter = false) => {
     setTab('details')
     if (!form.check(validateShipment(draft, lines))) return
-    if (!(await run(() => saveShipment(draft, lines, reason), form.fail))) return
+    let saved: ShipmentView | undefined
+    const ok = await run(async () => {
+      saved = await saveShipment(draft, lines, reason, lookups)
+      queryClient.setQueryData(shipmentKey(saved.shipment.id), saved)
+      await refreshShipments()
+    }, failed)
+    if (!ok || !saved) return
     if (closeAfter) return onClose()
-    const next = { ...draft, updatedAt: new Date().toISOString() }
-    setDraft(next)
-    setBaseline(JSON.stringify({ shipment: next, lines }))
+    if (!view) return onOpen(saved.shipment.id)
+    adopt(saved)
     setReason('')
   }
   const submit = (e: FormEvent) => {
@@ -495,14 +484,14 @@ export function ShipmentDrawer({
       )
     )
       return
-    if (await run(() => deleteShipment(draft.id), form.fail)) onClose()
+    const removed = await run(async () => {
+      await deleteShipment(draft.id)
+      await refreshShipments()
+    }, failed)
+    if (removed) onClose()
   }
-  const revisions = data.etaRevisions
-    .filter((r) => r.shipmentId === shipment.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  const logs = data.activityLogs
-    .filter((a) => a.entityType === 'shipment' && a.entityId === shipment.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const revisions = view?.revisions ?? []
+  const logs = useActivity('shipments', view?.shipment.id).data ?? []
   return (
     <Sheet
       open
@@ -538,6 +527,18 @@ export function ShipmentDrawer({
         </div>
       }
     >
+      {conflict && (
+        <ConflictBanner
+          record="shipment"
+          onReload={() => {
+            queryClient.setQueryData(shipmentKey(conflict.shipment.id), conflict)
+            adopt(conflict)
+            setConflict(null)
+            form.reset()
+          }}
+          onDismiss={() => setConflict(null)}
+        />
+      )}
       <div className="mb-5 empty:hidden">
         <FormError
           message={
@@ -550,7 +551,7 @@ export function ShipmentDrawer({
       </div>
       {access.user && readOnly && (
         <div className="mb-5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs text-slate-600">
-          View only. {roleInfo[access.user.role].label} profiles can't change shipments.
+          View only. {roleInfo[access.user.role].label} users can't change shipments.
         </div>
       )}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -648,7 +649,7 @@ export function ShipmentDrawer({
                 <Field label="Current stage" error={form.errors.stage}>
                   <SearchSelect
                     value={draft.stage}
-                    options={lookup('shipmentStage')}
+                    options={values(lookups, 'shipmentStage')}
                     onChange={(v) => update('stage', v)}
                   />
                 </Field>
@@ -755,9 +756,9 @@ export function ShipmentDrawer({
                 {revisions.map((r) => (
                   <Card key={r.id} className="p-4">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                      <span>{dateLabel(r.previousDate)}</span>
+                      <span>{dateLabel(r.previousDate ?? '')}</span>
                       <ArrowRight size={15} className="text-[#d96d35]" />
-                      <span>{dateLabel(r.newDate)}</span>
+                      <span>{dateLabel(r.newDate ?? '')}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {new Date(r.createdAt).toLocaleString()}
@@ -787,7 +788,13 @@ export function ShipmentDrawer({
                     size="sm"
                     disabled={!stored || !note.trim()}
                     onClick={async () => {
-                      if (await run(() => addNote('shipment', shipment.id, note))) setNote('')
+                      const posted = await run(async () => {
+                        await addNote('shipments', draft.id, note)
+                        await queryClient.invalidateQueries({
+                          queryKey: activityKey('shipments', draft.id),
+                        })
+                      })
+                      if (posted) setNote('')
                     }}
                   >
                     Post update
@@ -801,7 +808,7 @@ export function ShipmentDrawer({
                   <div className="text-sm text-slate-700">{a.message}</div>
                   <div className="mt-1 text-xs text-slate-500">
                     {new Date(a.createdAt).toLocaleString()}
-                    {a.actor && ` · ${a.actor}`}
+                    {a.actorName && ` · ${a.actorName}`}
                   </div>
                 </div>
               ))}

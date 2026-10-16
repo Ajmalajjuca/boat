@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - e2e
 
 # pnpm 10 runs dependency install scripts only for packages listed here.
 onlyBuiltDependencies:

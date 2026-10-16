@@ -10,7 +10,7 @@ The build runs in the PRD's six phases. Each phase ends in something that can be
 | 2 | Auth and users | Sign-in, server sessions, invites and password reset via Resend, `requirePermission` middleware with the route-walk test, CSRF, `create-admin` CLI, users and settings modules | Each role can sign in, and `/auth/me` returns the right allowed actions | [2026-10-15-phase-2-auth-and-users.md](2026-10-15-phase-2-auth-and-users.md) |
 | 3 | Core records | Soft-delete Prisma extension, audit service, version conflicts; lookups, products, lots, RM batches, GRN receipts, activity and notes | Every FR-1 to FR-4, FR-7 and FR-8 rule has a passing integration or API test | [2026-10-15-phase-3-core-records.md](2026-10-15-phase-3-core-records.md) |
 | 4 | Shipments and reports | Shipments with items and ETA revisions, month-end report, shipments CSV export, JSON export, import (merge/replace), reset | `docs/sample-test-backup.json` imports, and its month-end figures match the demo app's | [2026-10-15-phase-4-shipments-and-reports.md](2026-10-15-phase-4-shipments-and-reports.md) |
-| 5 | Frontend switch | API client with TanStack Query replaces `repository.ts` and `db.ts`; sign-in replaces PIN profiles; 409 shown as "someone else changed this"; Playwright suite | Every Playwright flow passes against the API, on desktop Chromium and a 390 px viewport | Written after Phase 4 merges |
+| 5 | Frontend switch | API client with TanStack Query replaces `repository.ts` and `db.ts`; sign-in replaces PIN profiles; 409 shown as "someone else changed this"; Playwright suite | Every Playwright flow passes against the API, on desktop Chromium and a 390 px viewport | [2026-10-16-phase-5-frontend-switch.md](2026-10-16-phase-5-frontend-switch.md) |
 | 6 | Launch | Render staging on a Neon branch, backup and restore drill, OWASP review, client data import, production cut-over | Client signs off on staging with their own data | Written after Phase 5 merges |
 
 ## Dependencies between phases
@@ -69,11 +69,24 @@ These follow from the versions available on 14 Oct 2026 or close gaps the PRD le
 7. **The month-end summary runs the domain's `monthSummary`** over lots and receipts chosen in SQL, rather than one SQL aggregate, so its figures are the demo's by construction. A month-end CSV with the demo's columns is added.
 8. **Reset needs the phrase `RESET ALL DATA`.** The demo used a confirm dialog.
 
+## Where Phase 5 departs from the PRD
+
+1. **`GET /lots/groups` is added.** The PRD's endpoint table has no grouped view, but the demo's default Production view groups lots by product with totals, and grouping a paged flat list would split products across pages. Its totals are SQL sums of the stored `grn_total`; the integration test checks them against the domain-computed values.
+2. **Demo-only features are dropped:** "Load demo data" on first run, PINs, recovery keys, "Turn off roles" and the in-app setup screen. `create-admin` replaces the setup screen; the sample backup can be imported for demos.
+3. **CSVs come from the server.** The browser's CSV builder is removed, so the three exports have one implementation each.
+4. **Response types live in `@boat/domain/api`.** The web app doesn't import from `apps/api`, which would type-check the server under the browser's compiler options. `apps/api/src/contract.ts` checks that each server view produces exactly the shared shape, so a changed response still fails typecheck.
+5. **Small API additions the screens needed:** the NPI card in `GET /lots/summary`, `GET /reports/months`, `vessels` in `GET /shipments/summary`, a `productId` filter on the lot endpoints, and each lot's current `eta` in the month-end report.
+6. **Writes are plain functions run through the app's `run()`**, which drives the saving indicator and the repeat-click guard, rather than TanStack `useMutation`. Each refreshes the queries its change affects.
+7. **A password reset ends at sign-in**, because `POST /auth/password/reset` doesn't start a session.
+8. **A session the server ended shows "Your session ended. Sign in again."** The idle message is kept for the browser's own idle timer, the only case where the app knows the reason.
+9. **Playwright seeds users through the real invite flow,** reading links from the log mailer's output, rather than writing users to the database.
+
 ## Notes for later phases
 
 - **Phase 4:** import must map system values by `system_key` (departure 6), and compute `grn_total` and `completed_on` with `refreshCompletion`.
 - **Phase 6:** import writes existing rows one at a time and refreshes each lot separately. An 18 MB backup took 32 s to import and 70 s to restore again against local Docker; the transaction limit is 120 s. Measure the client's real backup against Neon before cut-over, and make the writes set-based if it comes close.
 - **Phase 5:** every request with a session moves its idle timer, including `GET /auth/me`. A client that polls `/auth/me` would keep sessions alive forever, so poll something else or not at all.
+- **Phase 6:** the e2e suite runs against local Docker in CI. Run it once against the staging service before cut-over, since that is the first time the built web app is served by Render.
 
 ## Still open in the PRD (no effect on Phases 1–4)
 

@@ -8,7 +8,8 @@
     "./calculations": "./src/calculations.ts",
     "./validation": "./src/validation.ts",
     "./permissions": "./src/permissions.ts",
-    "./backup": "./src/backup.ts"
+    "./backup": "./src/backup.ts",
+    "./api": "./src/api.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

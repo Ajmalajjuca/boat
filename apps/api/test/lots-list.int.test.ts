@@ -227,6 +227,7 @@ describe('GET /lots/summary', () => {
       approval: count('approval'),
       followUp: count('followUp'),
       rm: count('rm'),
+      npi: count('npi'),
     })
   })
 })

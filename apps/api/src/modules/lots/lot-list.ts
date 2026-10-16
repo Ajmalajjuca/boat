@@ -1,29 +1,12 @@
+import { type LotFlag, lotFlagNames, type LotSort, lotSorts } from '@boat/domain/api'
 import { dayOffset } from '@boat/domain/calculations'
 import type { Db } from '../../core/prisma'
 import { Prisma } from '../../generated/prisma/client'
 
-export const lotFlagNames = [
-  'overdue',
-  'dueSoon',
-  'followUp',
-  'blocked',
-  'approval',
-  'rm',
-  'npi',
-  'onTrack',
-] as const
-export type LotFlag = (typeof lotFlagNames)[number]
-export const lotSorts = [
-  'eta-asc',
-  'eta-desc',
-  'qty-desc',
-  'balance-desc',
-  'product-asc',
-  'label-asc',
-] as const
-export type LotSort = (typeof lotSorts)[number]
+export { type LotFlag, lotFlagNames, type LotSort, lotSorts }
 
 const filterColumns = {
+  productId: 'l.product_id',
   segmentId: 'p.segment_id',
   categoryId: 'l.category_id',
   emsId: 'l.ems_id',
@@ -160,7 +143,16 @@ export async function countLots(db: Db, f: LotFilters, today: string) {
 }
 
 // The demo's summary cards, over every active lot.
-const cards = ['overdue', 'dueSoon', 'onTrack', 'blocked', 'approval', 'followUp', 'rm'] as const
+const cards = [
+  'overdue',
+  'dueSoon',
+  'onTrack',
+  'blocked',
+  'approval',
+  'followUp',
+  'rm',
+  'npi',
+] as const
 export async function lotCardCounts(db: Db, today: string) {
   const columns = Prisma.join(
     cards.map(
@@ -171,4 +163,36 @@ export async function lotCardCounts(db: Db, today: string) {
   const [row] = await db.$queryRaw<Record<(typeof cards)[number], number>[]>`
     SELECT ${columns} FROM ${from} WHERE l.deleted_at IS NULL AND l.completed_on IS NULL`
   return row
+}
+
+export type LotGroupRow = {
+  productId: string
+  lots: number
+  delayed: number
+  lotQty: number
+  produced: number
+  grnTotal: number
+  balance: number
+}
+
+// The matching lots per product, products in the order of their first lot. grn_total is kept by
+// refreshCompletion, so balance is the domain's lotQty - totalGrn. Sums are float8 so that large
+// totals arrive as numbers rather than BigInts.
+export async function lotGroupRows(db: Db, f: LotFilters, today: string) {
+  return db.$queryRaw<LotGroupRow[]>`
+    WITH matching AS (
+      SELECT l.id, l.product_id, ROW_NUMBER() OVER (ORDER BY ${order[f.sort]}, l.id) AS pos
+      FROM ${from} WHERE ${whereSql(f, today)})
+    SELECT m.product_id AS "productId",
+      COUNT(*)::int AS lots,
+      (COUNT(*) FILTER (WHERE s.system_key = 'delayed'))::int AS delayed,
+      SUM(x.lot_qty)::float8 AS "lotQty",
+      SUM(x.fresh_production_qty)::float8 AS produced,
+      SUM(x.grn_total)::float8 AS "grnTotal",
+      SUM(x.lot_qty - x.grn_total)::float8 AS balance
+    FROM matching m
+    JOIN lots x ON x.id = m.id
+    JOIN lookup_values s ON s.id = x.status_id
+    GROUP BY m.product_id
+    ORDER BY MIN(m.pos)`
 }

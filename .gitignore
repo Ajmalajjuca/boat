@@ -10,3 +10,6 @@ dist/
 coverage/
 .env
 apps/api/src/generated/
+e2e/.run
+e2e/test-results
+e2e/playwright-report

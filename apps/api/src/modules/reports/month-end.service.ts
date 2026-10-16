@@ -1,4 +1,11 @@
-import { lotSummary, monthEnd, monthLabel, monthSummary } from '@boat/domain/calculations'
+import {
+  effectiveLotEta,
+  lotSummary,
+  monthEnd,
+  monthLabel,
+  monthOf,
+  monthSummary,
+} from '@boat/domain/calculations'
 import type { RecordsDeps } from '../../core/clock'
 import { toCsv } from '../../core/csv'
 import { fromDbDate, toDbDate } from '../../core/dates'
@@ -53,6 +60,7 @@ export async function monthEndReport({ db, clock }: RecordsDeps, month: string) 
           id: row.id,
           label: row.label,
           plannedDate: fromDbDate(row.plannedDate),
+          eta: effectiveLotEta(r.lot) || null,
           product: row.product,
           blocker: row.blocker,
           blockerDescription: row.blockerDescription,
@@ -103,4 +111,21 @@ export async function monthEndCsv(deps: RecordsDeps, month: string) {
     StatusToday: r.statusToday,
   }))
   return { filename: `month-end-${month}.csv`, body: toCsv(csvHeaders, rows) }
+}
+
+// The month picker: months with planned lots or receipts, newest first, and always this month,
+// as the demo builds it. Lots and receipts of deleted products don't count.
+export async function monthList({ db, clock }: RecordsDeps) {
+  const current = monthOf(await clock.today())
+  const rows = await db.$queryRaw<{ month: string }[]>`
+    SELECT to_char(l.planned_date, 'YYYY-MM') AS month
+    FROM lots l JOIN products p ON p.id = l.product_id AND p.deleted_at IS NULL
+    WHERE l.deleted_at IS NULL AND l.planned_date IS NOT NULL
+    UNION
+    SELECT to_char(g.date, 'YYYY-MM')
+    FROM grn_receipts g
+    JOIN lots l ON l.id = g.lot_id AND l.deleted_at IS NULL
+    JOIN products p ON p.id = l.product_id AND p.deleted_at IS NULL
+    WHERE g.deleted_at IS NULL`
+  return { items: [...new Set([current, ...rows.map((r) => r.month)])].sort().reverse() }
 }

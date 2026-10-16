@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, type MutableRefObject } from 'react'
+import type { LotCards, LotFlag, LotGroup, LotSort } from '@boat/domain/api'
+import { dateLabel, effectiveLotEta, quantity, signedDays } from '@boat/domain/calculations'
+import type { LookupKind } from '@boat/domain/models'
 import {
   ChevronDown,
   ChevronRight,
@@ -10,37 +12,20 @@ import {
   Search,
   X,
 } from 'lucide-react'
-import type { DataSet, Lot, Product } from './models'
-import {
-  balance,
-  completed,
-  dateLabel,
-  effectiveLotEta,
-  fullGrnDate,
-  grnProgress,
-  leadTime,
-  lotFlags,
-  lotSummary,
-  planDelay,
-  quantity,
-  rmMetrics,
-  signedDays,
-  sum,
-  today,
-  totalGrn,
-} from './calculations'
-import { downloadFile, toCsv } from './repository'
-import { Badge, Button, Card, Empty, Input, Select } from './ui'
+import { type MutableRefObject, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useAccess } from './access'
+import { downloadLotsCsv, type LotQuery, lotPageSize } from './api/lots'
+import type { LotRecord, ProductRecord } from './api/mappers'
+import { useLookups, useLotGroups, useLots, useLotSummary, useProducts } from './api/queries'
+import { Badge, Button, Card, type CsvExport, Empty, Input, Pager, Select } from './ui'
 
 type Props = {
-  data: DataSet
   mode: 'active' | 'completed'
-  onOpenLot: (lot: Lot) => void
+  onOpenLot: (id: string) => void
   onNewLot: (productId: string) => void
-  onEditProduct: (product: Product) => void
+  onEditProduct: (product: ProductRecord) => void
   onAddProduct: () => void
-  csvRef: MutableRefObject<(() => boolean) | null>
+  csvRef: MutableRefObject<CsvExport | null>
 }
 type Column =
   | 'label'
@@ -111,7 +96,43 @@ const completedCols: Column[] = [
 ]
 const simpleCols: Column[] = ['label', 'status', 'stage', 'lotQty', 'grn', 'balance', 'eta']
 const allCols = Object.keys(columnLabels) as Column[]
-const filterPlaceholders = {
+
+// Dropdown filters hold lookup ids; the API filters by id.
+type Filters = {
+  segment: string
+  category: string
+  ems: string
+  poc: string
+  status: string
+  stage: string
+  mode: string
+  blocker: string
+  rm: boolean
+  followUp: boolean
+}
+const noFilters: Filters = {
+  segment: '',
+  category: '',
+  ems: '',
+  poc: '',
+  status: '',
+  stage: '',
+  mode: '',
+  blocker: '',
+  rm: false,
+  followUp: false,
+}
+const filterKinds: Record<Exclude<keyof Filters, 'rm' | 'followUp'>, LookupKind> = {
+  segment: 'segment',
+  category: 'category',
+  ems: 'ems',
+  poc: 'poc',
+  status: 'status',
+  stage: 'stage',
+  mode: 'logistics',
+  blocker: 'blocker',
+}
+const filterPlaceholders: Record<keyof typeof filterKinds, string> = {
   segment: 'All segments',
   category: 'All categories',
   ems: 'All EMS',
@@ -121,9 +142,92 @@ const filterPlaceholders = {
   mode: 'All modes',
   blocker: 'All blockers',
 }
-const statuses = (lot: Lot, receipts: DataSet['grnReceipts']) => {
-  const f = lotFlags(lot, receipts)
-  if (f.done) return <Badge tone="green">Completed</Badge>
+const cards: { id: keyof LotCards; label: string; help: string; tone: string }[] = [
+  {
+    id: 'overdue',
+    label: 'Overdue',
+    help: 'Incomplete lots with effective ETA before today.',
+    tone: 'red',
+  },
+  {
+    id: 'dueSoon',
+    label: 'Due Soon',
+    help: 'Incomplete lots due today through the next 3 days.',
+    tone: 'amber',
+  },
+  {
+    id: 'onTrack',
+    label: 'On Track',
+    help: 'Status On Track, not overdue, due soon, or blocked.',
+    tone: 'green',
+  },
+  {
+    id: 'blocked',
+    label: 'Delayed / Blocked',
+    help: 'Delayed or Hold status, or an active blocker.',
+    tone: 'red',
+  },
+  {
+    id: 'approval',
+    label: 'Approval',
+    help: 'Incomplete lots with an Approval Blocker.',
+    tone: 'amber',
+  },
+  {
+    id: 'followUp',
+    label: 'Follow-ups',
+    help: 'Incomplete lots with follow-up date on or before today.',
+    tone: 'blue',
+  },
+  {
+    id: 'rm',
+    label: 'RM Incomplete',
+    help: 'Incomplete lots whose material target has not been fully met.',
+    tone: 'amber',
+  },
+  { id: 'npi', label: 'NPI', help: 'Incomplete lots in a non-BAU product category.', tone: 'teal' },
+]
+
+function toQuery(
+  view: LotQuery['view'],
+  q: string,
+  f: Filters,
+  quick: string,
+  sort: LotSort,
+): LotQuery {
+  const flag = new Set<LotFlag>()
+  if (f.rm) flag.add('rm')
+  if (f.followUp) flag.add('followUp')
+  if (quick) flag.add(quick as LotFlag)
+  return {
+    view,
+    q: q.trim(),
+    segmentId: f.segment || undefined,
+    categoryId: f.category || undefined,
+    emsId: f.ems || undefined,
+    pocId: f.poc || undefined,
+    statusId: f.status || undefined,
+    stageId: f.stage || undefined,
+    logisticsId: f.mode || undefined,
+    blockerId: f.blocker || undefined,
+    flag: [...flag],
+    sort,
+  }
+}
+
+// Waits for typing to pause before searching, so each keystroke isn't a request.
+function useDebounced<T>(value: T, ms = 250) {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms)
+    return () => clearTimeout(timer)
+  }, [value, ms])
+  return settled
+}
+
+const statuses = (lot: LotRecord) => {
+  const f = lot.computed.flags
+  if (lot.computed.completed) return <Badge tone="green">Completed</Badge>
   if (f.blocked)
     return (
       <Badge tone={lot.status === 'Hold' ? 'amber' : 'red'}>
@@ -135,8 +239,72 @@ const statuses = (lot: Lot, receipts: DataSet['grnReceipts']) => {
   return <Badge tone="green">On track</Badge>
 }
 
+function renderCell(l: LotRecord, col: Column): ReactNode {
+  const c = l.computed
+  switch (col) {
+    case 'label':
+      return <span className="font-bold text-[#193e40]">{l.label}</span>
+    case 'status':
+      return (
+        <div>
+          {statuses(l)}
+          <span className="mt-1 block min-w-48 max-w-64 whitespace-normal text-[11px] leading-4 text-slate-500">
+            {c.summary}
+          </span>
+        </div>
+      )
+    case 'category':
+      return <Badge tone={l.category === 'BAU' ? 'slate' : 'blue'}>{l.category}</Badge>
+    case 'ems':
+      return l.ems || '—'
+    case 'stage':
+      return l.stage
+    case 'lotQty':
+      return quantity(l.lotQty)
+    case 'produced':
+      return quantity(l.freshProductionQty)
+    case 'grn':
+      return <span className="font-semibold">{quantity(c.grnTotal)}</span>
+    case 'balance':
+      return <span className="font-bold text-[#bd5e2d]">{quantity(c.balance)}</span>
+    case 'plannedDate':
+      return dateLabel(l.plannedDate)
+    case 'eta':
+      return (
+        <span className={c.flags.overdue ? 'font-semibold text-rose-700' : ''}>
+          {dateLabel(effectiveLotEta(l))}
+        </span>
+      )
+    case 'blocker':
+      return !l.blockerCategory || l.blockerCategory === 'None' ? (
+        '—'
+      ) : (
+        <span className="max-w-32 truncate" title={l.blockerDescription}>
+          {l.blockerCategory}
+        </span>
+      )
+    case 'poc':
+      return l.poc || '—'
+    case 'mode':
+      return l.logisticsMode || '—'
+    case 'rm':
+      return `${Math.round(c.rm.percent)}%`
+    case 'followUp':
+      return dateLabel(l.followUpDate)
+    case 'fullGrn':
+      return dateLabel(c.fullGrnDate ?? '')
+    case 'planDelay':
+      return (
+        <span className={c.planDelay && c.planDelay > 0 ? 'font-semibold text-rose-700' : ''}>
+          {signedDays(c.planDelay)}
+        </span>
+      )
+    case 'leadTime':
+      return c.leadTime ?? '—'
+  }
+}
+
 export default function Production({
-  data,
   mode,
   onOpenLot,
   onNewLot,
@@ -145,322 +313,45 @@ export default function Production({
   csvRef,
 }: Props) {
   const access = useAccess()
+  const lookups = useLookups().data ?? [],
+    products = useProducts().data ?? []
   const [search, setSearch] = useState(''),
     [filtersOpen, setFiltersOpen] = useState(false),
     [columnsOpen, setColumnsOpen] = useState(false)
-  const [filters, setFilters] = useState({
-    segment: '',
-    category: '',
-    ems: '',
-    poc: '',
-    status: '',
-    stage: '',
-    mode: '',
-    blocker: '',
-    rm: false,
-    followUp: false,
-  })
-  const [sort, setSort] = useState('eta-asc'),
+  const [filters, setFilters] = useState<Filters>(noFilters)
+  const [sort, setSort] = useState<LotSort>('eta-asc'),
     [group, setGroup] = useState(true),
     [expanded, setExpanded] = useState<string[]>([]),
     [columns, setColumns] = useState<Column[]>(defaultCols),
     [quick, setQuick] = useState('')
-  const look = (kind: string) =>
-    data.lookupValues
-      .filter((v) => v.kind === kind)
-      .sort((a, b) => a.sort - b.sort)
-      .map((v) => v.value)
-  const receiptsFor = (id: string) => data.grnReceipts.filter((r) => r.lotId === id)
-  const lots = useMemo(() => {
-    const term = search.toLowerCase().trim()
-    const filtered = data.lots.filter((l) => {
-      const product = data.products.find((p) => p.id === l.productId),
-        receipts = receiptsFor(l.id),
-        f = lotFlags(l, receipts),
-        rm = rmMetrics(
-          l,
-          data.rmBatches.filter((b) => b.lotId === l.id),
-        )
-      if (mode === 'completed' ? !f.done : f.done) return false
-      if (
-        term &&
-        !`${product?.name || ''} ${product?.variant || ''} ${l.label}`.toLowerCase().includes(term)
-      )
-        return false
-      if (
-        (filters.segment && product?.segment !== filters.segment) ||
-        (filters.category && l.category !== filters.category) ||
-        (filters.ems && l.ems !== filters.ems) ||
-        (filters.poc && l.poc !== filters.poc) ||
-        (filters.status && l.status !== filters.status) ||
-        (filters.stage && l.stage !== filters.stage) ||
-        (filters.mode && l.logisticsMode !== filters.mode) ||
-        (filters.blocker && l.blockerCategory !== filters.blocker)
-      )
-        return false
-      if ((filters.rm && rm.complete) || (filters.followUp && !f.followUp)) return false
-      if (
-        (quick === 'overdue' && !f.overdue) ||
-        (quick === 'dueSoon' && !f.dueSoon) ||
-        (quick === 'blocked' && !f.blocked) ||
-        (quick === 'approval' && !f.approval) ||
-        (quick === 'followUp' && !f.followUp) ||
-        (quick === 'rm' && rm.complete) ||
-        (quick === 'npi' && l.category === 'BAU') ||
-        (quick === 'onTrack' && (f.overdue || f.dueSoon || f.blocked || l.status !== 'On Track'))
-      )
-        return false
-      return true
-    })
-    return filtered.sort((a, b) => {
-      const [field, dir] = sort.split('-'),
-        sgn = dir === 'desc' ? -1 : 1
-      let av: string | number = '',
-        bv: string | number = ''
-      if (field === 'eta') {
-        av = effectiveLotEta(a) || '9999'
-        bv = effectiveLotEta(b) || '9999'
-      } else if (field === 'qty') {
-        av = a.lotQty
-        bv = b.lotQty
-      } else if (field === 'balance') {
-        av = balance(a, receiptsFor(a.id))
-        bv = balance(b, receiptsFor(b.id))
-      } else if (field === 'product') {
-        av = data.products.find((p) => p.id === a.productId)?.name || ''
-        bv = data.products.find((p) => p.id === b.productId)?.name || ''
-      } else {
-        av = a.label
-        bv = b.label
-      }
-      return av < bv ? -sgn : av > bv ? sgn : 0
-    })
-  }, [data, mode, search, filters, sort, quick])
-  const active = data.lots.filter((l) => !completed(l, receiptsFor(l.id)))
-  const count = (p: (l: Lot) => boolean) => active.filter(p).length
-  const cards = [
-    {
-      id: 'overdue',
-      label: 'Overdue',
-      value: count((l) => lotFlags(l, receiptsFor(l.id)).overdue),
-      help: 'Incomplete lots with effective ETA before today.',
-      tone: 'red',
-    },
-    {
-      id: 'dueSoon',
-      label: 'Due Soon',
-      value: count((l) => lotFlags(l, receiptsFor(l.id)).dueSoon),
-      help: 'Incomplete lots due today through the next 3 days.',
-      tone: 'amber',
-    },
-    {
-      id: 'onTrack',
-      label: 'On Track',
-      value: count((l) => {
-        const f = lotFlags(l, receiptsFor(l.id))
-        return l.status === 'On Track' && !f.blocked && !f.overdue && !f.dueSoon
-      }),
-      help: 'Status On Track, not overdue, due soon, or blocked.',
-      tone: 'green',
-    },
-    {
-      id: 'blocked',
-      label: 'Delayed / Blocked',
-      value: count((l) => lotFlags(l, receiptsFor(l.id)).blocked),
-      help: 'Delayed or Hold status, or an active blocker.',
-      tone: 'red',
-    },
-    {
-      id: 'approval',
-      label: 'Approval',
-      value: count((l) => lotFlags(l, receiptsFor(l.id)).approval),
-      help: 'Incomplete lots with an Approval Blocker.',
-      tone: 'amber',
-    },
-    {
-      id: 'followUp',
-      label: 'Follow-ups',
-      value: count((l) => lotFlags(l, receiptsFor(l.id)).followUp),
-      help: 'Incomplete lots with follow-up date on or before today.',
-      tone: 'blue',
-    },
-    {
-      id: 'rm',
-      label: 'RM Incomplete',
-      value: count(
-        (l) =>
-          !rmMetrics(
-            l,
-            data.rmBatches.filter((b) => b.lotId === l.id),
-          ).complete,
-      ),
-      help: 'Incomplete lots whose material target has not been fully met.',
-      tone: 'amber',
-    },
-    {
-      id: 'npi',
-      label: 'NPI',
-      value: count((l) => l.category !== 'BAU'),
-      help: 'Incomplete lots in a non-BAU product category.',
-      tone: 'teal',
-    },
-  ]
-  const emptyProducts =
-    mode === 'active' &&
-    !quick &&
-    !Object.entries(filters).some(([key, value]) => key !== 'segment' && Boolean(value))
-      ? data.products.filter(
-          (p) =>
-            !active.some((l) => l.productId === p.id) &&
-            (!filters.segment || p.segment === filters.segment) &&
-            `${p.name} ${p.variant}`.toLowerCase().includes(search.toLowerCase().trim()),
-        )
-      : []
-  const productOrder = data.products
-    .filter(
-      (p) => lots.some((l) => l.productId === p.id) || emptyProducts.some((e) => e.id === p.id),
-    )
-    .sort((a, b) => {
-      const ai = lots.findIndex((l) => l.productId === a.id),
-        bi = lots.findIndex((l) => l.productId === b.id)
-      return ai < 0 && bi < 0 ? a.name.localeCompare(b.name) : ai < 0 ? 1 : bi < 0 ? -1 : ai - bi
-    })
-  const renderCell = (l: Lot, col: Column) => {
-    const rs = receiptsFor(l.id)
-    switch (col) {
-      case 'label':
-        return <span className="font-bold text-[#193e40]">{l.label}</span>
-      case 'status':
-        return (
-          <div>
-            {statuses(l, rs)}
-            <span className="mt-1 block min-w-48 max-w-64 whitespace-normal text-[11px] leading-4 text-slate-500">
-              {lotSummary(l, rs)}
-            </span>
-          </div>
-        )
-      case 'category':
-        return <Badge tone={l.category === 'BAU' ? 'slate' : 'blue'}>{l.category}</Badge>
-      case 'ems':
-        return l.ems || '—'
-      case 'stage':
-        return l.stage
-      case 'lotQty':
-        return quantity(l.lotQty)
-      case 'produced':
-        return quantity(l.freshProductionQty)
-      case 'grn':
-        return <span className="font-semibold">{quantity(totalGrn(rs))}</span>
-      case 'balance':
-        return <span className="font-bold text-[#bd5e2d]">{quantity(balance(l, rs))}</span>
-      case 'plannedDate':
-        return dateLabel(l.plannedDate)
-      case 'eta':
-        return (
-          <span className={lotFlags(l, rs).overdue ? 'font-semibold text-rose-700' : ''}>
-            {dateLabel(effectiveLotEta(l))}
-          </span>
-        )
-      case 'blocker':
-        return l.blockerCategory === 'None' ? (
-          '—'
-        ) : (
-          <span className="max-w-32 truncate" title={l.blockerDescription}>
-            {l.blockerCategory}
-          </span>
-        )
-      case 'poc':
-        return l.poc || '—'
-      case 'mode':
-        return l.logisticsMode || '—'
-      case 'rm':
-        return `${Math.round(
-          rmMetrics(
-            l,
-            data.rmBatches.filter((b) => b.lotId === l.id),
-          ).percent,
-        )}%`
-      case 'followUp':
-        return dateLabel(l.followUpDate)
-      case 'fullGrn':
-        return dateLabel(fullGrnDate(l, rs))
-      case 'planDelay': {
-        const delay = planDelay(l, rs)
-        return (
-          <span className={delay && delay > 0 ? 'font-semibold text-rose-700' : ''}>
-            {signedDays(delay)}
-          </span>
-        )
-      }
-      case 'leadTime':
-        return (
-          leadTime(
-            l,
-            rs,
-            data.rmBatches.filter((b) => b.lotId === l.id),
-          ) ?? '—'
-        )
-    }
+  const term = useDebounced(search)
+  const query = useMemo(
+    () => toQuery(mode, term, filters, quick, sort),
+    [mode, term, filters, quick, sort],
+  )
+  // The page belongs to one query: a new filter or sort starts again from page 1, so the list
+  // never opens on an empty later page.
+  const queryKey = JSON.stringify(query)
+  const [paging, setPaging] = useState({ key: queryKey, page: 1 })
+  const page = paging.key === queryKey ? paging.page : 1
+  const groupsQuery = useLotGroups(query)
+  const groups = groupsQuery.data ?? []
+  const flat = useLots(query, page, lotPageSize, !group)
+  const summary = useLotSummary().data
+  const withLots = groups.filter((g) => g.lots > 0),
+    emptyProducts = groups.filter((g) => g.lots === 0),
+    total = withLots.reduce((n, g) => n + g.lots, 0)
+  const record = (id: string) => products.find((p) => p.id === id)
+  const look = (kind: LookupKind) =>
+    lookups.filter((v) => v.kind === kind).sort((a, b) => a.sort - b.sort)
+  csvRef.current = async () => {
+    if (!total) return false
+    await downloadLotsCsv(query)
+    return true
   }
-  const csv = () => {
-    const rows = lots.map((l) => {
-      const p = data.products.find((p) => p.id === l.productId),
-        rs = receiptsFor(l.id)
-      return {
-        Product: p?.name || '',
-        Variant: p?.variant || '',
-        Segment: p?.segment || '',
-        Lot: l.label,
-        Status: l.status,
-        StatusSummary: lotSummary(l, rs),
-        Category: l.category,
-        EMS: l.ems,
-        POC: l.poc,
-        Stage: l.stage,
-        Mode: l.logisticsMode,
-        LotQty: l.lotQty,
-        Produced: l.freshProductionQty,
-        Rework: l.reworkQty,
-        GRN: totalGrn(rs),
-        Balance: balance(l, rs),
-        RMReadyPercent: Math.round(
-          rmMetrics(
-            l,
-            data.rmBatches.filter((b) => b.lotId === l.id),
-          ).percent,
-        ),
-        PlannedDate: l.plannedDate,
-        CurrentETA: effectiveLotEta(l),
-        Blocker: l.blockerCategory,
-        FollowUp: l.followUpDate,
-        FullGRNDate: fullGrnDate(l, rs),
-        DaysVsPlan: planDelay(l, rs) ?? '',
-        RMToGRNDays:
-          leadTime(
-            l,
-            rs,
-            data.rmBatches.filter((b) => b.lotId === l.id),
-          ) ?? '',
-      }
-    })
-    if (!rows.length) return false
-    return downloadFile(`${mode}-lots-${today()}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
-  }
-  csvRef.current = csv
   const clear = () => {
     setSearch('')
-    setFilters({
-      segment: '',
-      category: '',
-      ems: '',
-      poc: '',
-      status: '',
-      stage: '',
-      mode: '',
-      blocker: '',
-      rm: false,
-      followUp: false,
-    })
+    setFilters(noFilters)
     setQuick('')
   }
   useEffect(() => {
@@ -469,11 +360,30 @@ export default function Production({
     setColumns(mode === 'completed' ? completedCols : defaultCols)
   }, [mode])
   // Searching or filtering expands the matching products so their lots are visible at once.
-  const narrowing = !!search.trim() || !!quick || Object.values(filters).some(Boolean)
-  const matchingProducts = productOrder.map((p) => p.id).join(',')
+  const narrowing = !!term.trim() || !!quick || Object.values(filters).some(Boolean)
+  const matchingProducts = withLots.map((g) => g.product.id).join(',')
   useEffect(() => {
     if (narrowing) setExpanded(matchingProducts ? matchingProducts.split(',') : [])
   }, [narrowing, matchingProducts])
+  const productButtons = (g: LotGroup) => {
+    const product = record(g.product.id)
+    return (
+      <>
+        {product && access.can('editProducts') && (
+          <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
+            Edit
+          </Button>
+        )}
+        {mode === 'active' && access.can('createLots') && (
+          <Button variant="secondary" size="sm" onClick={() => onNewLot(g.product.id)}>
+            <Plus size={14} /> Add lot
+          </Button>
+        )}
+      </>
+    )
+  }
+  const groupName = (g: LotGroup) =>
+    `${g.product.name}${g.product.variant ? ` ${g.product.variant}` : ''}`
   return (
     <div className="space-y-5">
       {mode === 'active' && (
@@ -492,7 +402,7 @@ export default function Production({
                     className={`icon-dot ${card.tone === 'red' ? 'text-rose-500' : card.tone === 'amber' ? 'text-amber-500' : card.tone === 'green' ? 'text-emerald-500' : card.tone === 'blue' ? 'text-sky-500' : 'text-teal-500'}`}
                   />
                 </div>
-                <div className="mt-2 metric-value">{card.value}</div>
+                <div className="mt-2 metric-value">{summary ? summary[card.id] : '—'}</div>
               </button>
             ))}
           </div>
@@ -509,8 +419,7 @@ export default function Production({
               {mode === 'active' ? 'Active production lots' : 'Completed lots'}
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              {lots.length} lots across {productOrder.length} products · Completion is based on full
-              GRN
+              {total} lots across {groups.length} products · Completion is based on full GRN
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -527,7 +436,7 @@ export default function Production({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setExpanded(productOrder.map((p) => p.id))}
+              onClick={() => setExpanded(groups.map((g) => g.product.id))}
               title="Expand all products"
             >
               <ChevronsUpDown size={14} /> Expand all
@@ -566,7 +475,7 @@ export default function Production({
             aria-label="Sort lots"
             className="max-w-40"
             value={sort}
-            onChange={(e) => setSort(e.target.value)}
+            onChange={(e) => setSort(e.target.value as LotSort)}
           >
             <option value="eta-asc">ETA: soonest</option>
             <option value="eta-desc">ETA: latest</option>
@@ -581,18 +490,18 @@ export default function Production({
         </div>
         {filtersOpen && (
           <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-4 sm:grid-cols-4 xl:grid-cols-8 sm:px-5">
-            {(
-              ['segment', 'category', 'ems', 'poc', 'status', 'stage', 'mode', 'blocker'] as const
-            ).map((kind) => (
+            {(Object.keys(filterKinds) as (keyof typeof filterKinds)[]).map((key) => (
               <Select
-                key={kind}
-                aria-label={`Filter by ${kind}`}
-                value={filters[kind]}
-                onChange={(e) => setFilters({ ...filters, [kind]: e.target.value })}
+                key={key}
+                aria-label={`Filter by ${key}`}
+                value={filters[key]}
+                onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}
               >
-                <option value="">{filterPlaceholders[kind]}</option>
-                {look(kind === 'mode' ? 'logistics' : kind).map((v) => (
-                  <option key={v}>{v}</option>
+                <option value="">{filterPlaceholders[key]}</option>
+                {look(filterKinds[key]).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.value}
+                  </option>
                 ))}
               </Select>
             ))}
@@ -636,20 +545,34 @@ export default function Production({
             ))}
           </div>
         )}
-        {lots.length === 0 && emptyProducts.length === 0 ? (
+        {groupsQuery.isPending ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading lots…</p>
+        ) : groupsQuery.isError ? (
+          <div className="p-5">
+            <Empty
+              title="Couldn't load lots"
+              description={groupsQuery.error.message}
+              action={
+                <Button variant="secondary" onClick={() => groupsQuery.refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          </div>
+        ) : !groups.length ? (
           <div className="p-5">
             <Empty
               title={
                 mode === 'completed'
                   ? 'No completed lots yet'
-                  : data.products.length
+                  : products.length
                     ? 'No matching lots'
                     : 'No products yet'
               }
               description={
                 mode === 'completed'
                   ? 'A lot appears here when its GRN receipts equal its positive lot quantity.'
-                  : data.products.length
+                  : products.length
                     ? 'Try clearing filters or add a lot to a product.'
                     : access.can('editProducts')
                       ? 'Add your first product, then add production lots to it.'
@@ -660,7 +583,7 @@ export default function Production({
                   <Button variant="secondary" onClick={clear}>
                     Clear filters
                   </Button>
-                ) : mode === 'active' && !data.products.length && access.can('editProducts') ? (
+                ) : mode === 'active' && !products.length && access.can('editProducts') ? (
                   <Button onClick={onAddProduct}>
                     <Plus size={16} /> Add Product
                   </Button>
@@ -670,79 +593,69 @@ export default function Production({
           </div>
         ) : group ? (
           <div>
-            {productOrder.map((product) => {
-              const pl = lots.filter((l) => l.productId === product.id),
-                open = expanded.includes(product.id),
-                rs = pl.flatMap((l) => receiptsFor(l.id))
+            {groups.map((g) => {
+              const open = expanded.includes(g.product.id)
               return (
-                <div key={product.id} className="border-t border-slate-100 first:border-t-0">
+                <div
+                  key={g.product.id}
+                  role="group"
+                  aria-label={groupName(g)}
+                  className="border-t border-slate-100 first:border-t-0"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 hover:bg-slate-50/60 sm:px-5">
                     <button
                       className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       onClick={() =>
                         setExpanded(
                           open
-                            ? expanded.filter((x) => x !== product.id)
-                            : [...expanded, product.id],
+                            ? expanded.filter((x) => x !== g.product.id)
+                            : [...expanded, g.product.id],
                         )
                       }
                       aria-expanded={open}
                     >
                       {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-sm font-extrabold text-teal-700">
-                        {product.name.slice(0, 1)}
+                        {g.product.name.slice(0, 1)}
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-[#173b3d]">
-                          {product.name}{' '}
-                          {product.variant && (
-                            <span className="font-normal text-slate-500">· {product.variant}</span>
+                          {g.product.name}{' '}
+                          {g.product.variant && (
+                            <span className="font-normal text-slate-500">
+                              · {g.product.variant}
+                            </span>
                           )}
                         </span>
                         <span className="text-xs text-slate-500">
-                          {product.segment} · {pl.length} lots ·{' '}
-                          {mode === 'active'
-                            ? `${pl.filter((l) => l.status === 'Delayed').length} delayed`
-                            : 'completed'}
+                          {g.product.segment.value} · {g.lots} lots ·{' '}
+                          {mode === 'active' ? `${g.delayed} delayed` : 'completed'}
                         </span>
                       </span>
                     </button>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
                       <span title="Total lot quantity">
-                        Qty <b>{quantity(sum(pl.map((l) => l.lotQty)))}</b>
+                        Qty <b>{quantity(g.lotQty)}</b>
                       </span>
                       <span title="Fresh production quantity">
-                        Produced <b>{quantity(sum(pl.map((l) => l.freshProductionQty)))}</b>
+                        Produced <b>{quantity(g.produced)}</b>
                       </span>
                       <span title="Total GRN">
-                        GRN <b>{quantity(totalGrn(rs))}</b>
+                        GRN <b>{quantity(g.grnTotal)}</b>
                       </span>
                       <span title="Remaining balance">
-                        Balance{' '}
-                        <b className="text-[#c46736]">
-                          {quantity(sum(pl.map((l) => balance(l, receiptsFor(l.id)))))}
-                        </b>
+                        Balance <b className="text-[#c46736]">{quantity(g.balance)}</b>
                       </span>
-                      {access.can('editProducts') && (
-                        <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
-                          Edit
-                        </Button>
-                      )}
-                      {mode === 'active' && access.can('createLots') && (
-                        <Button variant="secondary" size="sm" onClick={() => onNewLot(product.id)}>
-                          <Plus size={14} /> Add lot
-                        </Button>
-                      )}
+                      {productButtons(g)}
                     </div>
                   </div>
                   {open &&
-                    (pl.length ? (
-                      <LotTable
-                        lots={pl}
+                    (g.lots ? (
+                      <ProductLots
+                        productId={g.product.id}
+                        query={query}
                         columns={columns}
-                        renderCell={renderCell}
                         onOpenLot={onOpenLot}
-                        data={data}
                       />
                     ) : (
                       <p className="px-5 pb-4 text-xs text-slate-500">
@@ -756,15 +669,21 @@ export default function Production({
           </div>
         ) : (
           <>
-            {lots.length > 0 && (
-              <LotTable
-                lots={lots}
-                columns={columns}
-                renderCell={renderCell}
-                onOpenLot={onOpenLot}
-                data={data}
-                showProduct
-              />
+            {flat.data && flat.data.items.length > 0 && (
+              <>
+                <LotTable
+                  lots={flat.data.items}
+                  columns={columns}
+                  onOpenLot={onOpenLot}
+                  showProduct
+                />
+                <Pager
+                  page={page}
+                  pageSize={lotPageSize}
+                  total={flat.data.total}
+                  onPage={(next) => setPaging({ key: queryKey, page: next })}
+                />
+              </>
             )}
             {emptyProducts.length > 0 && (
               <div className="border-t border-slate-100 px-4 py-4 sm:px-5">
@@ -772,33 +691,20 @@ export default function Production({
                   Products without active lots
                 </h3>
                 <div className="space-y-2">
-                  {emptyProducts.map((product) => (
+                  {emptyProducts.map((g) => (
                     <div
-                      key={product.id}
+                      key={g.product.id}
+                      role="group"
+                      aria-label={groupName(g)}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
                     >
                       <div>
-                        <b className="text-sm text-[#173b3d]">{product.name}</b>
+                        <b className="text-sm text-[#173b3d]">{g.product.name}</b>
                         <span className="ml-2 text-xs text-slate-500">
-                          {[product.variant, product.segment].filter(Boolean).join(' · ')}
+                          {[g.product.variant, g.product.segment.value].filter(Boolean).join(' · ')}
                         </span>
                       </div>
-                      <div className="flex gap-2">
-                        {access.can('editProducts') && (
-                          <Button variant="ghost" size="sm" onClick={() => onEditProduct(product)}>
-                            Edit
-                          </Button>
-                        )}
-                        {access.can('createLots') && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => onNewLot(product.id)}
-                          >
-                            <Plus size={14} /> Add lot
-                          </Button>
-                        )}
-                      </div>
+                      <div className="flex gap-2">{productButtons(g)}</div>
                     </div>
                   ))}
                 </div>
@@ -810,19 +716,43 @@ export default function Production({
     </div>
   )
 }
+
+// One product's matching lots in the grouped view. More than 200 is rare; the flat view pages.
+function ProductLots({
+  productId,
+  query,
+  columns,
+  onOpenLot,
+}: {
+  productId: string
+  query: LotQuery
+  columns: Column[]
+  onOpenLot: (id: string) => void
+}) {
+  const lots = useLots({ ...query, productId }, 1, 200)
+  if (!lots.data) return <p className="px-5 pb-4 text-xs text-slate-500">Loading lots…</p>
+  return (
+    <>
+      <LotTable lots={lots.data.items} columns={columns} onOpenLot={onOpenLot} />
+      {lots.data.total > lots.data.items.length && (
+        <p className="px-5 pb-4 text-xs text-slate-500">
+          Showing {lots.data.items.length} of {lots.data.total} lots. Use the flat view or filters
+          to see the rest.
+        </p>
+      )}
+    </>
+  )
+}
+
 function LotTable({
   lots,
   columns,
-  renderCell,
   onOpenLot,
-  data,
   showProduct = false,
 }: {
-  lots: Lot[]
+  lots: LotRecord[]
   columns: Column[]
-  renderCell: (l: Lot, c: Column) => React.ReactNode
-  onOpenLot: (l: Lot) => void
-  data: DataSet
+  onOpenLot: (id: string) => void
   showProduct?: boolean
 }) {
   return (
@@ -840,12 +770,8 @@ function LotTable({
           </thead>
           <tbody>
             {lots.map((l) => (
-              <tr key={l.id} className="cursor-pointer" onClick={() => onOpenLot(l)}>
-                {showProduct && (
-                  <td className="font-semibold">
-                    {data.products.find((p) => p.id === l.productId)?.name}
-                  </td>
-                )}
+              <tr key={l.id} className="cursor-pointer" onClick={() => onOpenLot(l.id)}>
+                {showProduct && <td className="font-semibold">{l.product.name}</td>}
                 {columns.map((c) => (
                   <td key={c}>{renderCell(l, c)}</td>
                 ))}
@@ -858,56 +784,44 @@ function LotTable({
         </table>
       </div>
       <div className="divide-y divide-slate-100 md:hidden">
-        {lots.map((l) => {
-          const rs = data.grnReceipts.filter((r) => r.lotId === l.id)
-          return (
-            <button key={l.id} onClick={() => onOpenLot(l)} className="w-full p-4 text-left">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-[#173b3d]">{l.label}</span>
-                {statuses(l, rs)}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">{lotSummary(l, rs)}</div>
-              {showProduct && (
-                <div className="mt-1 text-xs text-slate-500">
-                  {data.products.find((p) => p.id === l.productId)?.name}
-                </div>
-              )}
-              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        {lots.map((l) => (
+          <button key={l.id} onClick={() => onOpenLot(l.id)} className="w-full p-4 text-left">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-[#173b3d]">{l.label}</span>
+              {statuses(l)}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">{l.computed.summary}</div>
+            {showProduct && <div className="mt-1 text-xs text-slate-500">{l.product.name}</div>}
+            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <span>
+                Qty <b>{quantity(l.lotQty)}</b>
+              </span>
+              <span>
+                GRN <b>{quantity(l.computed.grnTotal)}</b>
+              </span>
+              <span>
+                Balance <b>{quantity(l.computed.balance)}</b>
+              </span>
+            </div>
+            {l.computed.completed ? (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 text-xs text-slate-500">
+                <span>Full GRN {dateLabel(l.computed.fullGrnDate ?? '')}</span>
                 <span>
-                  Qty <b>{quantity(l.lotQty)}</b>
-                </span>
-                <span>
-                  GRN <b>{quantity(totalGrn(rs))}</b>
-                </span>
-                <span>
-                  Balance <b>{quantity(balance(l, rs))}</b>
+                  {signedDays(l.computed.planDelay)} vs plan · RM→GRN {l.computed.leadTime ?? '—'}{' '}
+                  days
                 </span>
               </div>
-              {completed(l, rs) ? (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 text-xs text-slate-500">
-                  <span>Full GRN {dateLabel(fullGrnDate(l, rs))}</span>
-                  <span>
-                    {signedDays(planDelay(l, rs))} vs plan · RM→GRN{' '}
-                    {leadTime(
-                      l,
-                      rs,
-                      data.rmBatches.filter((b) => b.lotId === l.id),
-                    ) ?? '—'}{' '}
-                    days
-                  </span>
-                </div>
-              ) : (
-                <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                  <span>{l.stage}</span>
-                  <span>ETA {dateLabel(effectiveLotEta(l))}</span>
-                </div>
-              )}
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full bg-[#d96d35]" style={{ width: `${grnProgress(l, rs)}%` }} />
+            ) : (
+              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                <span>{l.stage}</span>
+                <span>ETA {dateLabel(effectiveLotEta(l))}</span>
               </div>
-            </button>
-          )
-        })}
+            )}
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full bg-[#d96d35]" style={{ width: `${l.computed.grnPercent}%` }} />
+            </div>
+          </button>
+        ))}
       </div>
     </>
   )

@@ -123,7 +123,12 @@ describe('GET /shipments/summary', () => {
       revised: 1,
       arrived: 1,
       openUnits: 605,
+      vessels: expect.any(Array),
     })
+    const all = (await w.viewer.agent.get('/api/v1/shipments?pageSize=200')).body.items
+    expect(res.body.vessels).toEqual(
+      [...new Set(all.map((s: { vessel: string }) => s.vessel))].sort(),
+    )
   })
 })
 

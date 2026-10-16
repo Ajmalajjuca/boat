@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Activity,
   Archive,
@@ -9,7 +8,6 @@ import {
   CalendarCheck,
   Check,
   CircleAlert,
-  Database,
   Download,
   Factory,
   Menu,
@@ -19,26 +17,37 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { db, getData } from './db'
-import type { DataSet, LookupValue, Lot, Product, Shipment } from './models'
-import { dataKeys, productChoices, stamp } from './models'
-import { completed, quantity, today } from './calculations'
-import {
-  downloadFile,
-  exportData,
-  importData,
-  initialize,
-  parseImport,
-  saveProduct,
-  deleteProduct,
-} from './repository'
+import type { DataSet, Product } from '@boat/domain/models'
+import { dataKeys, productChoices } from '@boat/domain/models'
+import { quantity } from '@boat/domain/calculations'
+import { parseImport } from '@boat/domain/backup'
 import Production from './Production'
 import MonthEnd from './MonthEnd'
-import LotDrawer from './LotDrawer'
-import Shipments, { newShipment, ShipmentDrawer } from './Shipments'
-import Settings, { performReset } from './Settings'
-import { ChangePinModal, ProfileCard, SignIn } from './Profiles'
-import { AccessContext, can, setAccess, storedSession, storeSession } from './access'
+import LotDrawer, { type LotTarget } from './LotDrawer'
+import Shipments, { ShipmentDrawer, type ShipmentTarget } from './Shipments'
+import Settings from './Settings'
+import type { MePayload } from '@boat/domain/api'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './api/queryClient'
+import { AuthProvider, useAuth } from './auth/AuthProvider'
+import { ChangePassword } from './auth/ChangePassword'
+import { ProfileCard } from './auth/ProfileCard'
+import { SignIn } from './auth/SignIn'
+import { AcceptInvite, ResetPassword } from './auth/TokenPages'
+import { AccessContext, accessFrom, can } from './access'
+import type { LookupItem } from '@boat/domain/api'
+import { ConflictError } from './api/client'
+import { type ProductRecord, toProduct, values } from './api/mappers'
+import { deleteProduct, saveProduct } from './api/products'
+import { exportBackup, importBackup, resetAllData } from './api/admin'
+import {
+  refreshEverything,
+  refreshProducts,
+  useCompletedCount,
+  useLookups,
+  useProducts,
+} from './api/queries'
+import { newLot, newProduct, newShipment } from './drafts'
 import {
   Badge,
   Button,
@@ -46,13 +55,14 @@ import {
   Field,
   FormError,
   Input,
+  ConflictBanner,
+  type CsvExport,
   Modal,
   SearchSelect,
   useFormErrors,
   type Run,
 } from './ui'
-import { validateProduct } from './validation'
-import { defaultLookup, newLot } from './demo'
+import { validateProduct } from '@boat/domain/validation'
 
 type Screen = 'production' | 'completed' | 'monthEnd' | 'shipments' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -73,24 +83,56 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
     title: 'Finished Goods',
     description: 'Track incoming shipments, revised ETAs, and warehouse arrivals.',
   },
-  settings: { title: 'Settings', description: 'Manage operational values and local browser data.' },
+  settings: { title: 'Settings', description: 'Manage operational values, users and data.' },
 }
-function productBlank(lookups: LookupValue[]): Product {
-  return stamp({ name: '', variant: '', segment: defaultLookup(lookups, 'segment', 'PA / TWS') })
+const activityKey = 'boat.lastActivity'
+
+function Loading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6]">
+      <div className="flex items-center gap-3 text-sm font-semibold text-[#173b3d]">
+        <Activity className="animate-pulse text-[#d96d35]" /> Loading...
+      </div>
+    </div>
+  )
 }
+
 export default function App() {
-  const data = useLiveQuery(getData, [])
-  const users = useLiveQuery(() => db.users.toArray(), []),
-    lockSetting = useLiveQuery(() => db.localSettings.get('lockMinutes'), [])
-  const [sessionId, setSessionId] = useState(storedSession),
-    [pinOpen, setPinOpen] = useState(false)
-  const [dbError, setDbError] = useState(''),
-    [screen, setScreen] = useState<Screen>('production'),
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
+    </QueryClientProvider>
+  )
+}
+
+// The invite and reset pages are chosen by path; everything else needs a session.
+function Root() {
+  const auth = useAuth()
+  const [path, setPath] = useState(location.pathname)
+  const home = () => {
+    history.replaceState(null, '', '/')
+    setPath('/')
+  }
+  if (path === '/invite') return <AcceptInvite onDone={home} />
+  if (path === '/reset-password') return <ResetPassword onDone={home} />
+  if (auth.me === undefined) return <Loading />
+  if (!auth.me) return <SignIn />
+  // A new key per user, so nothing from the last user's screens survives.
+  return <Workspace key={auth.me.user.id} me={auth.me} />
+}
+
+function Workspace({ me }: { me: MePayload }) {
+  const auth = useAuth()
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [screen, setScreen] = useState<Screen>('production'),
     [menuOpen, setMenuOpen] = useState(false)
-  const [selectedLot, setSelectedLot] = useState<Lot | null>(null),
-    [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
-  const [product, setProduct] = useState<Product | null>(null),
-    [productBase, setProductBase] = useState('')
+  const [lotTarget, setLotTarget] = useState<LotTarget | null>(null),
+    [shipmentTarget, setShipmentTarget] = useState<ShipmentTarget | null>(null)
+  const [product, setProduct] = useState<(Product & { version?: number }) | null>(null),
+    [productBase, setProductBase] = useState(''),
+    [productConflict, setProductConflict] = useState<ProductRecord | null>(null)
   const [addLotOpen, setAddLotOpen] = useState(false),
     [addLotProductId, setAddLotProductId] = useState('')
   const [importOpen, setImportOpen] = useState(false),
@@ -98,56 +140,51 @@ export default function App() {
     [importPreview, setImportPreview] = useState<DataSet | null>(null),
     [importFile, setImportFile] = useState(''),
     [importMode, setImportMode] = useState<'merge' | 'replace'>('merge'),
-    [importError, setImportError] = useState('')
+    [importError, setImportError] = useState(''),
+    [resetOpen, setResetOpen] = useState(false),
+    [resetText, setResetText] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('idle'),
     [message, setMessage] = useState('')
-  const csvRef = useRef<(() => boolean) | null>(null),
+  const csvRef = useRef<CsvExport | null>(null),
     busy = useRef(false),
     productForm = useFormErrors()
-  // Roles are on once a profile exists; until then everyone has full access, as before.
-  const enabled = !!users?.length,
-    user = (enabled && users?.find((u) => u.id === sessionId)) || null,
-    lockMinutes = Number(lockSetting?.value ?? 15)
-  const access = useMemo(() => ({ enabled, user }), [enabled, user])
-  setAccess(access)
-  const signIn = (id: string) => {
-    setSessionId(id)
-    storeSession(id)
-  }
-  // Closes every editor so the next profile starts from a clean screen.
-  const lock = (notice = '') => {
-    setSelectedLot(null)
-    setSelectedShipment(null)
-    setProduct(null)
-    setAddLotOpen(false)
-    setImportOpen(false)
-    setPinOpen(false)
-    setMenuOpen(false)
-    signIn('')
-    setSaveState('idle')
-    setMessage(notice)
-  }
-  // Idle lock: no pointer or key activity for the chosen minutes returns to the profile screen.
+  const access = useMemo(() => accessFrom(me), [me])
+  const lookups: LookupItem[] = useLookups().data ?? [],
+    products = useProducts().data ?? [],
+    completedCount = useCompletedCount().data
+  // Idle sign-out: no pointer or key activity for the workspace's idle timeout ends the session.
+  // Tabs share one session cookie, so activity in any tab counts: each tab records its last
+  // activity in localStorage (a timestamp, not a record) and checks the latest of all tabs.
+  const idleMinutes = me.idleTimeoutMinutes
   useEffect(() => {
-    if (!user || !lockMinutes) return
     let last = Date.now()
     const touch = () => {
       last = Date.now()
+      try {
+        localStorage.setItem(activityKey, String(last))
+      } catch {
+        // Without storage each tab times out on its own activity.
+      }
     }
+    const lastAnywhere = () => {
+      try {
+        return Math.max(last, Number(localStorage.getItem(activityKey)) || 0)
+      } catch {
+        return last
+      }
+    }
+    touch()
     const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
     events.forEach((name) => window.addEventListener(name, touch, { passive: true }))
     const timer = setInterval(() => {
-      if (Date.now() - last > lockMinutes * 60_000)
-        lock(`Locked after ${lockMinutes} minutes without activity.`)
+      if (Date.now() - lastAnywhere() > idleMinutes * 60_000)
+        void auth.signOut(`Signed out after ${idleMinutes} minutes without activity.`)
     }, 15_000)
     return () => {
       events.forEach((name) => window.removeEventListener(name, touch))
       clearInterval(timer)
     }
-  }, [user?.id, lockMinutes])
-  useEffect(() => {
-    db.open().catch((e) => setDbError(e instanceof Error ? e.message : 'Could not open IndexedDB.'))
-  }, [])
+  }, [idleMinutes, auth.signOut])
   // Success messages fade; errors stay until dismissed or the next action.
   useEffect(() => {
     if (!message || saveState === 'failed') return
@@ -174,9 +211,10 @@ export default function App() {
       busy.current = false
     }
   }
-  const openProduct = (value?: Product) => {
-    const next = value || productBlank(data?.lookupValues || [])
+  const openProduct = (value?: ProductRecord) => {
+    const next = value || newProduct(lookups)
     productForm.reset()
+    setProductConflict(null)
     setProduct(next)
     setProductBase(JSON.stringify(next))
   }
@@ -189,33 +227,41 @@ export default function App() {
       return
     setProduct(null)
   }
+  // A 409 that carries the server's record is a stale version; other 409s are rules to explain.
+  const productFailed = (e: unknown) => {
+    if (e instanceof ConflictError && e.current)
+      setProductConflict(toProduct(e.current as Parameters<typeof toProduct>[0]))
+    else productForm.fail(e)
+  }
   const saveProductForm = async (e: FormEvent) => {
     e.preventDefault()
     if (!product || !productForm.check(validateProduct(product))) return
-    if (await run(() => saveProduct(product), productForm.fail)) {
+    const saved = await run(async () => {
+      await saveProduct(product, lookups)
+      await refreshProducts()
+    }, productFailed)
+    if (saved) {
       setProduct(null)
       setMessage(`Product ${product.name.trim()} saved.`)
     }
   }
   const removeProduct = async () => {
     if (!product) return
-    const lots = data?.lots.filter((l) => l.productId === product.id) || []
     if (
       !window.confirm(
-        `Delete ${product.name} and its ${lots.length} lots, RM batches, GRN receipts, and lot history? Products used in shipment lines cannot be deleted.`,
+        `Delete ${product.name} and all its lots, RM batches, GRN receipts, and lot history? Products used in shipment lines cannot be deleted.`,
       )
     )
       return
-    if (await run(() => deleteProduct(product.id), productForm.fail)) setProduct(null)
+    const removed = await run(async () => {
+      await deleteProduct(product.id)
+      await refreshProducts()
+    }, productForm.fail)
+    if (removed) setProduct(null)
   }
   const exportJson = async () => {
     try {
-      const payload = await exportData()
-      downloadFile(
-        `control-tower-backup-${today()}.json`,
-        JSON.stringify(payload, null, 2),
-        'application/json',
-      )
+      await exportBackup()
       setMessage('JSON backup downloaded.')
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Export failed.')
@@ -254,29 +300,41 @@ export default function App() {
       )
     )
       return
+    let result: Awaited<ReturnType<typeof importBackup>> | undefined
     const ok = await run(
-      () => importData(importRaw, importMode),
+      async () => {
+        result = await importBackup(importRaw, importMode)
+        await refreshEverything()
+      },
       (e) => setImportError(e instanceof Error ? e.message : 'Import failed.'),
     )
-    if (ok) {
+    if (ok && result) {
+      const { imported } = result
       setImportOpen(false)
       setMessage(
-        `${importMode === 'merge' ? 'Merged' : 'Replaced'} ${importPreview?.products.length || 0} products, ${importPreview?.lots.length || 0} lots, and ${importPreview?.shipments.length || 0} shipments.`,
+        `${importMode === 'merge' ? 'Merged' : 'Replaced'} ${imported.products} products, ${imported.lots} lots, and ${imported.shipments} shipments.`,
       )
     }
   }
-  const reset = () =>
-    performReset(run, () => {
-      setScreen('production')
-      setSelectedLot(null)
-      setSelectedShipment(null)
+  // Reset soft-deletes every business record once the user has typed the phrase.
+  const resetPhrase = 'RESET ALL DATA'
+  const reset = async () => {
+    let result: Awaited<ReturnType<typeof resetAllData>> | undefined
+    const ok = await run(async () => {
+      result = await resetAllData(resetText)
+      await refreshEverything()
     })
-  const selectedLotLive =
-    selectedLot && (data?.lots.find((l) => l.id === selectedLot.id) || selectedLot)
-  const selectedShipmentLive =
-    selectedShipment &&
-    (data?.shipments.find((s) => s.id === selectedShipment.id) || selectedShipment)
-  const initialized = !!data?.settings.find((s) => s.key === 'initialized')
+    if (!ok || !result) return
+    const { deleted } = result
+    setResetOpen(false)
+    setResetText('')
+    setScreen('production')
+    setLotTarget(null)
+    setShipmentTarget(null)
+    setMessage(
+      `Deleted ${deleted.products} products, ${deleted.lots} lots and ${deleted.shipments} shipments.`,
+    )
+  }
   const navItems: [Screen, typeof Factory][] = [
     ['production', Factory],
     ['completed', Archive],
@@ -284,100 +342,6 @@ export default function App() {
     ['shipments', Ship],
     ['settings', Settings2],
   ]
-  if (dbError)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6] p-5">
-        <Card className="max-w-md p-6">
-          <CircleAlert className="mb-3 text-rose-600" />
-          <h1 className="text-lg font-bold">Local database unavailable</h1>
-          <p className="mt-2 text-sm text-slate-600">{dbError}</p>
-          <p className="mt-3 text-xs text-slate-500">
-            Enable browser storage and reload this page.
-          </p>
-        </Card>
-      </div>
-    )
-  if (!data || !users)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6]">
-        <div className="flex items-center gap-3 text-sm font-semibold text-[#173b3d]">
-          <Activity className="animate-pulse text-[#d96d35]" /> Loading...
-        </div>
-      </div>
-    )
-  if (enabled && !user)
-    return (
-      <>
-        <SignIn
-          users={users}
-          onSignIn={(u) => {
-            signIn(u.id)
-            setMessage('')
-          }}
-        />
-        {message && (
-          <div
-            role="status"
-            className="fixed left-1/2 top-4 z-[90] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800 shadow-xl"
-          >
-            {message}
-          </div>
-        )}
-      </>
-    )
-  if (!initialized)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#edf2f1] p-5">
-        <Card className="w-full max-w-xl overflow-hidden">
-          <div className="bg-[#123b3e] p-8 text-white">
-            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#d96d35]">
-              <Box size={25} />
-            </div>
-            <div className="text-xs font-bold uppercase tracking-[.22em] text-teal-200">
-              Supply chain workspace
-            </div>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Your app starts here.</h1>
-            <p className="mt-3 text-sm leading-6 text-teal-100">
-              Track production lots, material shortages, partial GRN receipts, and finished goods
-              shipments in one local workspace.
-            </p>
-          </div>
-          <div className="space-y-3 p-6 sm:p-8">
-            {!can('manageData') ? (
-              <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                This workspace is empty. Ask an admin to load data, then sign in again.{' '}
-                <button className="font-semibold text-teal-800 underline" onClick={() => lock()}>
-                  Switch user
-                </button>
-              </p>
-            ) : (
-              <>
-                <Button
-                  className="w-full justify-start"
-                  size="lg"
-                  onClick={() => run(() => initialize('demo'))}
-                >
-                  <Plus size={17} /> Load fictional demo data
-                </Button>
-                <Button
-                  className="w-full justify-start"
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => run(() => initialize('empty'))}
-                >
-                  <Database size={17} /> Start with an empty workspace
-                </Button>
-              </>
-            )}
-            <p className="pt-2 text-xs leading-5 text-slate-500">
-              Data stays in this browser profile. You can export a JSON backup from Settings at any
-              time.
-            </p>
-            {message && <p className="text-sm text-rose-700">{message}</p>}
-          </div>
-        </Card>
-      </div>
-    )
   return (
     <AccessContext.Provider value={access}>
       <div className="min-h-screen bg-[#f5f7f6] lg:flex">
@@ -426,14 +390,7 @@ export default function App() {
                     <span className="flex-1">{screenInfo[id].title}</span>
                     {id === 'completed' && (
                       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">
-                        {
-                          data.lots.filter((l) =>
-                            completed(
-                              l,
-                              data.grnReceipts.filter((r) => r.lotId === l.id),
-                            ),
-                          ).length
-                        }
+                        {completedCount ?? '…'}
                       </span>
                     )}
                   </button>
@@ -442,20 +399,14 @@ export default function App() {
             </div>
             <div className="mt-auto space-y-3 px-5 pb-6">
               <ProfileCard
-                user={user}
-                onLock={() => lock()}
-                onChangePin={() => {
-                  setPinOpen(true)
+                onChangePassword={() => {
+                  setPasswordOpen(true)
                   setMenuOpen(false)
-                }}
-                onSetUp={() => {
-                  setScreen('settings')
-                  setMenuOpen(false)
-                  csvRef.current = null
                 }}
               />
               <div className="flex items-center gap-2 px-1 text-[11px] text-teal-100/70">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" /> Data stored in this browser
+                <span className="h-2 w-2 rounded-full bg-emerald-400" /> Records shared by everyone
+                signed in
               </div>
             </div>
           </div>
@@ -495,16 +446,16 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-2">
                 {screen === 'production' || screen === 'completed' ? (
                   <>
-                    {can('editProducts') && (
+                    {can('editProducts', access) && (
                       <Button onClick={() => openProduct()}>
                         <Plus size={16} /> Add Product
                       </Button>
                     )}
-                    {data.products.length > 0 && can('createLots') && (
+                    {products.length > 0 && can('createLots', access) && (
                       <Button
                         variant="secondary"
                         onClick={() => {
-                          setAddLotProductId(data.products[0].id)
+                          setAddLotProductId(products[0].id)
                           setAddLotOpen(true)
                         }}
                       >
@@ -512,18 +463,18 @@ export default function App() {
                       </Button>
                     )}
                   </>
-                ) : screen === 'shipments' && can('editShipments') ? (
-                  <Button onClick={() => setSelectedShipment(newShipment(data.lookupValues))}>
+                ) : screen === 'shipments' && can('editShipments', access) ? (
+                  <Button onClick={() => setShipmentTarget({ draft: newShipment(lookups) })}>
                     <Plus size={16} /> Add Shipment
                   </Button>
                 ) : null}
-                {can('manageData') && (
+                {can('manageData', access) && (
                   <Button variant="secondary" size="sm" onClick={openImport}>
                     <Upload size={15} /> <span className="hidden sm:inline">Import JSON</span>
                     <span className="sm:hidden">Import</span>
                   </Button>
                 )}
-                {can('exportBackup') && (
+                {can('exportBackup', access) && (
                   <Button variant="secondary" size="sm" onClick={exportJson}>
                     <Download size={15} /> <span className="hidden sm:inline">Export JSON</span>
                     <span className="sm:hidden">Export</span>
@@ -533,10 +484,16 @@ export default function App() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => {
-                      if (csvRef.current && !csvRef.current()) {
-                        setSaveState('idle')
-                        setMessage('Nothing to export: the current view has no rows.')
+                    onClick={async () => {
+                      if (!csvRef.current) return
+                      try {
+                        if (!(await csvRef.current())) {
+                          setSaveState('idle')
+                          setMessage('Nothing to export: the current view has no rows.')
+                        }
+                      } catch (e) {
+                        setSaveState('failed')
+                        setMessage(e instanceof Error ? e.message : 'Export failed.')
                       }
                     }}
                   >
@@ -562,7 +519,7 @@ export default function App() {
                     ? 'Saved'
                     : saveState === 'failed'
                       ? 'Save failed'
-                      : 'Local data'}
+                      : 'Shared data'}
               </div>
             </div>
             {message &&
@@ -589,31 +546,29 @@ export default function App() {
               )}
             {(screen === 'production' || screen === 'completed') && (
               <Production
-                data={data}
                 mode={screen === 'production' ? 'active' : 'completed'}
-                onOpenLot={setSelectedLot}
-                onNewLot={(productId) => setSelectedLot(newLot(productId, data.lookupValues))}
+                onOpenLot={(id) => setLotTarget({ id })}
+                onNewLot={(productId) => setLotTarget({ draft: newLot(productId, lookups) })}
                 onEditProduct={openProduct}
                 onAddProduct={() => openProduct()}
                 csvRef={csvRef}
               />
             )}
             {screen === 'monthEnd' && (
-              <MonthEnd data={data} onOpenLot={setSelectedLot} csvRef={csvRef} />
+              <MonthEnd onOpenLot={(id) => setLotTarget({ id })} csvRef={csvRef} />
             )}
             {screen === 'shipments' && (
-              <Shipments data={data} onOpen={setSelectedShipment} csvRef={csvRef} />
+              <Shipments onOpen={(id) => setShipmentTarget({ id })} csvRef={csvRef} />
             )}
             {screen === 'settings' && (
               <Settings
-                data={data}
                 run={run}
                 onImport={openImport}
                 onExport={exportJson}
-                onReset={reset}
-                users={users}
-                lockMinutes={lockMinutes}
-                onSignIn={signIn}
+                onReset={() => {
+                  setResetText('')
+                  setResetOpen(true)
+                }}
                 onMessage={(text) => {
                   setSaveState('idle')
                   setMessage(text)
@@ -622,21 +577,31 @@ export default function App() {
             )}
           </div>
         </main>
-        {selectedLotLive && (
+        {lotTarget && (
           <LotDrawer
-            key={selectedLotLive.id}
-            lot={selectedLotLive}
-            data={data}
-            onClose={() => setSelectedLot(null)}
+            key={'id' in lotTarget ? lotTarget.id : 'new'}
+            target={lotTarget}
+            onClose={() => setLotTarget(null)}
+            onOpen={(id) => setLotTarget({ id })}
+            onGone={() => {
+              setLotTarget(null)
+              setSaveState('idle')
+              setMessage('This lot was deleted.')
+            }}
             run={run}
           />
         )}
-        {selectedShipmentLive && (
+        {shipmentTarget && (
           <ShipmentDrawer
-            key={selectedShipmentLive.id}
-            shipment={selectedShipmentLive}
-            data={data}
-            onClose={() => setSelectedShipment(null)}
+            key={'id' in shipmentTarget ? shipmentTarget.id : 'new'}
+            target={shipmentTarget}
+            onClose={() => setShipmentTarget(null)}
+            onOpen={(id) => setShipmentTarget({ id })}
+            onGone={() => {
+              setShipmentTarget(null)
+              setSaveState('idle')
+              setMessage('This shipment was deleted.')
+            }}
             run={run}
           />
         )}
@@ -645,14 +610,22 @@ export default function App() {
           onOpenChange={(v) => {
             if (!v) closeProduct()
           }}
-          title={
-            product && data.products.some((p) => p.id === product.id)
-              ? 'Edit product'
-              : 'Add product'
-          }
+          title={product?.version === undefined ? 'Add product' : 'Edit product'}
         >
           {product && (
             <form onSubmit={saveProductForm} noValidate className="space-y-4">
+              {productConflict && (
+                <ConflictBanner
+                  record="product"
+                  onReload={() => {
+                    setProduct(productConflict)
+                    setProductBase(JSON.stringify(productConflict))
+                    setProductConflict(null)
+                    productForm.reset()
+                  }}
+                  onDismiss={() => setProductConflict(null)}
+                />
+              )}
               <FormError message={productForm.errors.form} />
               <Field label="Product name" required error={productForm.errors.name}>
                 <Input
@@ -678,10 +651,7 @@ export default function App() {
               <Field label="Segment" required error={productForm.errors.segment}>
                 <SearchSelect
                   value={product.segment}
-                  options={data.lookupValues
-                    .filter((v) => v.kind === 'segment')
-                    .sort((a, b) => a.sort - b.sort)
-                    .map((v) => v.value)}
+                  options={values(lookups, 'segment')}
                   onChange={(v) => {
                     setProduct({ ...product, segment: v })
                     productForm.clear('segment')
@@ -690,7 +660,7 @@ export default function App() {
               </Field>
               <div className="flex items-center justify-between pt-2">
                 <div>
-                  {data.products.some((p) => p.id === product.id) && can('deleteProducts') && (
+                  {product.version !== undefined && can('deleteProducts', access) && (
                     <Button type="button" variant="danger" size="sm" onClick={removeProduct}>
                       Delete product
                     </Button>
@@ -711,7 +681,7 @@ export default function App() {
             <Field label="Product">
               <SearchSelect
                 value={addLotProductId}
-                options={productChoices(data.products)}
+                options={productChoices(products)}
                 onChange={setAddLotProductId}
               />
             </Field>
@@ -723,7 +693,7 @@ export default function App() {
                 disabled={!addLotProductId}
                 onClick={() => {
                   setAddLotOpen(false)
-                  setSelectedLot(newLot(addLotProductId, data.lookupValues))
+                  setLotTarget({ draft: newLot(addLotProductId, lookups) })
                 }}
               >
                 Continue to lot details
@@ -805,17 +775,33 @@ export default function App() {
             </div>
           </div>
         </Modal>
-        {user && (
-          <ChangePinModal
-            user={user}
-            open={pinOpen}
-            onClose={() => setPinOpen(false)}
-            onDone={() => {
-              setSaveState('idle')
-              setMessage('PIN updated.')
-            }}
-          />
-        )}
+        <Modal open={resetOpen} onOpenChange={setResetOpen} title="Reset all data">
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Deletes every product, lot, receipt and shipment for everyone. Users, dropdown values
+              and settings stay. Export a JSON backup first if you may need the records again.
+            </p>
+            <Field label={`Type ${resetPhrase} to confirm`}>
+              <Input value={resetText} onChange={(e) => setResetText(e.target.value)} />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setResetOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" disabled={resetText !== resetPhrase} onClick={reset}>
+                Reset all data
+              </Button>
+            </div>
+          </div>
+        </Modal>
+        <ChangePassword
+          open={passwordOpen}
+          onClose={() => setPasswordOpen(false)}
+          onDone={() => {
+            setSaveState('idle')
+            setMessage('Password changed.')
+          }}
+        />
       </div>
     </AccessContext.Provider>
   )

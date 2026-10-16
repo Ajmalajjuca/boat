@@ -1,71 +1,43 @@
-import { useMemo, useState, type MutableRefObject } from 'react'
-import type { DataSet, Lot } from './models'
-import {
-  dateLabel,
-  effectiveLotEta,
-  lotSummary,
-  monthLabel,
-  monthOf,
-  monthSummary,
-  quantity,
-  today,
-} from './calculations'
-import { downloadFile, toCsv } from './repository'
-import { Card, Empty, Select } from './ui'
+import { useState, type MutableRefObject } from 'react'
+import type { LotProduct } from '@boat/domain/api'
+import { dateLabel, monthLabel, monthOf, quantity, today } from '@boat/domain/calculations'
+import { downloadMonthEndCsv } from './api/reports'
+import { useMonthEnd, useMonths } from './api/queries'
+import { Button, Card, Empty, Select, type CsvExport } from './ui'
 
 type Props = {
-  data: DataSet
-  onOpenLot: (lot: Lot) => void
-  csvRef: MutableRefObject<(() => boolean) | null>
+  onOpenLot: (id: string) => void
+  csvRef: MutableRefObject<CsvExport | null>
 }
-export default function MonthEnd({ data, onOpenLot, csvRef }: Props) {
+const productName = (p: LotProduct) => `${p.name}${p.variant ? ` · ${p.variant}` : ''}`
+
+export default function MonthEnd({ onOpenLot, csvRef }: Props) {
   const current = monthOf(today())
-  const months = useMemo(
-    () =>
-      [
-        ...new Set([
-          current,
-          ...data.lots.map((l) => monthOf(l.plannedDate)),
-          ...data.grnReceipts.map((r) => monthOf(r.date)),
-        ]),
-      ]
-        .filter(Boolean)
-        .sort()
-        .reverse(),
-    [data, current],
-  )
+  const months = useMonths().data ?? [current]
   const [month, setMonth] = useState(current)
-  const summary = useMemo(() => monthSummary(data.lots, data.grnReceipts, month), [data, month])
-  const product = (id: string) => data.products.find((p) => p.id === id)
-  const productName = (id: string) => {
-    const p = product(id)
-    return p ? `${p.name}${p.variant ? ` · ${p.variant}` : ''}` : 'Unknown product'
+  const reportQuery = useMonthEnd(month),
+    report = reportQuery.data
+  csvRef.current = async () => {
+    if (!report?.lots.length) return false
+    await downloadMonthEndCsv(month)
+    return true
   }
-  const inProgress = month === current
-  const short = summary.lots.filter((row) => row.shortfall > 0)
-  const receiptsFor = (id: string) => data.grnReceipts.filter((r) => r.lotId === id)
-  csvRef.current = () =>
-    summary.lots.length > 0 &&
-    downloadFile(
-      `month-end-${month}.csv`,
-      toCsv(
-        summary.lots.map((row) => ({
-          Month: month,
-          Product: product(row.lot.productId)?.name || '',
-          Variant: product(row.lot.productId)?.variant || '',
-          Segment: product(row.lot.productId)?.segment || '',
-          Lot: row.lot.label,
-          PlannedDate: row.lot.plannedDate,
-          PlannedQty: row.planned,
-          ReceivedByMonthEnd: row.received,
-          Shortfall: row.shortfall,
-          Blocker: row.lot.blockerCategory,
-          BlockerDescription: row.lot.blockerDescription,
-          StatusToday: lotSummary(row.lot, receiptsFor(row.lot.id)),
-        })),
-      ),
-      'text/csv;charset=utf-8',
+  if (reportQuery.isError && !report)
+    return (
+      <Empty
+        title="Couldn't load the month-end summary"
+        description={reportQuery.error.message}
+        action={
+          <Button variant="secondary" onClick={() => reportQuery.refetch()}>
+            Try again
+          </Button>
+        }
+      />
     )
+  if (!report) return <Empty title="Loading month-end summary..." description="" />
+  const summary = report,
+    inProgress = report.inProgress
+  const short = summary.lots.filter((row) => row.shortfall > 0)
   const cards = [
     ['Planned units', quantity(summary.planned), 'Lot quantity of lots planned for this month.'],
     [
@@ -156,9 +128,9 @@ export default function MonthEnd({ data, onOpenLot, csvRef }: Props) {
                   {summary.products.map((row) => {
                     const percent = row.planned ? Math.round((row.received / row.planned) * 100) : 0
                     return (
-                      <tr key={row.productId}>
-                        <td className="font-bold text-[#193e40]">{productName(row.productId)}</td>
-                        <td>{product(row.productId)?.segment || '—'}</td>
+                      <tr key={row.product.id}>
+                        <td className="font-bold text-[#193e40]">{productName(row.product)}</td>
+                        <td>{row.product.segment.value || '—'}</td>
                         <td>{row.lots}</td>
                         <td>{quantity(row.planned)}</td>
                         <td className="font-semibold">{quantity(row.received)}</td>
@@ -213,24 +185,26 @@ export default function MonthEnd({ data, onOpenLot, csvRef }: Props) {
                       <tr
                         key={row.lot.id}
                         className="cursor-pointer"
-                        onClick={() => onOpenLot(row.lot)}
+                        onClick={() => onOpenLot(row.lot.id)}
                       >
                         <td className="font-bold text-[#193e40]">{row.lot.label}</td>
-                        <td>{productName(row.lot.productId)}</td>
-                        <td>{dateLabel(row.lot.plannedDate)}</td>
-                        <td>{dateLabel(effectiveLotEta(row.lot))}</td>
+                        <td>{productName(row.lot.product)}</td>
+                        <td>{dateLabel(row.lot.plannedDate ?? '')}</td>
+                        <td>{dateLabel(row.lot.eta ?? '')}</td>
                         <td>{quantity(row.planned)}</td>
                         <td>{quantity(row.received)}</td>
                         <td className="font-bold text-[#bd5e2d]">{quantity(row.shortfall)}</td>
                         <td>
                           <span className="block min-w-56 whitespace-normal text-xs text-slate-600">
-                            {lotSummary(row.lot, receiptsFor(row.lot.id))}
+                            {row.statusToday}
                           </span>
                         </td>
                         <td>
                           <span className="block min-w-48 whitespace-normal text-xs text-slate-600">
                             {row.lot.blockerDescription ||
-                              (row.lot.blockerCategory !== 'None' && row.lot.blockerCategory) ||
+                              (row.lot.blocker &&
+                                row.lot.blocker.value !== 'None' &&
+                                row.lot.blocker.value) ||
                               '—'}
                           </span>
                         </td>
