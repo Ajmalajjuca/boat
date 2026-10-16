@@ -5,11 +5,11 @@ import {
   deniedMessage,
   lotEditDenial,
   PermissionError,
-  roleCan,
   type Action,
   type LotAccess,
 } from '@boat/domain/permissions'
-import type { Lot, UserProfile } from './models'
+import type { MePayload } from '@boat/domain/api'
+import type { Lot, Role } from './models'
 
 export {
   actionVerbs,
@@ -21,25 +21,34 @@ export {
   type LotAccess,
 } from '@boat/domain/permissions'
 
-// UI role modes. They prevent accidental changes on a shared browser; they are not a security
-// boundary, because anyone with developer tools can edit IndexedDB directly.
+// The signed-in user and what their role allows, from GET /auth/me. Hiding controls is a
+// convenience: the API checks every request itself.
+export type AccessUser = { id: string; name: string; email: string; role: Role; poc: string }
+export type AccessState = { user: AccessUser | null; actions: Action[] }
+const signedOut: AccessState = { user: null, actions: [] }
+export const accessFrom = (me: MePayload): AccessState => ({
+  user: {
+    id: me.user.id,
+    name: me.user.name,
+    email: me.user.email,
+    role: me.user.role,
+    poc: me.user.poc?.value ?? '',
+  },
+  actions: me.allowedActions,
+})
 
-// enabled is false until the first profile is created; the app then works as before.
-export type AccessState = { enabled: boolean; user: UserProfile | null }
-const openAccess: AccessState = { enabled: false, user: null }
-let current = openAccess
-// The repository checks this state, so a hidden button is never the only guard.
+// repository.ts reads this state until Task 11 removes it with IndexedDB.
+let current = signedOut
 export const setAccess = (state: AccessState) => {
   current = state
 }
-export const actorName = () => (current.enabled ? current.user?.name : undefined)
+export const actorName = () => current.user?.name
 
 export function can(action: Action, state = current) {
-  if (!state.enabled) return true
-  return !!state.user && roleCan(state.user.role, action)
+  return state.actions.includes(action)
 }
 export function lotAccess(lot: Pick<Lot, 'poc'>, state = current): LotAccess {
-  return state.enabled ? actorLotAccess(state.user, lot) : 'full'
+  return actorLotAccess(state.user, lot)
 }
 
 const denied = (what: string) =>
@@ -48,11 +57,11 @@ export function requireAction(action: Action) {
   if (!can(action)) throw denied(actionVerbs[action])
 }
 export function requireLotEdit(lot: Lot, next?: Lot) {
-  const what = current.enabled ? lotEditDenial(current.user, lot, next) : undefined
+  const what = lotEditDenial(current.user, lot, next)
   if (what) throw denied(what)
 }
 
-export const AccessContext = createContext<AccessState>(openAccess)
+export const AccessContext = createContext<AccessState>(signedOut)
 export function useAccess() {
   const state = useContext(AccessContext)
   return {

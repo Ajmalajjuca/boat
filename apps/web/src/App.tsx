@@ -9,7 +9,6 @@ import {
   CalendarCheck,
   Check,
   CircleAlert,
-  Database,
   Download,
   Factory,
   Menu,
@@ -27,7 +26,6 @@ import {
   downloadFile,
   exportData,
   importData,
-  initialize,
   parseImport,
   saveProduct,
   deleteProduct,
@@ -37,8 +35,15 @@ import MonthEnd from './MonthEnd'
 import LotDrawer from './LotDrawer'
 import Shipments, { newShipment, ShipmentDrawer } from './Shipments'
 import Settings, { performReset } from './Settings'
-import { ChangePinModal, ProfileCard, SignIn } from './Profiles'
-import { AccessContext, can, setAccess, storedSession, storeSession } from './access'
+import type { MePayload } from '@boat/domain/api'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './api/queryClient'
+import { AuthProvider, useAuth } from './auth/AuthProvider'
+import { ChangePassword } from './auth/ChangePassword'
+import { ProfileCard } from './auth/ProfileCard'
+import { SignIn } from './auth/SignIn'
+import { AcceptInvite, ResetPassword } from './auth/TokenPages'
+import { AccessContext, accessFrom, can, setAccess } from './access'
 import {
   Badge,
   Button,
@@ -78,12 +83,46 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
 function productBlank(lookups: LookupValue[]): Product {
   return stamp({ name: '', variant: '', segment: defaultLookup(lookups, 'segment', 'PA / TWS') })
 }
+function Loading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6]">
+      <div className="flex items-center gap-3 text-sm font-semibold text-[#173b3d]">
+        <Activity className="animate-pulse text-[#d96d35]" /> Loading...
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
+    </QueryClientProvider>
+  )
+}
+
+// The invite and reset pages are chosen by path; everything else needs a session.
+function Root() {
+  const auth = useAuth()
+  const [path, setPath] = useState(location.pathname)
+  const home = () => {
+    history.replaceState(null, '', '/')
+    setPath('/')
+  }
+  if (path === '/invite') return <AcceptInvite onDone={home} />
+  if (path === '/reset-password') return <ResetPassword onDone={home} />
+  if (auth.me === undefined) return <Loading />
+  if (!auth.me) return <SignIn />
+  // A new key per user, so nothing from the last user's screens survives.
+  return <Workspace key={auth.me.user.id} me={auth.me} />
+}
+
+function Workspace({ me }: { me: MePayload }) {
+  const auth = useAuth()
+  const [passwordOpen, setPasswordOpen] = useState(false)
   const data = useLiveQuery(getData, [])
-  const users = useLiveQuery(() => db.users.toArray(), []),
-    lockSetting = useLiveQuery(() => db.localSettings.get('lockMinutes'), [])
-  const [sessionId, setSessionId] = useState(storedSession),
-    [pinOpen, setPinOpen] = useState(false)
   const [dbError, setDbError] = useState(''),
     [screen, setScreen] = useState<Screen>('production'),
     [menuOpen, setMenuOpen] = useState(false)
@@ -104,32 +143,11 @@ export default function App() {
   const csvRef = useRef<(() => boolean) | null>(null),
     busy = useRef(false),
     productForm = useFormErrors()
-  // Roles are on once a profile exists; until then everyone has full access, as before.
-  const enabled = !!users?.length,
-    user = (enabled && users?.find((u) => u.id === sessionId)) || null,
-    lockMinutes = Number(lockSetting?.value ?? 15)
-  const access = useMemo(() => ({ enabled, user }), [enabled, user])
+  const access = useMemo(() => accessFrom(me), [me])
   setAccess(access)
-  const signIn = (id: string) => {
-    setSessionId(id)
-    storeSession(id)
-  }
-  // Closes every editor so the next profile starts from a clean screen.
-  const lock = (notice = '') => {
-    setSelectedLot(null)
-    setSelectedShipment(null)
-    setProduct(null)
-    setAddLotOpen(false)
-    setImportOpen(false)
-    setPinOpen(false)
-    setMenuOpen(false)
-    signIn('')
-    setSaveState('idle')
-    setMessage(notice)
-  }
-  // Idle lock: no pointer or key activity for the chosen minutes returns to the profile screen.
+  // Idle sign-out: no pointer or key activity for the workspace's idle timeout ends the session.
+  const idleMinutes = me.idleTimeoutMinutes
   useEffect(() => {
-    if (!user || !lockMinutes) return
     let last = Date.now()
     const touch = () => {
       last = Date.now()
@@ -137,14 +155,14 @@ export default function App() {
     const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
     events.forEach((name) => window.addEventListener(name, touch, { passive: true }))
     const timer = setInterval(() => {
-      if (Date.now() - last > lockMinutes * 60_000)
-        lock(`Locked after ${lockMinutes} minutes without activity.`)
+      if (Date.now() - last > idleMinutes * 60_000)
+        void auth.signOut(`Signed out after ${idleMinutes} minutes without activity.`)
     }, 15_000)
     return () => {
       events.forEach((name) => window.removeEventListener(name, touch))
       clearInterval(timer)
     }
-  }, [user?.id, lockMinutes])
+  }, [idleMinutes, auth.signOut])
   useEffect(() => {
     db.open().catch((e) => setDbError(e instanceof Error ? e.message : 'Could not open IndexedDB.'))
   }, [])
@@ -276,7 +294,6 @@ export default function App() {
   const selectedShipmentLive =
     selectedShipment &&
     (data?.shipments.find((s) => s.id === selectedShipment.id) || selectedShipment)
-  const initialized = !!data?.settings.find((s) => s.key === 'initialized')
   const navItems: [Screen, typeof Factory][] = [
     ['production', Factory],
     ['completed', Archive],
@@ -297,87 +314,7 @@ export default function App() {
         </Card>
       </div>
     )
-  if (!data || !users)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6]">
-        <div className="flex items-center gap-3 text-sm font-semibold text-[#173b3d]">
-          <Activity className="animate-pulse text-[#d96d35]" /> Loading...
-        </div>
-      </div>
-    )
-  if (enabled && !user)
-    return (
-      <>
-        <SignIn
-          users={users}
-          onSignIn={(u) => {
-            signIn(u.id)
-            setMessage('')
-          }}
-        />
-        {message && (
-          <div
-            role="status"
-            className="fixed left-1/2 top-4 z-[90] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800 shadow-xl"
-          >
-            {message}
-          </div>
-        )}
-      </>
-    )
-  if (!initialized)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#edf2f1] p-5">
-        <Card className="w-full max-w-xl overflow-hidden">
-          <div className="bg-[#123b3e] p-8 text-white">
-            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#d96d35]">
-              <Box size={25} />
-            </div>
-            <div className="text-xs font-bold uppercase tracking-[.22em] text-teal-200">
-              Supply chain workspace
-            </div>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Your app starts here.</h1>
-            <p className="mt-3 text-sm leading-6 text-teal-100">
-              Track production lots, material shortages, partial GRN receipts, and finished goods
-              shipments in one local workspace.
-            </p>
-          </div>
-          <div className="space-y-3 p-6 sm:p-8">
-            {!can('manageData') ? (
-              <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                This workspace is empty. Ask an admin to load data, then sign in again.{' '}
-                <button className="font-semibold text-teal-800 underline" onClick={() => lock()}>
-                  Switch user
-                </button>
-              </p>
-            ) : (
-              <>
-                <Button
-                  className="w-full justify-start"
-                  size="lg"
-                  onClick={() => run(() => initialize('demo'))}
-                >
-                  <Plus size={17} /> Load fictional demo data
-                </Button>
-                <Button
-                  className="w-full justify-start"
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => run(() => initialize('empty'))}
-                >
-                  <Database size={17} /> Start with an empty workspace
-                </Button>
-              </>
-            )}
-            <p className="pt-2 text-xs leading-5 text-slate-500">
-              Data stays in this browser profile. You can export a JSON backup from Settings at any
-              time.
-            </p>
-            {message && <p className="text-sm text-rose-700">{message}</p>}
-          </div>
-        </Card>
-      </div>
-    )
+  if (!data) return <Loading />
   return (
     <AccessContext.Provider value={access}>
       <div className="min-h-screen bg-[#f5f7f6] lg:flex">
@@ -442,16 +379,9 @@ export default function App() {
             </div>
             <div className="mt-auto space-y-3 px-5 pb-6">
               <ProfileCard
-                user={user}
-                onLock={() => lock()}
-                onChangePin={() => {
-                  setPinOpen(true)
+                onChangePassword={() => {
+                  setPasswordOpen(true)
                   setMenuOpen(false)
-                }}
-                onSetUp={() => {
-                  setScreen('settings')
-                  setMenuOpen(false)
-                  csvRef.current = null
                 }}
               />
               <div className="flex items-center gap-2 px-1 text-[11px] text-teal-100/70">
@@ -611,9 +541,6 @@ export default function App() {
                 onImport={openImport}
                 onExport={exportJson}
                 onReset={reset}
-                users={users}
-                lockMinutes={lockMinutes}
-                onSignIn={signIn}
                 onMessage={(text) => {
                   setSaveState('idle')
                   setMessage(text)
@@ -805,17 +732,14 @@ export default function App() {
             </div>
           </div>
         </Modal>
-        {user && (
-          <ChangePinModal
-            user={user}
-            open={pinOpen}
-            onClose={() => setPinOpen(false)}
-            onDone={() => {
-              setSaveState('idle')
-              setMessage('PIN updated.')
-            }}
-          />
-        )}
+        <ChangePassword
+          open={passwordOpen}
+          onClose={() => setPasswordOpen(false)}
+          onDone={() => {
+            setSaveState('idle')
+            setMessage('Password changed.')
+          }}
+        />
       </div>
     </AccessContext.Provider>
   )

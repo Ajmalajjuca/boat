@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import type { DataSet, LookupKind, LookupValue, UserProfile } from './models'
+import type { DataSet, LookupKind, LookupValue } from './models'
 import { isSystemLookup } from './models'
 import { SCHEMA_VERSION } from './db'
 import { deleteLookup, resetData, saveLookup } from './repository'
@@ -28,7 +28,6 @@ import {
 } from './ui'
 import { validateLookupValue } from './validation'
 import { useAccess } from './access'
-import { RolesCard } from './Profiles'
 
 const kinds: { kind: LookupKind; label: string; help: string }[] = [
   { kind: 'segment', label: 'Segments', help: 'Product families used for grouping and filtering.' },
@@ -48,19 +47,12 @@ export default function Settings({
   onImport,
   onExport,
   onReset,
-  users,
-  lockMinutes,
-  onSignIn,
-  onMessage,
 }: {
   data: DataSet
   run: Run
   onImport: () => void
   onExport: () => void
   onReset: () => void
-  users: UserProfile[]
-  lockMinutes: number
-  onSignIn: (userId: string) => void
   onMessage: (message: string) => void
 }) {
   const access = useAccess(),
@@ -251,14 +243,6 @@ export default function Settings({
         </Card>
       </div>
       <div className="space-y-5">
-        <RolesCard
-          users={users}
-          lookups={data.lookupValues}
-          lockMinutes={lockMinutes}
-          run={run}
-          onSignIn={onSignIn}
-          onMessage={onMessage}
-        />
         <Card className="p-5">
           <div className="flex items-start gap-3">
             <Database size={19} className="shrink-0 text-[#d96d35]" />
