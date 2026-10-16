@@ -1,19 +1,14 @@
 import { useState } from 'react'
-import {
-  Database,
-  Download,
-  Info,
-  Pencil,
-  Plus,
-  RotateCcw,
-  ShieldCheck,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import type { DataSet, LookupKind, LookupValue } from './models'
-import { isSystemLookup } from './models'
-import { SCHEMA_VERSION } from './db'
-import { deleteLookup, resetData, saveLookup } from './repository'
+import { Database, Download, Info, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
+import type { LookupItem } from '@boat/domain/api'
+import { fetchMe } from './api/auth'
+import { saveSettings } from './api/admin'
+import { addLookup, deleteLookup, renameLookup } from './api/lookups'
+import { keys, refreshEverything, useLookups, useSettings } from './api/queries'
+import { queryClient } from './api/queryClient'
+import { useAuth } from './auth/AuthProvider'
+import type { LookupKind } from './models'
+import Users from './Users'
 import {
   Badge,
   Button,
@@ -23,6 +18,7 @@ import {
   FormError,
   Input,
   Modal,
+  SearchSelect,
   useFormErrors,
   type Run,
 } from './ui'
@@ -42,13 +38,12 @@ const kinds: { kind: LookupKind; label: string; help: string }[] = [
   { kind: 'shipmentStage', label: 'Shipment stages', help: 'Pre-arrival and warehouse stages.' },
 ]
 export default function Settings({
-  data,
   run,
   onImport,
   onExport,
   onReset,
+  onMessage,
 }: {
-  data: DataSet
   run: Run
   onImport: () => void
   onExport: () => void
@@ -59,20 +54,28 @@ export default function Settings({
     editable = access.can('manageSettings')
   const [kind, setKind] = useState<LookupKind>('segment'),
     [value, setValue] = useState(''),
-    [editing, setEditing] = useState<LookupValue | null>(null),
+    [editing, setEditing] = useState<LookupItem | null>(null),
     [editValue, setEditValue] = useState('')
   const addForm = useFormErrors(),
     renameForm = useFormErrors()
   const current = kinds.find((k) => k.kind === kind)!,
-    items = data.lookupValues.filter((v) => v.kind === kind).sort((a, b) => a.sort - b.sort)
+    items = (useLookups().data ?? []).filter((v) => v.kind === kind).sort((a, b) => a.sort - b.sort)
+  // Dropdown text appears in every record, so a change refreshes everything.
   const add = async () => {
     if (!addForm.check(validateLookupValue(value))) return
-    if (await run(() => saveLookup(kind, value), addForm.fail)) setValue('')
+    const added = await run(async () => {
+      await addLookup(kind, value)
+      await refreshEverything()
+    }, addForm.fail)
+    if (added) setValue('')
   }
   const rename = async () => {
     if (!editing || !renameForm.check(validateLookupValue(editValue))) return
-    if (await run(() => saveLookup(editing.kind, editValue, editing), renameForm.fail))
-      setEditing(null)
+    const renamed = await run(async () => {
+      await renameLookup(editing.id, editValue)
+      await refreshEverything()
+    }, renameForm.fail)
+    if (renamed) setEditing(null)
   }
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
@@ -136,7 +139,7 @@ export default function Settings({
                   >
                     <span className="text-sm font-medium text-slate-700">
                       {item.value}
-                      {isSystemLookup(item.kind, item.value) && (
+                      {item.system && (
                         <Badge className="ml-2" tone="slate">
                           Required
                         </Badge>
@@ -148,11 +151,9 @@ export default function Settings({
                           variant="ghost"
                           size="icon"
                           aria-label={`Rename ${item.value}`}
-                          disabled={isSystemLookup(item.kind, item.value)}
+                          disabled={item.system}
                           title={
-                            isSystemLookup(item.kind, item.value)
-                              ? 'Used by app calculations; cannot be renamed'
-                              : undefined
+                            item.system ? 'Used by app calculations; cannot be renamed' : undefined
                           }
                           onClick={() => {
                             renameForm.reset()
@@ -167,11 +168,9 @@ export default function Settings({
                           size="icon"
                           className="text-rose-700"
                           aria-label={`Delete ${item.value}`}
-                          disabled={isSystemLookup(item.kind, item.value)}
+                          disabled={item.system}
                           title={
-                            isSystemLookup(item.kind, item.value)
-                              ? 'Used by app calculations; cannot be deleted'
-                              : undefined
+                            item.system ? 'Used by app calculations; cannot be deleted' : undefined
                           }
                           onClick={async () => {
                             if (
@@ -179,7 +178,10 @@ export default function Settings({
                                 `Delete lookup value "${item.value}"? Values currently in use cannot be deleted.`,
                               )
                             )
-                              await run(() => deleteLookup(item))
+                              await run(async () => {
+                                await deleteLookup(item.id)
+                                await refreshEverything()
+                              })
                           }}
                         >
                           <Trash2 size={15} />
@@ -243,15 +245,20 @@ export default function Settings({
         </Card>
       </div>
       <div className="space-y-5">
+        {editable && (
+          <>
+            <Users run={run} onMessage={onMessage} />
+            <SignInSettings run={run} onMessage={onMessage} />
+          </>
+        )}
         <Card className="p-5">
           <div className="flex items-start gap-3">
             <Database size={19} className="shrink-0 text-[#d96d35]" />
             <div>
               <h2 className="font-bold text-[#173b3d]">Data management</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                Records are stored in this browser using IndexedDB. Clearing browser storage removes
-                them. Export JSON regularly for a portable backup; data does not sync across
-                devices.
+                Records are stored on the server and shared by every user. Export a JSON backup for
+                a copy you keep.
               </p>
             </div>
           </div>
@@ -282,34 +289,6 @@ export default function Settings({
             value and setting key. Replace clears existing records only after validation and
             confirmation.
           </p>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={18} className="text-teal-700" />
-            <h2 className="font-bold text-[#173b3d]">Local workspace</h2>
-          </div>
-          <div className="mt-4 space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between">
-              <span>Products</span>
-              <Badge tone="teal">{data.products.length}</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span>Production lots</span>
-              <Badge tone="teal">{data.lots.length}</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span>GRN receipts</span>
-              <Badge tone="teal">{data.grnReceipts.length}</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span>Shipments</span>
-              <Badge tone="teal">{data.shipments.length}</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span>Schema version</span>
-              <Badge>{SCHEMA_VERSION}</Badge>
-            </div>
-          </div>
         </Card>
       </div>
       <Modal
@@ -351,12 +330,56 @@ export default function Settings({
   )
 }
 
-export async function performReset(run: Run, after: () => void) {
-  if (
-    window.confirm(
-      'Reset all products, lots, receipts, shipments, lookup values, and history in this browser? This cannot be undone. Export a JSON backup first if needed.',
-    )
-  ) {
-    if (await run(resetData)) after()
+const timeZones = Intl.supportedValuesOf('timeZone')
+
+// The idle sign-out time and the company time zone, which sets "today" for every date rule.
+function SignInSettings({ run, onMessage }: { run: Run; onMessage: (message: string) => void }) {
+  const auth = useAuth()
+  const settings = useSettings().data
+  const [idle, setIdle] = useState(''),
+    [zone, setZone] = useState('')
+  const form = useFormErrors()
+  const idleValue = idle || String(settings?.idleTimeoutMinutes ?? ''),
+    zoneValue = zone || settings?.timeZone || ''
+  const save = async () => {
+    const saved = await run(async () => {
+      await saveSettings({ idleTimeoutMinutes: Number(idleValue), timeZone: zoneValue })
+      await queryClient.invalidateQueries({ queryKey: keys.settings })
+      // This browser's idle timer reads the session's value, so refresh it now.
+      auth.signedIn(await fetchMe())
+    }, form.fail)
+    if (saved) onMessage('Settings saved.')
   }
+  return (
+    <Card className="p-5">
+      <h2 className="font-bold text-[#173b3d]">Sign-in</h2>
+      <div className="mt-4 grid gap-3">
+        <FormError message={form.errors.form} />
+        <Field label="Idle sign-out (minutes)" error={form.errors.idleTimeoutMinutes}>
+          <Input
+            type="number"
+            min="5"
+            max="720"
+            step="1"
+            value={idleValue}
+            onChange={(e) => {
+              setIdle(e.target.value)
+              form.clear('idleTimeoutMinutes')
+            }}
+          />
+        </Field>
+        <Field label="Company time zone" error={form.errors.timeZone}>
+          <SearchSelect
+            value={zoneValue}
+            options={timeZones}
+            onChange={(v) => {
+              setZone(v)
+              form.clear('timeZone')
+            }}
+          />
+        </Field>
+        <Button onClick={save}>Save sign-in settings</Button>
+      </div>
+    </Card>
+  )
 }

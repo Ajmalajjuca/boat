@@ -21,13 +21,13 @@ import {
 import { db, getData } from './db'
 import type { DataSet, Product } from './models'
 import { dataKeys, productChoices } from './models'
-import { quantity, today } from './calculations'
-import { downloadFile, exportData, importData, parseImport } from './repository'
+import { quantity } from './calculations'
+import { parseImport } from '@boat/domain/backup'
 import Production from './Production'
 import MonthEnd from './MonthEnd'
 import LotDrawer, { type LotTarget } from './LotDrawer'
 import Shipments, { ShipmentDrawer, type ShipmentTarget } from './Shipments'
-import Settings, { performReset } from './Settings'
+import Settings from './Settings'
 import type { MePayload } from '@boat/domain/api'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './api/queryClient'
@@ -41,7 +41,14 @@ import type { LookupItem } from '@boat/domain/api'
 import { ConflictError } from './api/client'
 import { type ProductRecord, toProduct, values } from './api/mappers'
 import { deleteProduct, saveProduct } from './api/products'
-import { refreshProducts, useCompletedCount, useLookups, useProducts } from './api/queries'
+import { exportBackup, importBackup, resetAllData } from './api/admin'
+import {
+  refreshEverything,
+  refreshProducts,
+  useCompletedCount,
+  useLookups,
+  useProducts,
+} from './api/queries'
 import { newLot, newProduct, newShipment } from './drafts'
 import {
   Badge,
@@ -135,7 +142,9 @@ function Workspace({ me }: { me: MePayload }) {
     [importPreview, setImportPreview] = useState<DataSet | null>(null),
     [importFile, setImportFile] = useState(''),
     [importMode, setImportMode] = useState<'merge' | 'replace'>('merge'),
-    [importError, setImportError] = useState('')
+    [importError, setImportError] = useState(''),
+    [resetOpen, setResetOpen] = useState(false),
+    [resetText, setResetText] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('idle'),
     [message, setMessage] = useState('')
   const csvRef = useRef<CsvExport | null>(null),
@@ -243,12 +252,7 @@ function Workspace({ me }: { me: MePayload }) {
   }
   const exportJson = async () => {
     try {
-      const payload = await exportData()
-      downloadFile(
-        `control-tower-backup-${today()}.json`,
-        JSON.stringify(payload, null, 2),
-        'application/json',
-      )
+      await exportBackup()
       setMessage('JSON backup downloaded.')
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Export failed.')
@@ -287,23 +291,41 @@ function Workspace({ me }: { me: MePayload }) {
       )
     )
       return
+    let result: Awaited<ReturnType<typeof importBackup>> | undefined
     const ok = await run(
-      () => importData(importRaw, importMode),
+      async () => {
+        result = await importBackup(importRaw, importMode)
+        await refreshEverything()
+      },
       (e) => setImportError(e instanceof Error ? e.message : 'Import failed.'),
     )
-    if (ok) {
+    if (ok && result) {
+      const { imported } = result
       setImportOpen(false)
       setMessage(
-        `${importMode === 'merge' ? 'Merged' : 'Replaced'} ${importPreview?.products.length || 0} products, ${importPreview?.lots.length || 0} lots, and ${importPreview?.shipments.length || 0} shipments.`,
+        `${importMode === 'merge' ? 'Merged' : 'Replaced'} ${imported.products} products, ${imported.lots} lots, and ${imported.shipments} shipments.`,
       )
     }
   }
-  const reset = () =>
-    performReset(run, () => {
-      setScreen('production')
-      setLotTarget(null)
-      setShipmentTarget(null)
+  // Reset soft-deletes every business record once the user has typed the phrase.
+  const resetPhrase = 'RESET ALL DATA'
+  const reset = async () => {
+    let result: Awaited<ReturnType<typeof resetAllData>> | undefined
+    const ok = await run(async () => {
+      result = await resetAllData(resetText)
+      await refreshEverything()
     })
+    if (!ok || !result) return
+    const { deleted } = result
+    setResetOpen(false)
+    setResetText('')
+    setScreen('production')
+    setLotTarget(null)
+    setShipmentTarget(null)
+    setMessage(
+      `Deleted ${deleted.products} products, ${deleted.lots} lots and ${deleted.shipments} shipments.`,
+    )
+  }
   const navItems: [Screen, typeof Factory][] = [
     ['production', Factory],
     ['completed', Archive],
@@ -544,11 +566,13 @@ function Workspace({ me }: { me: MePayload }) {
             )}
             {screen === 'settings' && (
               <Settings
-                data={data}
                 run={run}
                 onImport={openImport}
                 onExport={exportJson}
-                onReset={reset}
+                onReset={() => {
+                  setResetText('')
+                  setResetOpen(true)
+                }}
                 onMessage={(text) => {
                   setSaveState('idle')
                   setMessage(text)
@@ -751,6 +775,25 @@ function Workspace({ me }: { me: MePayload }) {
               </Button>
               <Button disabled={!importPreview} onClick={commitImport}>
                 Import records
+              </Button>
+            </div>
+          </div>
+        </Modal>
+        <Modal open={resetOpen} onOpenChange={setResetOpen} title="Reset all data">
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Deletes every product, lot, receipt and shipment for everyone. Users, dropdown values
+              and settings stay. Export a JSON backup first if you may need the records again.
+            </p>
+            <Field label={`Type ${resetPhrase} to confirm`}>
+              <Input value={resetText} onChange={(e) => setResetText(e.target.value)} />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setResetOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" disabled={resetText !== resetPhrase} onClick={reset}>
+                Reset all data
               </Button>
             </div>
           </div>

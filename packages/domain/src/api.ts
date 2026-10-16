@@ -254,6 +254,18 @@ export type UserItem = {
   poc: Ref | null
 }
 export type InviteResult = { user: UserItem; inviteEmailSent: boolean }
+export type ResetResult = {
+  deleted: Record<
+    | 'shipmentItems'
+    | 'shipments'
+    | 'grnReceipts'
+    | 'rmBatches'
+    | 'lotComponents'
+    | 'lots'
+    | 'products',
+    number
+  >
+}
 export type ImportResult = {
   mode: 'merge' | 'replace'
   imported: Record<keyof DataSet, number>

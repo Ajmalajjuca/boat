@@ -5,6 +5,7 @@ import type * as Api from '@boat/domain/api'
 import type { entryView } from './modules/activity/activity.service'
 import type { MePayload } from './modules/auth/auth.service'
 import type { importBackup } from './modules/data-transfer/import.service'
+import type { resetData } from './modules/data-transfer/reset.service'
 import type { ReceiptInput } from './modules/grn-receipts/grn-receipts.service'
 import type { LookupView } from './modules/lookups/lookups.service'
 import type { getLotDetail, LotView } from './modules/lots/lot-view'
@@ -52,6 +53,8 @@ export type ContractChecks = [
   Expect<Same<Reply<typeof monthList>, { items: string[] }>>,
   Expect<Same<Json<UserView>, Api.UserItem>>,
   Expect<Same<Reply<typeof importBackup>, Api.ImportResult>>,
+  // POST /data/reset answers { deleted: <these counts> }.
+  Expect<Same<{ deleted: Reply<typeof resetData> }, Api.ResetResult>>,
   Expect<Same<LotInput, Api.LotInput>>,
   Expect<Same<LotPatch, Api.LotPatch>>,
   Expect<Same<BatchInput, Api.BatchInput>>,

@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { listLookups } from './lookups'
 import { type ActivityOwner, listActivity } from './activity'
+import { fetchSettings, listUsers } from './admin'
 import {
   fetchLot,
   fetchLotGroups,
@@ -93,6 +94,11 @@ export const useShipment = (id: string | undefined) =>
     queryFn: () => fetchShipment(id!),
     enabled: !!id,
   })
+
+export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: fetchSettings })
+// Only admins may list users, so the screen enables this for them alone.
+export const useUsers = (enabled: boolean) =>
+  useQuery({ queryKey: keys.users, queryFn: listUsers, enabled })
 
 const refresh = (...areas: (readonly string[])[]) =>
   Promise.all(areas.map((queryKey) => queryClient.invalidateQueries({ queryKey })))
