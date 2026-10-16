@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireSignedIn } from '../../core/access'
 import type { RecordsDeps } from '../../core/clock'
 import { parseInput } from '../../core/parse'
-import { monthEndCsv, monthEndReport } from './month-end.service'
+import { monthEndCsv, monthEndReport, monthList } from './month-end.service'
 
 const monthQuery = z.object({
   month: z
@@ -16,6 +16,10 @@ export function reportsRouter(deps: RecordsDeps) {
 
   router.get('/month-end', requireSignedIn(), async (req, res) => {
     res.json(await monthEndReport(deps, parseInput(monthQuery, req.query).month))
+  })
+
+  router.get('/months', requireSignedIn(), async (_req, res) => {
+    res.json(await monthList(deps))
   })
 
   router.get('/month-end/export.csv', requireSignedIn(), async (req, res) => {

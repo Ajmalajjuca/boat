@@ -1,27 +1,9 @@
+import { type LotFlag, lotFlagNames, type LotSort, lotSorts } from '@boat/domain/api'
 import { dayOffset } from '@boat/domain/calculations'
 import type { Db } from '../../core/prisma'
 import { Prisma } from '../../generated/prisma/client'
 
-export const lotFlagNames = [
-  'overdue',
-  'dueSoon',
-  'followUp',
-  'blocked',
-  'approval',
-  'rm',
-  'npi',
-  'onTrack',
-] as const
-export type LotFlag = (typeof lotFlagNames)[number]
-export const lotSorts = [
-  'eta-asc',
-  'eta-desc',
-  'qty-desc',
-  'balance-desc',
-  'product-asc',
-  'label-asc',
-] as const
-export type LotSort = (typeof lotSorts)[number]
+export { type LotFlag, lotFlagNames, type LotSort, lotSorts }
 
 const filterColumns = {
   productId: 'l.product_id',

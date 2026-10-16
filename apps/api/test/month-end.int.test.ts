@@ -126,3 +126,24 @@ describe('GET /reports/month-end/export.csv', () => {
     expect(lines[1]).toContain('"2026-09","Woofer"')
   })
 })
+
+describe('GET /reports/months', () => {
+  it('FR-5.1 lists planned and receipt months, newest first, with the current month', async () => {
+    const product = await makeProduct(db)
+    const lot = await makeLot(db, { productId: product.id, plannedDate: day('2025-03-14') })
+    await db.grnReceipt.create({
+      data: { lotId: lot.id, label: 'G', date: day('2025-05-02'), quantity: 1 },
+    })
+    const gone = await makeLot(db, { productId: product.id, plannedDate: day('2024-01-10') })
+    await db.lot.update({ where: { id: gone.id }, data: { deletedAt: new Date() } })
+    const res = await w.viewer.agent.get('/api/v1/reports/months')
+    expect(res.status).toBe(200)
+    const months: string[] = res.body.items
+    expect(months[0]).toBe('2026-10')
+    expect(months).toContain('2025-05')
+    expect(months).toContain('2025-03')
+    expect(months).not.toContain('2024-01')
+    expect(months).toEqual([...months].sort().reverse())
+    expect(new Set(months).size).toBe(months.length)
+  })
+})

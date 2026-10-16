@@ -1,3 +1,9 @@
+import {
+  type ShipmentFlag,
+  shipmentFlagNames,
+  type ShipmentSort,
+  shipmentSorts,
+} from '@boat/domain/api'
 import { randomUUID } from 'node:crypto'
 import { effectiveShipmentEta } from '@boat/domain/calculations'
 import type { Shipment, ShipmentItem } from '@boat/domain/models'
@@ -316,10 +322,7 @@ export async function deleteShipment({ db }: RecordsDeps, user: SessionUser, id:
   })
 }
 
-export const shipmentFlagNames = ['open', 'soon', 'overdue', 'revised', 'arrived'] as const
-export type ShipmentFlag = (typeof shipmentFlagNames)[number]
-export const shipmentSorts = ['eta-asc', 'eta-desc', 'qty-desc', 'number-asc'] as const
-export type ShipmentSort = (typeof shipmentSorts)[number]
+export { type ShipmentFlag, shipmentFlagNames, type ShipmentSort, shipmentSorts }
 export type ShipmentFilters = {
   q: string
   stageId?: string
@@ -386,6 +389,7 @@ export async function shipmentCards({ db, clock }: RecordsDeps) {
     openUnits: all
       .filter((v) => v.computed.flags.open)
       .reduce((n, v) => n + v.computed.totalQty, 0),
+    vessels: [...new Set(all.map((v) => v.vessel))].sort(),
   }
 }
 
