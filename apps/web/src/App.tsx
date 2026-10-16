@@ -19,17 +19,10 @@ import {
   X,
 } from 'lucide-react'
 import { db, getData } from './db'
-import type { DataSet, LookupValue, Lot, Product, Shipment } from './models'
-import { dataKeys, productChoices, stamp } from './models'
-import { completed, quantity, today } from './calculations'
-import {
-  downloadFile,
-  exportData,
-  importData,
-  parseImport,
-  saveProduct,
-  deleteProduct,
-} from './repository'
+import type { DataSet, Lot, Product, Shipment } from './models'
+import { dataKeys, productChoices } from './models'
+import { quantity, today } from './calculations'
+import { downloadFile, exportData, importData, parseImport } from './repository'
 import Production from './Production'
 import MonthEnd from './MonthEnd'
 import LotDrawer from './LotDrawer'
@@ -44,6 +37,12 @@ import { ProfileCard } from './auth/ProfileCard'
 import { SignIn } from './auth/SignIn'
 import { AcceptInvite, ResetPassword } from './auth/TokenPages'
 import { AccessContext, accessFrom, can, setAccess } from './access'
+import type { LookupItem } from '@boat/domain/api'
+import { ConflictError } from './api/client'
+import { type ProductRecord, toProduct, values } from './api/mappers'
+import { deleteProduct, saveProduct } from './api/products'
+import { refreshProducts, useCompletedCount, useLookups, useProducts } from './api/queries'
+import { newProduct } from './drafts'
 import {
   Badge,
   Button,
@@ -51,13 +50,15 @@ import {
   Field,
   FormError,
   Input,
+  ConflictBanner,
+  type CsvExport,
   Modal,
   SearchSelect,
   useFormErrors,
   type Run,
 } from './ui'
 import { validateProduct } from './validation'
-import { defaultLookup, newLot } from './demo'
+import { newLot } from './demo'
 
 type Screen = 'production' | 'completed' | 'monthEnd' | 'shipments' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -79,9 +80,6 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
     description: 'Track incoming shipments, revised ETAs, and warehouse arrivals.',
   },
   settings: { title: 'Settings', description: 'Manage operational values and local browser data.' },
-}
-function productBlank(lookups: LookupValue[]): Product {
-  return stamp({ name: '', variant: '', segment: defaultLookup(lookups, 'segment', 'PA / TWS') })
 }
 function Loading() {
   return (
@@ -128,8 +126,9 @@ function Workspace({ me }: { me: MePayload }) {
     [menuOpen, setMenuOpen] = useState(false)
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null),
     [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
-  const [product, setProduct] = useState<Product | null>(null),
-    [productBase, setProductBase] = useState('')
+  const [product, setProduct] = useState<(Product & { version?: number }) | null>(null),
+    [productBase, setProductBase] = useState(''),
+    [productConflict, setProductConflict] = useState<ProductRecord | null>(null)
   const [addLotOpen, setAddLotOpen] = useState(false),
     [addLotProductId, setAddLotProductId] = useState('')
   const [importOpen, setImportOpen] = useState(false),
@@ -140,10 +139,13 @@ function Workspace({ me }: { me: MePayload }) {
     [importError, setImportError] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('idle'),
     [message, setMessage] = useState('')
-  const csvRef = useRef<(() => boolean) | null>(null),
+  const csvRef = useRef<CsvExport | null>(null),
     busy = useRef(false),
     productForm = useFormErrors()
   const access = useMemo(() => accessFrom(me), [me])
+  const lookups: LookupItem[] = useLookups().data ?? [],
+    products = useProducts().data ?? [],
+    completedCount = useCompletedCount().data
   setAccess(access)
   // Idle sign-out: no pointer or key activity for the workspace's idle timeout ends the session.
   const idleMinutes = me.idleTimeoutMinutes
@@ -192,9 +194,10 @@ function Workspace({ me }: { me: MePayload }) {
       busy.current = false
     }
   }
-  const openProduct = (value?: Product) => {
-    const next = value || productBlank(data?.lookupValues || [])
+  const openProduct = (value?: ProductRecord) => {
+    const next = value || newProduct(lookups)
     productForm.reset()
+    setProductConflict(null)
     setProduct(next)
     setProductBase(JSON.stringify(next))
   }
@@ -207,24 +210,37 @@ function Workspace({ me }: { me: MePayload }) {
       return
     setProduct(null)
   }
+  // A 409 that carries the server's record is a stale version; other 409s are rules to explain.
+  const productFailed = (e: unknown) => {
+    if (e instanceof ConflictError && e.current)
+      setProductConflict(toProduct(e.current as Parameters<typeof toProduct>[0]))
+    else productForm.fail(e)
+  }
   const saveProductForm = async (e: FormEvent) => {
     e.preventDefault()
     if (!product || !productForm.check(validateProduct(product))) return
-    if (await run(() => saveProduct(product), productForm.fail)) {
+    const saved = await run(async () => {
+      await saveProduct(product, lookups)
+      await refreshProducts()
+    }, productFailed)
+    if (saved) {
       setProduct(null)
       setMessage(`Product ${product.name.trim()} saved.`)
     }
   }
   const removeProduct = async () => {
     if (!product) return
-    const lots = data?.lots.filter((l) => l.productId === product.id) || []
     if (
       !window.confirm(
-        `Delete ${product.name} and its ${lots.length} lots, RM batches, GRN receipts, and lot history? Products used in shipment lines cannot be deleted.`,
+        `Delete ${product.name} and all its lots, RM batches, GRN receipts, and lot history? Products used in shipment lines cannot be deleted.`,
       )
     )
       return
-    if (await run(() => deleteProduct(product.id), productForm.fail)) setProduct(null)
+    const removed = await run(async () => {
+      await deleteProduct(product.id)
+      await refreshProducts()
+    }, productForm.fail)
+    if (removed) setProduct(null)
   }
   const exportJson = async () => {
     try {
@@ -363,14 +379,7 @@ function Workspace({ me }: { me: MePayload }) {
                     <span className="flex-1">{screenInfo[id].title}</span>
                     {id === 'completed' && (
                       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">
-                        {
-                          data.lots.filter((l) =>
-                            completed(
-                              l,
-                              data.grnReceipts.filter((r) => r.lotId === l.id),
-                            ),
-                          ).length
-                        }
+                        {completedCount ?? '…'}
                       </span>
                     )}
                   </button>
@@ -430,11 +439,11 @@ function Workspace({ me }: { me: MePayload }) {
                         <Plus size={16} /> Add Product
                       </Button>
                     )}
-                    {data.products.length > 0 && can('createLots') && (
+                    {products.length > 0 && can('createLots') && (
                       <Button
                         variant="secondary"
                         onClick={() => {
-                          setAddLotProductId(data.products[0].id)
+                          setAddLotProductId(products[0].id)
                           setAddLotOpen(true)
                         }}
                       >
@@ -463,10 +472,16 @@ function Workspace({ me }: { me: MePayload }) {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => {
-                      if (csvRef.current && !csvRef.current()) {
-                        setSaveState('idle')
-                        setMessage('Nothing to export: the current view has no rows.')
+                    onClick={async () => {
+                      if (!csvRef.current) return
+                      try {
+                        if (!(await csvRef.current())) {
+                          setSaveState('idle')
+                          setMessage('Nothing to export: the current view has no rows.')
+                        }
+                      } catch (e) {
+                        setSaveState('failed')
+                        setMessage(e instanceof Error ? e.message : 'Export failed.')
                       }
                     }}
                   >
@@ -519,9 +534,8 @@ function Workspace({ me }: { me: MePayload }) {
               )}
             {(screen === 'production' || screen === 'completed') && (
               <Production
-                data={data}
                 mode={screen === 'production' ? 'active' : 'completed'}
-                onOpenLot={setSelectedLot}
+                onOpenLot={(id) => setSelectedLot(data.lots.find((l) => l.id === id) ?? null)}
                 onNewLot={(productId) => setSelectedLot(newLot(productId, data.lookupValues))}
                 onEditProduct={openProduct}
                 onAddProduct={() => openProduct()}
@@ -572,14 +586,22 @@ function Workspace({ me }: { me: MePayload }) {
           onOpenChange={(v) => {
             if (!v) closeProduct()
           }}
-          title={
-            product && data.products.some((p) => p.id === product.id)
-              ? 'Edit product'
-              : 'Add product'
-          }
+          title={product?.version === undefined ? 'Add product' : 'Edit product'}
         >
           {product && (
             <form onSubmit={saveProductForm} noValidate className="space-y-4">
+              {productConflict && (
+                <ConflictBanner
+                  record="product"
+                  onReload={() => {
+                    setProduct(productConflict)
+                    setProductBase(JSON.stringify(productConflict))
+                    setProductConflict(null)
+                    productForm.reset()
+                  }}
+                  onDismiss={() => setProductConflict(null)}
+                />
+              )}
               <FormError message={productForm.errors.form} />
               <Field label="Product name" required error={productForm.errors.name}>
                 <Input
@@ -605,10 +627,7 @@ function Workspace({ me }: { me: MePayload }) {
               <Field label="Segment" required error={productForm.errors.segment}>
                 <SearchSelect
                   value={product.segment}
-                  options={data.lookupValues
-                    .filter((v) => v.kind === 'segment')
-                    .sort((a, b) => a.sort - b.sort)
-                    .map((v) => v.value)}
+                  options={values(lookups, 'segment')}
                   onChange={(v) => {
                     setProduct({ ...product, segment: v })
                     productForm.clear('segment')
@@ -617,7 +636,7 @@ function Workspace({ me }: { me: MePayload }) {
               </Field>
               <div className="flex items-center justify-between pt-2">
                 <div>
-                  {data.products.some((p) => p.id === product.id) && can('deleteProducts') && (
+                  {product.version !== undefined && can('deleteProducts') && (
                     <Button type="button" variant="danger" size="sm" onClick={removeProduct}>
                       Delete product
                     </Button>
@@ -638,7 +657,7 @@ function Workspace({ me }: { me: MePayload }) {
             <Field label="Product">
               <SearchSelect
                 value={addLotProductId}
-                options={productChoices(data.products)}
+                options={productChoices(products)}
                 onChange={setAddLotProductId}
               />
             </Field>

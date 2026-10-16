@@ -10,6 +10,8 @@ export async function signInWithForm(page: Page, email: string, password: string
 
 // Below the lg breakpoint the sidebar, with the profile card, is a slide-out menu.
 export async function openMenu(page: Page) {
+  // The workspace may still be loading; the menu button sits beside its screen title.
+  await page.getByRole('heading', { level: 1 }).first().waitFor()
   const open = page.getByRole('button', { name: 'Open navigation' })
   if (await open.isVisible()) await open.click()
 }
@@ -23,9 +25,12 @@ export async function goTo(page: Page, screen: string) {
   await expect(page.getByRole('heading', { level: 1, name: screen })).toBeVisible()
 }
 
-// Picks an option in a SearchSelect field. Its list renders inside the same dialog.
+// Picks an option in a SearchSelect field. Its <label> also holds the chosen value, so the field is
+// found by its caption rather than by label text. The list renders inside the same dialog.
 export async function choose(scope: Page | Locator, label: string, option: string) {
-  await scope.getByLabel(label, { exact: true }).click()
+  const page = 'page' in scope ? scope.page() : scope
+  const caption = page.locator('.field-label').getByText(label, { exact: true })
+  await scope.locator('label').filter({ has: caption }).getByRole('button').first().click()
   await scope.getByRole('option', { name: option, exact: true }).click()
 }
 

@@ -85,3 +85,18 @@ test('FR-10.2 changes your own password and keeps you signed in', async ({ page 
   await expect(page.getByRole('heading', { name: 'Production Tracker' })).toBeVisible()
   await (await signInApi(user.email, 'a changed password')).dispose()
 })
+
+test('returns to sign-in when the session ends', async ({ page }) => {
+  const user = await newUser('viewer')
+  await signInWithForm(page, user.email, user.password)
+  // Changing the password elsewhere ends the user's other sessions, including this page's.
+  const other = await signInApi(user.email, user.password)
+  await other.patch('/auth/me/password', {
+    currentPassword: user.password,
+    newPassword: 'a password set elsewhere',
+  })
+  await other.dispose()
+  await page.getByRole('combobox', { name: 'Sort lots' }).selectOption('qty-desc')
+  await expect(page.getByText('Your session ended. Sign in again.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+})

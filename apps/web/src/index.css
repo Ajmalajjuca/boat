@@ -79,6 +79,13 @@
     font-size: 12px;
     font-weight: 700;
   }
+  /* The required marker is drawn by CSS with empty alternative text, so it is neither part of the
+     label's text nor of the field's accessible name. */
+  .field-label[data-required]::after {
+    content: '*' / '';
+    margin-left: 2px;
+    color: #e11d48;
+  }
 }
 .table-wrap {
   overflow: auto;

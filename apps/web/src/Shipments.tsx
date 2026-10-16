@@ -42,12 +42,13 @@ import {
   Select,
   Sheet,
   Textarea,
+  type CsvExport,
 } from './ui'
 
 type Props = {
   data: DataSet
   onOpen: (s: Shipment) => void
-  csvRef: MutableRefObject<(() => boolean) | null>
+  csvRef: MutableRefObject<CsvExport | null>
 }
 export const newShipment = (lookups?: LookupValue[]): Shipment =>
   stamp({

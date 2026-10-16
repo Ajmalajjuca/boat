@@ -11,12 +11,12 @@ import {
   today,
 } from './calculations'
 import { downloadFile, toCsv } from './repository'
-import { Card, Empty, Select } from './ui'
+import { Card, Empty, Select, type CsvExport } from './ui'
 
 type Props = {
   data: DataSet
   onOpenLot: (lot: Lot) => void
-  csvRef: MutableRefObject<(() => boolean) | null>
+  csvRef: MutableRefObject<CsvExport | null>
 }
 export default function MonthEnd({ data, onOpenLot, csvRef }: Props) {
   const current = monthOf(today())
