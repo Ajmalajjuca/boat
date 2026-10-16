@@ -1,5 +1,5 @@
 import type { LookupItem } from '@boat/domain/api'
-import { type LookupKind, type Lot, type Product, stamp } from '@boat/domain/models'
+import { type LookupKind, type Lot, type Product, type Shipment, stamp } from '@boat/domain/models'
 import { values } from './api/mappers'
 
 // The preferred value while Settings still has it, otherwise the first value of its kind.
@@ -38,4 +38,16 @@ export const newLot = (productId: string, lookups: LookupItem[]): Lot =>
     blockerDescription: '',
     followUpDate: '',
     followUpNote: '',
+  })
+
+export const newShipment = (lookups: LookupItem[]): Shipment =>
+  stamp({
+    number: '',
+    vessel: '',
+    etd: '',
+    plannedEta: '',
+    revisedEta: '',
+    actualArrival: '',
+    stage: defaultValue(lookups, 'shipmentStage', 'In Transit'),
+    remarks: '',
   })

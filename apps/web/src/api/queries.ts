@@ -11,6 +11,7 @@ import {
 } from './lots'
 import { listProducts } from './products'
 import { fetchMonthEnd, listMonths } from './reports'
+import { fetchShipment, fetchShipmentSummary, listShipments, type ShipmentQuery } from './shipments'
 import { queryClient } from './queryClient'
 
 // Query keys by area. A write invalidates whole areas, so every view of them refetches.
@@ -75,6 +76,22 @@ export const useMonthEnd = (month: string) =>
     queryKey: [...keys.monthEnd, 'report', month],
     queryFn: () => fetchMonthEnd(month),
     placeholderData: keepPreviousData,
+  })
+
+export const shipmentKey = (id: string) => [...keys.shipments, 'detail', id]
+export const useShipments = (query: ShipmentQuery, page: number) =>
+  useQuery({
+    queryKey: [...keys.shipments, 'list', query, page],
+    queryFn: () => listShipments(query, page),
+    placeholderData: keepPreviousData,
+  })
+export const useShipmentSummary = () =>
+  useQuery({ queryKey: [...keys.shipments, 'summary'], queryFn: fetchShipmentSummary })
+export const useShipment = (id: string | undefined) =>
+  useQuery({
+    queryKey: shipmentKey(id ?? ''),
+    queryFn: () => fetchShipment(id!),
+    enabled: !!id,
   })
 
 const refresh = (...areas: (readonly string[])[]) =>

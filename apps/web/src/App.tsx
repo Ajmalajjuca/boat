@@ -19,14 +19,14 @@ import {
   X,
 } from 'lucide-react'
 import { db, getData } from './db'
-import type { DataSet, Product, Shipment } from './models'
+import type { DataSet, Product } from './models'
 import { dataKeys, productChoices } from './models'
 import { quantity, today } from './calculations'
 import { downloadFile, exportData, importData, parseImport } from './repository'
 import Production from './Production'
 import MonthEnd from './MonthEnd'
 import LotDrawer, { type LotTarget } from './LotDrawer'
-import Shipments, { newShipment, ShipmentDrawer } from './Shipments'
+import Shipments, { ShipmentDrawer, type ShipmentTarget } from './Shipments'
 import Settings, { performReset } from './Settings'
 import type { MePayload } from '@boat/domain/api'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -42,7 +42,7 @@ import { ConflictError } from './api/client'
 import { type ProductRecord, toProduct, values } from './api/mappers'
 import { deleteProduct, saveProduct } from './api/products'
 import { refreshProducts, useCompletedCount, useLookups, useProducts } from './api/queries'
-import { newLot, newProduct } from './drafts'
+import { newLot, newProduct, newShipment } from './drafts'
 import {
   Badge,
   Button,
@@ -124,7 +124,7 @@ function Workspace({ me }: { me: MePayload }) {
     [screen, setScreen] = useState<Screen>('production'),
     [menuOpen, setMenuOpen] = useState(false)
   const [lotTarget, setLotTarget] = useState<LotTarget | null>(null),
-    [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
+    [shipmentTarget, setShipmentTarget] = useState<ShipmentTarget | null>(null)
   const [product, setProduct] = useState<(Product & { version?: number }) | null>(null),
     [productBase, setProductBase] = useState(''),
     [productConflict, setProductConflict] = useState<ProductRecord | null>(null)
@@ -302,11 +302,8 @@ function Workspace({ me }: { me: MePayload }) {
     performReset(run, () => {
       setScreen('production')
       setLotTarget(null)
-      setSelectedShipment(null)
+      setShipmentTarget(null)
     })
-  const selectedShipmentLive =
-    selectedShipment &&
-    (data?.shipments.find((s) => s.id === selectedShipment.id) || selectedShipment)
   const navItems: [Screen, typeof Factory][] = [
     ['production', Factory],
     ['completed', Archive],
@@ -449,7 +446,7 @@ function Workspace({ me }: { me: MePayload }) {
                     )}
                   </>
                 ) : screen === 'shipments' && can('editShipments') ? (
-                  <Button onClick={() => setSelectedShipment(newShipment(data.lookupValues))}>
+                  <Button onClick={() => setShipmentTarget({ draft: newShipment(lookups) })}>
                     <Plus size={16} /> Add Shipment
                   </Button>
                 ) : null}
@@ -543,7 +540,7 @@ function Workspace({ me }: { me: MePayload }) {
               <MonthEnd onOpenLot={(id) => setLotTarget({ id })} csvRef={csvRef} />
             )}
             {screen === 'shipments' && (
-              <Shipments data={data} onOpen={setSelectedShipment} csvRef={csvRef} />
+              <Shipments onOpen={(id) => setShipmentTarget({ id })} csvRef={csvRef} />
             )}
             {screen === 'settings' && (
               <Settings
@@ -574,12 +571,17 @@ function Workspace({ me }: { me: MePayload }) {
             run={run}
           />
         )}
-        {selectedShipmentLive && (
+        {shipmentTarget && (
           <ShipmentDrawer
-            key={selectedShipmentLive.id}
-            shipment={selectedShipmentLive}
-            data={data}
-            onClose={() => setSelectedShipment(null)}
+            key={'id' in shipmentTarget ? shipmentTarget.id : 'new'}
+            target={shipmentTarget}
+            onClose={() => setShipmentTarget(null)}
+            onOpen={(id) => setShipmentTarget({ id })}
+            onGone={() => {
+              setShipmentTarget(null)
+              setSaveState('idle')
+              setMessage('This shipment was deleted.')
+            }}
             run={run}
           />
         )}

@@ -45,3 +45,12 @@ export async function openLot(page: Page, label: string) {
   await expect(drawer).toBeVisible()
   return drawer
 }
+
+// Shipments show as table rows on desktop and as cards on mobile.
+export async function openShipment(page: Page, number: string) {
+  await page.getByRole('textbox', { name: 'Search shipments' }).fill(number)
+  await page.getByRole('main').getByText(number, { exact: true }).filter({ visible: true }).click()
+  const drawer = page.getByRole('dialog', { name: number })
+  await expect(drawer).toBeVisible()
+  return drawer
+}

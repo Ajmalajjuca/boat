@@ -35,6 +35,16 @@ type LotFields = Partial<
   components?: string[]
 }
 
+export type ShipmentFields = {
+  vessel?: string
+  etd?: string
+  plannedEta?: string
+  revisedEta?: string
+  actualArrival?: string
+  stage?: string
+  items: { productId: string; quantity: number }[]
+}
+
 // Seeds records through the API as the admin. Dropdown values survive resets, so they are found
 // by text or created.
 export async function seeder() {
@@ -110,6 +120,20 @@ export async function seeder() {
         receivedQty: fields.receivedQty ?? 0,
         receivedDate: fields.receivedDate ?? null,
       }),
+    shipment: async (number: string, fields: ShipmentFields) => {
+      const { vessel = 'MSC Aurora', stage = 'In Transit', items, ...dates } = fields
+      return api.post('/shipments', {
+        number,
+        vessel,
+        etd: dates.etd ?? null,
+        plannedEta: dates.plannedEta ?? null,
+        revisedEta: dates.revisedEta ?? null,
+        actualArrival: dates.actualArrival ?? null,
+        stageId: await lookup('shipmentStage', stage),
+        remarks: '',
+        items,
+      })
+    },
     done: () => api.dispose(),
   }
 }
