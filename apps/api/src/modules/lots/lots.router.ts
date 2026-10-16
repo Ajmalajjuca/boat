@@ -8,7 +8,15 @@ import { pageQuery } from '../../core/pagination'
 import { parseId, parseInput } from '../../core/parse'
 import { type LotFilters, lotFlagNames, lotSorts } from './lot-list'
 import { getLotDetail } from './lot-view'
-import { createLot, deleteLot, exportLotsCsv, listLots, lotCards, updateLot } from './lots.service'
+import {
+  createLot,
+  deleteLot,
+  exportLotsCsv,
+  listLots,
+  lotCards,
+  lotGroups,
+  updateLot,
+} from './lots.service'
 
 const choose = (label: string) => z.guid({ error: `Choose ${label} from the list.` })
 const fields = {
@@ -71,6 +79,7 @@ const filterId = z.guid({ error: 'Choose a value from the list.' }).optional()
 const listQuery = z.object({
   view: z.enum(['active', 'completed'], { error: 'Choose active or completed.' }).default('active'),
   q: z.string().max(100, { error: 'Keep the search to 100 characters or fewer.' }).default(''),
+  productId: filterId,
   segmentId: filterId,
   categoryId: filterId,
   emsId: filterId,
@@ -101,6 +110,10 @@ export function lotsRouter(deps: RecordsDeps) {
 
   router.get('/summary', requireSignedIn(), async (_req, res) => {
     res.json(await lotCards(deps))
+  })
+
+  router.get('/groups', requireSignedIn(), async (req, res) => {
+    res.json(await lotGroups(deps, toFilters(parseInput(listQuery, req.query))))
   })
 
   router.get('/export.csv', requireSignedIn(), async (req, res) => {

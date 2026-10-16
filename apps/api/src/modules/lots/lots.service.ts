@@ -14,13 +14,14 @@ import { holdDataLockShared } from '../../core/data-lock'
 import { type LookupKind, Prisma } from '../../generated/prisma/client'
 import { renameFields, resolveLookups } from '../lookups/resolve'
 import { softDeleteLots } from './lot-deletion'
-import { countLots, findLotIds, lotCardCounts, type LotFilters } from './lot-list'
+import { countLots, findLotIds, lotCardCounts, type LotFilters, lotGroupRows } from './lot-list'
 import { lockLot, lockLotForEdit, refreshCompletion } from './lot-lock'
 import {
   batchInclude,
   getLotDetail,
   loadLotViews,
   lotAccess,
+  lotInclude,
   type LotRow,
   type LotView,
   toDomainLot,
@@ -414,4 +415,51 @@ export async function exportLotsCsv(
     for (const view of await loadLotViews(db, ids.slice(i, i + 500), date, user))
       rows.push(csvRow(view))
   return { filename: `${filters.view}-lots-${date}.csv`, body: toCsv(csvHeaders, rows) }
+}
+
+// Filters that hide products without active lots, as the demo's Production view does.
+const narrowing = [
+  'productId',
+  'categoryId',
+  'emsId',
+  'pocId',
+  'statusId',
+  'stageId',
+  'logisticsId',
+  'blockerId',
+] as const
+
+// The grouped Production view: products in the order of their first matching lot with their
+// totals, then, on the unfiltered active view, products that have no active lots.
+export async function lotGroups({ db, clock }: RecordsDeps, filters: LotFilters) {
+  const rows = await lotGroupRows(db, filters, await clock.today())
+  const select = lotInclude.product.select
+  const products = await db.product.findMany({
+    where: { id: { in: rows.map((r) => r.productId) } },
+    select,
+  })
+  const byId = new Map(products.map((p) => [p.id, p]))
+  const showEmpty =
+    filters.view === 'active' && !filters.flags.length && !narrowing.some((k) => filters[k])
+  const term = filters.q.trim().toLowerCase()
+  const empty = showEmpty
+    ? (
+        await db.product.findMany({
+          where: {
+            deletedAt: null,
+            ...(filters.segmentId && { segmentId: filters.segmentId }),
+            lots: { none: { deletedAt: null, completedOn: null } },
+          },
+          select,
+          orderBy: [{ name: 'asc' }, { variant: 'asc' }],
+        })
+      ).filter((p) => `${p.name} ${p.variant}`.toLowerCase().includes(term))
+    : []
+  const zero = { lots: 0, delayed: 0, lotQty: 0, produced: 0, grnTotal: 0, balance: 0 }
+  return {
+    items: [
+      ...rows.map(({ productId, ...totals }) => ({ product: byId.get(productId)!, ...totals })),
+      ...empty.map((product) => ({ product, ...zero })),
+    ],
+  }
 }
