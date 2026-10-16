@@ -97,7 +97,8 @@ export default function Shipments({ onOpen, csvRef }: Props) {
   const queryText = JSON.stringify(query)
   useEffect(() => setPage(1), [queryText])
   const summary = useShipmentSummary().data
-  const list = useShipments(query, page).data
+  const listQuery = useShipments(query, page),
+    list = listQuery.data
   const shipments = list?.items ?? []
   const clear = () => {
     setSearch('')
@@ -239,7 +240,21 @@ export default function Shipments({ onOpen, csvRef }: Props) {
             <X size={14} /> Clear
           </Button>
         </div>
-        {shipments.length ? (
+        {listQuery.isPending ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading shipments…</p>
+        ) : listQuery.isError && !list ? (
+          <div className="p-5">
+            <Empty
+              title="Couldn't load shipments"
+              description={listQuery.error.message}
+              action={
+                <Button variant="secondary" onClick={() => listQuery.refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          </div>
+        ) : shipments.length ? (
           <>
             <div className="table-wrap hidden md:block">
               <table className="data-table">

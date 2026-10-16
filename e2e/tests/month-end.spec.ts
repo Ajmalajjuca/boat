@@ -57,3 +57,16 @@ test('FR-5.2 downloads the month-end CSV', async ({ page }) => {
   expect(csv).toContain('J-1')
   expect(csv).toContain('J-2')
 })
+
+test('shows an error, not an endless load, when the report fails', async ({ page }) => {
+  await seedMonth()
+  await page.route('**/api/v1/reports/month-end?*', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+  )
+  await page.goto('/')
+  await goTo(page, 'Month-end Summary')
+  await expect(page.getByText("Couldn't reach the server — try again.")).toBeVisible()
+  await page.unroute('**/api/v1/reports/month-end?*')
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByTitle('Lot quantity of lots planned for this month.')).toContainText('150')
+})

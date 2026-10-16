@@ -12,6 +12,7 @@ test('a refresh, and another user, see the same records', async ({ page, browser
   await expect(page.getByRole('group', { name: 'Kept Product' })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('group', { name: 'Kept Product' })).toBeVisible()
+  await expect(page.getByText('Records shared by everyone signed in')).toBeAttached()
 
   const other = await browser.newContext({
     storageState: authFile('viewer'),

@@ -36,8 +36,14 @@ const text = (ref: Ref | null) => ref?.value ?? ''
 const day = (date: string | null) => date ?? ''
 const orNull = (date: string) => date || null
 
+// A dropdown value as a record carries it. Records keep the ones the server sent, so a save
+// resolves them even when this browser's list is older than the record.
+export type KnownValue = Pick<LookupItem, 'id' | 'kind' | 'value'>
+const known = (kind: LookupKind, ...refs: (Ref | null)[]): KnownValue[] =>
+  refs.flatMap((r) => (r ? [{ id: r.id, kind, value: r.value }] : []))
+
 // Dropdown values are unique per kind ignoring case, as the server's citext index enforces.
-export function lookupId(lookups: LookupItem[], kind: LookupKind, value: string) {
+export function lookupId(lookups: KnownValue[], kind: LookupKind, value: string) {
   if (!value) return null
   const wanted = value.toLowerCase()
   return lookups.find((l) => l.kind === kind && l.value.toLowerCase() === wanted)?.id ?? null
@@ -54,6 +60,7 @@ export type LotRecord = Lot & {
   computed: LotComputed
   access: LotAccess
   completedOn: string
+  refs: KnownValue[]
 }
 export function toLot(item: LotItem): LotRecord {
   return {
@@ -89,11 +96,25 @@ export function toLot(item: LotItem): LotRecord {
     completedOn: day(item.completedOn),
     computed: item.computed,
     access: item.access,
+    refs: [
+      ...known('category', item.category),
+      ...known('ems', item.ems),
+      ...known('poc', item.poc),
+      ...known('status', item.status),
+      ...known('stage', item.stage),
+      ...known('component', ...item.components),
+      ...known('logistics', item.logistics),
+      ...known('blocker', item.blocker),
+    ],
   }
 }
-// Required values that can't be found are sent as '', so the server's 422 names the field.
-export function lotInput(lot: Lot, lookups: LookupItem[]): LotInput {
-  const id = (kind: LookupKind, value: string) => lookupId(lookups, kind, value)
+// Values are found in the record's own refs first, then in this browser's list. A value that
+// can't be found is sent as '' (never null, which would clear it), so the server's 422 names the
+// field. Only an empty optional value is sent as null.
+export function lotInput(lot: Lot & { refs?: KnownValue[] }, lookups: LookupItem[]): LotInput {
+  const all = [...(lot.refs ?? []), ...lookups]
+  const id = (kind: LookupKind, value: string) =>
+    value ? (lookupId(all, kind, value) ?? '') : null
   return {
     productId: lot.productId,
     label: lot.label,
@@ -201,6 +222,7 @@ export type ShipmentRecord = Shipment & {
   version: number
   computed: ShipmentComputed
   lines: ShipmentLine[]
+  refs: KnownValue[]
 }
 export const toShipment = (s: ShipmentListItem): ShipmentRecord => ({
   id: s.id,
@@ -217,6 +239,7 @@ export const toShipment = (s: ShipmentListItem): ShipmentRecord => ({
   remarks: s.remarks,
   computed: s.computed,
   lines: s.items,
+  refs: known('shipmentStage', s.stage),
 })
 export const toLines = (s: ShipmentListItem): ShipmentItem[] =>
   s.items.map((i) => ({
@@ -228,7 +251,7 @@ export const toLines = (s: ShipmentListItem): ShipmentItem[] =>
     quantity: i.quantity,
   }))
 export const shipmentInput = (
-  s: Shipment,
+  s: Shipment & { refs?: KnownValue[] },
   lines: ShipmentItem[],
   lookups: LookupItem[],
 ): ShipmentInput => ({
@@ -238,7 +261,9 @@ export const shipmentInput = (
   plannedEta: orNull(s.plannedEta),
   revisedEta: orNull(s.revisedEta),
   actualArrival: orNull(s.actualArrival),
-  stageId: lookupId(lookups, 'shipmentStage', s.stage),
+  stageId: s.stage
+    ? (lookupId([...(s.refs ?? []), ...lookups], 'shipmentStage', s.stage) ?? '')
+    : null,
   remarks: s.remarks,
   items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
 })

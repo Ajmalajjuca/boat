@@ -3,7 +3,7 @@ import type { LotProduct } from '@boat/domain/api'
 import { dateLabel, monthLabel, monthOf, quantity, today } from '@boat/domain/calculations'
 import { downloadMonthEndCsv } from './api/reports'
 import { useMonthEnd, useMonths } from './api/queries'
-import { Card, Empty, Select, type CsvExport } from './ui'
+import { Button, Card, Empty, Select, type CsvExport } from './ui'
 
 type Props = {
   onOpenLot: (id: string) => void
@@ -15,12 +15,25 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
   const current = monthOf(today())
   const months = useMonths().data ?? [current]
   const [month, setMonth] = useState(current)
-  const report = useMonthEnd(month).data
+  const reportQuery = useMonthEnd(month),
+    report = reportQuery.data
   csvRef.current = async () => {
     if (!report?.lots.length) return false
     await downloadMonthEndCsv(month)
     return true
   }
+  if (reportQuery.isError && !report)
+    return (
+      <Empty
+        title="Couldn't load the month-end summary"
+        description={reportQuery.error.message}
+        action={
+          <Button variant="secondary" onClick={() => reportQuery.refetch()}>
+            Try again
+          </Button>
+        }
+      />
+    )
   if (!report) return <Empty title="Loading month-end summary..." description="" />
   const summary = report,
     inProgress = report.inProgress

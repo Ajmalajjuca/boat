@@ -80,7 +80,11 @@ function toError(status: number, data: ErrorBody | undefined, options: CallOptio
       if (!options.public) sessionEnded()
       return new UnauthenticatedError(message)
     case 403:
-      return new ApiError(403, forbiddenMessage)
+      // A stale CSRF token (the session changed in another tab) needs a reload, not a role.
+      return new ApiError(
+        403,
+        message?.startsWith('Your session token') ? message : forbiddenMessage,
+      )
     case 404:
       return new NotFoundError()
     case 409:

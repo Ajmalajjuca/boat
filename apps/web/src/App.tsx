@@ -85,6 +85,8 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
   },
   settings: { title: 'Settings', description: 'Manage operational values, users and data.' },
 }
+const activityKey = 'boat.lastActivity'
+
 function Loading() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6]">
@@ -151,16 +153,31 @@ function Workspace({ me }: { me: MePayload }) {
     products = useProducts().data ?? [],
     completedCount = useCompletedCount().data
   // Idle sign-out: no pointer or key activity for the workspace's idle timeout ends the session.
+  // Tabs share one session cookie, so activity in any tab counts: each tab records its last
+  // activity in localStorage (a timestamp, not a record) and checks the latest of all tabs.
   const idleMinutes = me.idleTimeoutMinutes
   useEffect(() => {
     let last = Date.now()
     const touch = () => {
       last = Date.now()
+      try {
+        localStorage.setItem(activityKey, String(last))
+      } catch {
+        // Without storage each tab times out on its own activity.
+      }
     }
+    const lastAnywhere = () => {
+      try {
+        return Math.max(last, Number(localStorage.getItem(activityKey)) || 0)
+      } catch {
+        return last
+      }
+    }
+    touch()
     const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
     events.forEach((name) => window.addEventListener(name, touch, { passive: true }))
     const timer = setInterval(() => {
-      if (Date.now() - last > idleMinutes * 60_000)
+      if (Date.now() - lastAnywhere() > idleMinutes * 60_000)
         void auth.signOut(`Signed out after ${idleMinutes} minutes without activity.`)
     }, 15_000)
     return () => {
@@ -388,7 +405,8 @@ function Workspace({ me }: { me: MePayload }) {
                 }}
               />
               <div className="flex items-center gap-2 px-1 text-[11px] text-teal-100/70">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" /> Data stored in this browser
+                <span className="h-2 w-2 rounded-full bg-emerald-400" /> Records shared by everyone
+                signed in
               </div>
             </div>
           </div>

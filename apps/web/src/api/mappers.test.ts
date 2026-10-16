@@ -128,6 +128,16 @@ describe('lots', () => {
   it('sends an empty id for a required value that no longer exists, so the server names the field', () => {
     expect(lotInput({ ...toLot(item), status: 'Gone' }, lookups).statusId).toBe('')
   })
+  it('keeps the ids the server sent for values this browser has not loaded yet', () => {
+    const lot = toLot({ ...item, poc: ref('p9', 'Priya'), ems: ref('e9', 'Foxconn') })
+    expect(lotInput({ ...lot, followUpNote: 'Call' }, lookups)).toMatchObject({
+      pocId: 'p9',
+      emsId: 'e9',
+    })
+  })
+  it('sends an empty id for an optional value it cannot find, rather than clearing it', () => {
+    expect(lotInput({ ...toLot(item), poc: 'Nobody' }, lookups).pocId).toBe('')
+  })
   it("renames the server's lot fields to the form's", () => {
     expect(lotField('categoryId')).toBe('category')
     expect(lotField('componentIds.1')).toBe('rmComponents')
@@ -216,6 +226,11 @@ describe('shipments', () => {
       arrivalDelay: null,
     },
   }
+  it('keeps the stage id the server sent, and never clears a stage it cannot find', () => {
+    const s = toShipment({ ...shipment, stage: ref('t9', 'At Port') })
+    expect(shipmentInput(s, toLines(shipment), lookups).stageId).toBe('t9')
+    expect(shipmentInput({ ...s, stage: 'Nowhere' }, [], lookups).stageId).toBe('')
+  })
   it('maps a shipment and its lines both ways', () => {
     expect(toShipment(shipment)).toMatchObject({ stage: 'In Transit', revisedEta: '', version: 2 })
     const lines = toLines(shipment)

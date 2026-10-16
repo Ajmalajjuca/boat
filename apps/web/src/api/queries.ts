@@ -26,9 +26,8 @@ export const keys = {
   users: ['users'],
 } as const
 
-// Dropdown values change only in Settings, which refreshes them itself.
-export const useLookups = () =>
-  useQuery({ queryKey: keys.lookups, queryFn: listLookups, staleTime: 5 * 60_000 })
+// Another admin may change dropdown values at any time, so they refresh like other reads.
+export const useLookups = () => useQuery({ queryKey: keys.lookups, queryFn: listLookups })
 export const useProducts = () => useQuery({ queryKey: keys.products, queryFn: listProducts })
 export const useLotSummary = () =>
   useQuery({ queryKey: [...keys.lots, 'summary'], queryFn: fetchLotSummary })

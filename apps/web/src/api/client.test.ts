@@ -103,6 +103,11 @@ describe('errors', () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     expect((await api.get('/lots').then(fail, caught)).message).toBe(unreachableMessage)
   })
+  it("keeps the server's message when a write's session token is out of date", async () => {
+    const message = 'Your session token is missing or out of date. Reload the page and try again.'
+    reply(403, { error: 'forbidden', message })
+    expect((await api.post('/lots').then(fail, caught)).message).toBe(message)
+  })
   it("passes the server's message on a 429", async () => {
     reply(429, { error: 'rate_limited', message: 'Too many failed attempts.' })
     expect((await api.post('/auth/login', {}, { public: true }).then(fail, caught)).message).toBe(

@@ -112,3 +112,20 @@ test('FR-6.5 filters by card and downloads the CSV of what is shown', async ({ p
   expect(csv).toContain('INV-DONE')
   expect(csv).not.toContain('INV-OPEN')
 })
+
+test('shows an error, not an empty list, when the shipments fail to load', async ({ page }) => {
+  const seed = await seeder()
+  const tango = await seed.product('Tango')
+  await seed.shipment('INV-ERR', { items: [{ productId: tango.id, quantity: 5 }] })
+  await seed.done()
+  await page.route('**/api/v1/shipments?*', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+  )
+  await page.goto('/')
+  await goTo(page, 'Finished Goods')
+  await expect(page.getByText("Couldn't reach the server — try again.")).toBeVisible()
+  await expect(page.getByText('No matching shipments')).toHaveCount(0)
+  await page.unroute('**/api/v1/shipments?*')
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(shipment(page, 'INV-ERR')).toBeVisible()
+})
