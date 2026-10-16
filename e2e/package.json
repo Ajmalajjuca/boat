@@ -1,0 +1,19 @@
+{
+  "name": "@boat/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@boat/domain": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@testcontainers/postgresql": "12.2.1",
+    "@types/node": "^24.19.2",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1",
+    "typescript": "^7.0.2"
+  }
+}

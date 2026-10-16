@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm --filter @boat/web dev",
     "api": "pnpm --filter @boat/api",
+    "e2e": "pnpm --filter @boat/e2e e2e",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
