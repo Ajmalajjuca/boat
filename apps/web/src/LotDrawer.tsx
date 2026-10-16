@@ -8,7 +8,22 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import type { DataSet, GRNReceipt, Lot, RMBatch } from './models'
+import type { LookupItem, LotDetail } from '@boat/domain/api'
+import { addNote } from './api/activity'
+import { ConflictError, NotFoundError } from './api/client'
+import { deleteLot, type LotView, saveLot, toLotView } from './api/lots'
+import { type LotRecord, values } from './api/mappers'
+import {
+  activityKey,
+  lotKey,
+  refreshLots,
+  useActivity,
+  useLookups,
+  useLot,
+  useProducts,
+} from './api/queries'
+import { queryClient } from './api/queryClient'
+import type { GRNReceipt, Lot, RMBatch } from './models'
 import { productChoices, stamp } from './models'
 import {
   balance,
@@ -17,7 +32,6 @@ import {
   fullGrnDate,
   grnProgress,
   leadTime,
-  lotSummary,
   planDelay,
   quantity,
   signedDays,
@@ -25,19 +39,12 @@ import {
   today,
   totalGrn,
 } from './calculations'
-import {
-  addNote,
-  deleteBatch,
-  deleteLot,
-  deleteReceipt,
-  saveBatch,
-  saveLot,
-  saveReceipt,
-} from './repository'
+import { deleteBatch, deleteReceipt, saveBatch, saveReceipt } from './repository'
 import {
   Badge,
   Button,
   Card,
+  ConflictBanner,
   Field,
   Input,
   Modal,
@@ -56,13 +63,22 @@ import {
   validateReceipt,
   type FieldErrors,
 } from './validation'
-import { roleInfo, useAccess } from './access'
+import { type LotAccess, roleInfo, useAccess } from './access'
 
+export type LotTarget = { id: string } | { draft: Lot }
 type Props = {
-  lot: Lot
-  data: DataSet
+  target: LotTarget
   onClose: () => void
+  // A new lot reopens by id after its first save.
+  onOpen: (id: string) => void
+  // The lot was deleted by someone else.
+  onGone: () => void
   run: Run
+}
+type EditorProps = Omit<Props, 'target'> & {
+  view: LotView | null
+  initial: Lot
+  lookups: LookupItem[]
 }
 // Fields edited on the Overview tab; a failed save switches there so the error is visible.
 const overviewFields = [
@@ -81,9 +97,38 @@ const overviewFields = [
   'blockerCategory',
 ]
 const number = (s: string) => (s === '' ? 0 : Number(s))
-export default function LotDrawer({ lot, data, onClose, run }: Props) {
-  const [draft, setDraft] = useState(lot),
-    [baseline, setBaseline] = useState(JSON.stringify(lot)),
+export default function LotDrawer({ target, ...props }: Props) {
+  const lookups = useLookups().data
+  const detail = useLot('id' in target ? target.id : undefined)
+  const gone = detail.error instanceof NotFoundError
+  useEffect(() => {
+    if (gone) props.onGone()
+  }, [gone])
+  if (lookups && 'draft' in target)
+    return <LotEditor view={null} initial={target.draft} lookups={lookups} {...props} />
+  if (lookups && detail.data)
+    return <LotEditor view={detail.data} initial={detail.data.lot} lookups={lookups} {...props} />
+  return (
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+      title="Lot details"
+    >
+      {detail.error && !gone ? (
+        <FormError message={detail.error.message} />
+      ) : (
+        <p className="text-sm text-slate-500">Loading lot...</p>
+      )}
+    </Sheet>
+  )
+}
+
+function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: EditorProps) {
+  const [draft, setDraft] = useState<Lot & { version?: number }>(initial),
+    [baseline, setBaseline] = useState(JSON.stringify(initial)),
+    [conflict, setConflict] = useState<LotView | null>(null),
     [tab, setTab] = useState<'overview' | 'rm' | 'grn' | 'history'>('overview')
   const [batch, setBatch] = useState<RMBatch | null>(null),
     [receipt, setReceipt] = useState<GRNReceipt | null>(null),
@@ -92,15 +137,20 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
     batchForm = useFormErrors(),
     receiptForm = useFormErrors()
   const access = useAccess()
-  useEffect(() => {
+  const products = useProducts().data ?? []
+  const dirty = JSON.stringify(draft) !== baseline,
+    stored = !!view
+  const adopt = (lot: LotRecord) => {
     setDraft(lot)
     setBaseline(JSON.stringify(lot))
-    setTab('overview')
-  }, [lot.id])
-  const dirty = JSON.stringify(draft) !== baseline,
-    stored = !!data.lots.find((l) => l.id === lot.id)
-  // Saved lots use the stored POC, so editing the POC field cannot unlock a lot.
-  const level = stored ? access.lotAccess(lot) : access.can('createLots') ? 'full' : 'none',
+  }
+  // Follows the server while there are no unsaved edits. Query results keep their identity when
+  // nothing changed, so this runs only on a real change, such as a refetch on window focus.
+  useEffect(() => {
+    if (view && !dirty) adopt(view.lot)
+  }, [view])
+  // A saved lot's edit level comes from the server, so editing the POC field cannot unlock it.
+  const level: LotAccess = view ? view.lot.access : access.can('createLots') ? 'full' : 'none',
     readOnly = level === 'none',
     planLocked = level !== 'full',
     canDeleteEntries = access.can('deleteEntries') && !readOnly
@@ -115,18 +165,12 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
     if (dirty && !window.confirm('Discard unsaved lot changes?')) return
     onClose()
   }
-  const rs = data.grnReceipts.filter((r) => r.lotId === lot.id),
-    bs = data.rmBatches.filter((b) => b.lotId === lot.id),
-    logs = data.activityLogs
-      .filter((a) => a.entityType === 'lot' && a.entityId === lot.id)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const rs = view?.receipts ?? [],
+    bs = view?.batches ?? [],
+    logs = useActivity('lots', view?.lot.id).data ?? []
   const metrics = rmMetrics(draft, bs),
-    products = productChoices(data.products)
-  const lookup = (kind: string) =>
-    data.lookupValues
-      .filter((v) => v.kind === kind)
-      .sort((a, b) => a.sort - b.sort)
-      .map((v) => v.value)
+    productOptions = productChoices(products)
+  const lookup = (kind: Parameters<typeof values>[1]) => values(lookups, kind)
   const update = <K extends keyof Lot>(key: K, value: Lot[K]) => {
     setDraft((d) => ({ ...d, [key]: value }))
     lotForm.clear(key)
@@ -140,21 +184,26 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
     if (keys.some((k) => overviewFields.includes(k))) setTab('overview')
     else if (keys.includes('rmComponents')) setTab('rm')
   }
+  const failed = (e: unknown) => {
+    if (e instanceof ConflictError && e.current)
+      return setConflict(toLotView(e.current as LotDetail))
+    if (e instanceof NotFoundError) return onGone()
+    lotForm.fail(e)
+    showTabFor(fieldErrors(e))
+  }
   const save = async (closeAfter = false) => {
     const found = validateLot(draft)
     if (!lotForm.check(found)) return showTabFor(found)
-    const ok = await run(
-      () => saveLot(draft),
-      (e) => {
-        lotForm.fail(e)
-        showTabFor(fieldErrors(e))
-      },
-    )
-    if (!ok) return
+    let saved: LotView | undefined
+    const ok = await run(async () => {
+      saved = await saveLot(draft, lookups)
+      queryClient.setQueryData(lotKey(saved.lot.id), saved)
+      await refreshLots()
+    }, failed)
+    if (!ok || !saved) return
     if (closeAfter) return onClose()
-    const next = { ...draft, updatedAt: new Date().toISOString() }
-    setDraft(next)
-    setBaseline(JSON.stringify(next))
+    if (!view) return onOpen(saved.lot.id)
+    adopt(saved.lot)
   }
   const remove = async () => {
     if (!stored) {
@@ -167,14 +216,18 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
       )
     )
       return
-    if (await run(() => deleteLot(lot.id), lotForm.fail)) onClose()
+    const removed = await run(async () => {
+      await deleteLot(draft.id)
+      await refreshLots()
+    }, failed)
+    if (removed) onClose()
   }
   const openBatch = (value?: RMBatch) => {
     batchForm.reset()
     setBatch(
       value ||
         stamp({
-          lotId: lot.id,
+          lotId: draft.id,
           component: draft.rmComponents[0] || '',
           label: '',
           plannedQty: 0,
@@ -188,7 +241,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
   }
   const openReceipt = (value?: GRNReceipt) => {
     receiptForm.reset()
-    setReceipt(value || stamp({ lotId: lot.id, label: '', date: today(), quantity: 0, note: '' }))
+    setReceipt(value || stamp({ lotId: draft.id, label: '', date: today(), quantity: 0, note: '' }))
   }
   const editBatch = (patch: Partial<RMBatch>) => {
     setBatch((b) => (b ? { ...b, ...patch } : b))
@@ -234,7 +287,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
           if (!open) close()
         }}
         title={stored ? `${draft.label || 'Lot details'}` : 'New production lot'}
-        subtitle={`${data.products.find((p) => p.id === draft.productId)?.name || 'Product'} · ${draft.category}${stored ? ` · ${lotSummary(lot, rs)}` : ''}`}
+        subtitle={`${products.find((p) => p.id === draft.productId)?.name || 'Product'} · ${draft.category}${view ? ` · ${view.lot.computed.summary}` : ''}`}
         footer={
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -262,6 +315,18 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
           </div>
         }
       >
+        {conflict && (
+          <ConflictBanner
+            record="lot"
+            onReload={() => {
+              queryClient.setQueryData(lotKey(conflict.lot.id), conflict)
+              adopt(conflict.lot)
+              setConflict(null)
+              lotForm.reset()
+            }}
+            onDismiss={() => setConflict(null)}
+          />
+        )}
         <div className="mb-5 empty:hidden">
           <FormError
             message={
@@ -275,7 +340,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
         {access.user && level !== 'full' && (
           <div className="mb-5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs text-slate-600">
             {readOnly
-              ? `View only. ${roleInfo[access.user.role].label} profiles can't change this lot${access.user.role === 'poc' ? ` because its POC is ${lot.poc || 'not set'}` : ''}.`
+              ? `View only. ${roleInfo[access.user.role].label} users can't change this lot${access.user.role === 'poc' ? ` because its POC is ${view?.lot.poc || 'not set'}` : ''}.`
               : 'You can update progress on this lot. Locked fields such as product, lot quantity, planned date, and POC are set by a planner or admin.'}
           </div>
         )}
@@ -330,7 +395,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                 >
                   <SearchSelect
                     value={draft.productId}
-                    options={products}
+                    options={productOptions}
                     onChange={(id) => update('productId', id)}
                   />
                 </Field>
@@ -880,7 +945,13 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     size="sm"
                     disabled={!stored || !note.trim()}
                     onClick={async () => {
-                      if (await run(() => addNote('lot', lot.id, note))) setNote('')
+                      const posted = await run(async () => {
+                        await addNote('lots', draft.id, note)
+                        await queryClient.invalidateQueries({
+                          queryKey: activityKey('lots', draft.id),
+                        })
+                      })
+                      if (posted) setNote('')
                     }}
                   >
                     Post update
@@ -896,7 +967,7 @@ export default function LotDrawer({ lot, data, onClose, run }: Props) {
                     <div className="text-sm text-slate-700">{item.message}</div>
                     <div className="mt-1 text-xs text-slate-500">
                       {new Date(item.createdAt).toLocaleString()}
-                      {item.actor && ` · ${item.actor}`}
+                      {item.actorName && ` · ${item.actorName}`}
                     </div>
                   </div>
                 </div>

@@ -5,7 +5,10 @@ import { twMerge } from 'tailwind-merge'
 import { fieldErrors, type FieldErrors } from './validation'
 import { Check, ChevronDown, CircleAlert, Lock, X } from 'lucide-react'
 import {
+  createContext,
+  useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -106,15 +109,28 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants>) {
   return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />
 }
+// The caption id of the enclosing Field. Controls name themselves by the caption alone, because
+// the wrapping <label> also contains the control's own text (a textarea's value, a select's options).
+const FieldCaption = createContext<string | undefined>(undefined)
+const useCaption = (props: { 'aria-label'?: string; 'aria-labelledby'?: string }) => {
+  const caption = useContext(FieldCaption)
+  return props['aria-label'] ? props['aria-labelledby'] : (props['aria-labelledby'] ?? caption)
+}
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn('field', className)} {...props} />
+  return <input className={cn('field', className)} aria-labelledby={useCaption(props)} {...props} />
 }
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn('field min-h-20 resize-y', className)} {...props} />
+  return (
+    <textarea
+      className={cn('field min-h-20 resize-y', className)}
+      aria-labelledby={useCaption(props)}
+      {...props}
+    />
+  )
 }
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn('field', className)} {...props}>
+    <select className={cn('field', className)} aria-labelledby={useCaption(props)} {...props}>
       {children}
     </select>
   )
@@ -139,6 +155,7 @@ export function Field({
 }) {
   // A disabled fieldset disables every control inside it, including SearchSelect's button.
   const Outer = locked ? 'fieldset' : 'div'
+  const captionId = useId()
   return (
     // Error and help text sit outside the <label> so they are not read as part of the field name.
     <Outer
@@ -147,7 +164,11 @@ export function Field({
       disabled={locked || undefined}
     >
       <label className="block">
-        <span className="field-label" data-required={(required && !locked) || undefined}>
+        <span
+          id={captionId}
+          className="field-label"
+          data-required={(required && !locked) || undefined}
+        >
           {label}
           {locked && (
             <span title="Your role cannot change this field" aria-hidden="true">
@@ -155,7 +176,7 @@ export function Field({
             </span>
           )}
         </span>
-        {children}
+        <FieldCaption.Provider value={captionId}>{children}</FieldCaption.Provider>
       </label>
       {error ? (
         <span

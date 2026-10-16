@@ -19,13 +19,13 @@ import {
   X,
 } from 'lucide-react'
 import { db, getData } from './db'
-import type { DataSet, Lot, Product, Shipment } from './models'
+import type { DataSet, Product, Shipment } from './models'
 import { dataKeys, productChoices } from './models'
 import { quantity, today } from './calculations'
 import { downloadFile, exportData, importData, parseImport } from './repository'
 import Production from './Production'
 import MonthEnd from './MonthEnd'
-import LotDrawer from './LotDrawer'
+import LotDrawer, { type LotTarget } from './LotDrawer'
 import Shipments, { newShipment, ShipmentDrawer } from './Shipments'
 import Settings, { performReset } from './Settings'
 import type { MePayload } from '@boat/domain/api'
@@ -42,7 +42,7 @@ import { ConflictError } from './api/client'
 import { type ProductRecord, toProduct, values } from './api/mappers'
 import { deleteProduct, saveProduct } from './api/products'
 import { refreshProducts, useCompletedCount, useLookups, useProducts } from './api/queries'
-import { newProduct } from './drafts'
+import { newLot, newProduct } from './drafts'
 import {
   Badge,
   Button,
@@ -58,7 +58,6 @@ import {
   type Run,
 } from './ui'
 import { validateProduct } from './validation'
-import { newLot } from './demo'
 
 type Screen = 'production' | 'completed' | 'monthEnd' | 'shipments' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -124,7 +123,7 @@ function Workspace({ me }: { me: MePayload }) {
   const [dbError, setDbError] = useState(''),
     [screen, setScreen] = useState<Screen>('production'),
     [menuOpen, setMenuOpen] = useState(false)
-  const [selectedLot, setSelectedLot] = useState<Lot | null>(null),
+  const [lotTarget, setLotTarget] = useState<LotTarget | null>(null),
     [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [product, setProduct] = useState<(Product & { version?: number }) | null>(null),
     [productBase, setProductBase] = useState(''),
@@ -302,11 +301,9 @@ function Workspace({ me }: { me: MePayload }) {
   const reset = () =>
     performReset(run, () => {
       setScreen('production')
-      setSelectedLot(null)
+      setLotTarget(null)
       setSelectedShipment(null)
     })
-  const selectedLotLive =
-    selectedLot && (data?.lots.find((l) => l.id === selectedLot.id) || selectedLot)
   const selectedShipmentLive =
     selectedShipment &&
     (data?.shipments.find((s) => s.id === selectedShipment.id) || selectedShipment)
@@ -535,15 +532,19 @@ function Workspace({ me }: { me: MePayload }) {
             {(screen === 'production' || screen === 'completed') && (
               <Production
                 mode={screen === 'production' ? 'active' : 'completed'}
-                onOpenLot={(id) => setSelectedLot(data.lots.find((l) => l.id === id) ?? null)}
-                onNewLot={(productId) => setSelectedLot(newLot(productId, data.lookupValues))}
+                onOpenLot={(id) => setLotTarget({ id })}
+                onNewLot={(productId) => setLotTarget({ draft: newLot(productId, lookups) })}
                 onEditProduct={openProduct}
                 onAddProduct={() => openProduct()}
                 csvRef={csvRef}
               />
             )}
             {screen === 'monthEnd' && (
-              <MonthEnd data={data} onOpenLot={setSelectedLot} csvRef={csvRef} />
+              <MonthEnd
+                data={data}
+                onOpenLot={(lot) => setLotTarget({ id: lot.id })}
+                csvRef={csvRef}
+              />
             )}
             {screen === 'shipments' && (
               <Shipments data={data} onOpen={setSelectedShipment} csvRef={csvRef} />
@@ -563,12 +564,17 @@ function Workspace({ me }: { me: MePayload }) {
             )}
           </div>
         </main>
-        {selectedLotLive && (
+        {lotTarget && (
           <LotDrawer
-            key={selectedLotLive.id}
-            lot={selectedLotLive}
-            data={data}
-            onClose={() => setSelectedLot(null)}
+            key={'id' in lotTarget ? lotTarget.id : 'new'}
+            target={lotTarget}
+            onClose={() => setLotTarget(null)}
+            onOpen={(id) => setLotTarget({ id })}
+            onGone={() => {
+              setLotTarget(null)
+              setSaveState('idle')
+              setMessage('This lot was deleted.')
+            }}
             run={run}
           />
         )}
@@ -669,7 +675,7 @@ function Workspace({ me }: { me: MePayload }) {
                 disabled={!addLotProductId}
                 onClick={() => {
                   setAddLotOpen(false)
-                  setSelectedLot(newLot(addLotProductId, data.lookupValues))
+                  setLotTarget({ draft: newLot(addLotProductId, lookups) })
                 }}
               >
                 Continue to lot details

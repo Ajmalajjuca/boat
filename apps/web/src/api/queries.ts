@@ -1,6 +1,14 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { listLookups } from './lookups'
-import { fetchLotGroups, fetchLotSummary, listLots, type LotQuery, lotPageSize } from './lots'
+import { type ActivityOwner, listActivity } from './activity'
+import {
+  fetchLot,
+  fetchLotGroups,
+  fetchLotSummary,
+  listLots,
+  type LotQuery,
+  lotPageSize,
+} from './lots'
 import { listProducts } from './products'
 import { queryClient } from './queryClient'
 
@@ -40,6 +48,23 @@ export const useCompletedCount = () =>
   useQuery({
     queryKey: [...keys.lots, 'completed-count'],
     queryFn: () => listLots(completed, 1, 1).then((r) => r.total),
+  })
+
+export const lotKey = (id: string) => [...keys.lots, 'detail', id]
+// Lot history sits under the lots key and shipment history under the shipments key, so the
+// refresh after any write to either also reloads its history.
+export const activityKey = (owner: ActivityOwner, id: string) => [
+  ...(owner === 'lots' ? keys.lots : keys.shipments),
+  'activity',
+  id,
+]
+export const useLot = (id: string | undefined) =>
+  useQuery({ queryKey: lotKey(id ?? ''), queryFn: () => fetchLot(id!), enabled: !!id })
+export const useActivity = (owner: ActivityOwner, id: string | undefined) =>
+  useQuery({
+    queryKey: activityKey(owner, id ?? ''),
+    queryFn: () => listActivity(owner, id!),
+    enabled: !!id,
   })
 
 const refresh = (...areas: (readonly string[])[]) =>

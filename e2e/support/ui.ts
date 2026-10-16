@@ -35,3 +35,13 @@ export async function choose(scope: Page | Locator, label: string, option: strin
 }
 
 export const toast = (page: Page) => page.locator('[data-toast]')
+
+// Searching expands the product that holds the lot. Desktop lists lots in a table, mobile in
+// cards; only one of them is visible.
+export async function openLot(page: Page, label: string) {
+  await page.getByRole('textbox', { name: 'Search product, variant, or lot' }).fill(label)
+  await page.getByRole('main').getByText(label, { exact: true }).filter({ visible: true }).click()
+  const drawer = page.getByRole('dialog', { name: label })
+  await expect(drawer).toBeVisible()
+  return drawer
+}
