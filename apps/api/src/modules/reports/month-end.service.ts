@@ -1,4 +1,11 @@
-import { lotSummary, monthEnd, monthLabel, monthOf, monthSummary } from '@boat/domain/calculations'
+import {
+  effectiveLotEta,
+  lotSummary,
+  monthEnd,
+  monthLabel,
+  monthOf,
+  monthSummary,
+} from '@boat/domain/calculations'
 import type { RecordsDeps } from '../../core/clock'
 import { toCsv } from '../../core/csv'
 import { fromDbDate, toDbDate } from '../../core/dates'
@@ -53,6 +60,7 @@ export async function monthEndReport({ db, clock }: RecordsDeps, month: string) 
           id: row.id,
           label: row.label,
           plannedDate: fromDbDate(row.plannedDate),
+          eta: effectiveLotEta(r.lot) || null,
           product: row.product,
           blocker: row.blocker,
           blockerDescription: row.blockerDescription,

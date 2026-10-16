@@ -10,6 +10,7 @@ import {
   lotPageSize,
 } from './lots'
 import { listProducts } from './products'
+import { fetchMonthEnd, listMonths } from './reports'
 import { queryClient } from './queryClient'
 
 // Query keys by area. A write invalidates whole areas, so every view of them refetches.
@@ -65,6 +66,15 @@ export const useActivity = (owner: ActivityOwner, id: string | undefined) =>
     queryKey: activityKey(owner, id ?? ''),
     queryFn: () => listActivity(owner, id!),
     enabled: !!id,
+  })
+
+export const useMonths = () =>
+  useQuery({ queryKey: [...keys.monthEnd, 'months'], queryFn: listMonths })
+export const useMonthEnd = (month: string) =>
+  useQuery({
+    queryKey: [...keys.monthEnd, 'report', month],
+    queryFn: () => fetchMonthEnd(month),
+    placeholderData: keepPreviousData,
   })
 
 const refresh = (...areas: (readonly string[])[]) =>

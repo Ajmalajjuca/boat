@@ -231,6 +231,7 @@ export type MonthEndReport = {
       id: string
       label: string
       plannedDate: string | null
+      eta: string | null
       product: LotProduct
       blocker: Ref | null
       blockerDescription: string

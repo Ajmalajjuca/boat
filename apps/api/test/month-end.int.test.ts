@@ -57,6 +57,17 @@ beforeAll(async () => {
 afterAll(() => close())
 
 describe('GET /reports/month-end', () => {
+  it('FR-5.2 gives each lot its current ETA', async () => {
+    const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-09')
+    const eta = Object.fromEntries(
+      res.body.lots.map((r: { lot: { label: string; eta: string | null } }) => [
+        r.lot.label,
+        r.lot.eta,
+      ]),
+    )
+    expect(eta).toEqual({ L1: '2026-09-10', L2: '2026-10-10', L5: '2026-09-05' })
+  })
+
   it('FR-5.1 compares the quantity of lots planned in the month with GRN received by month end', async () => {
     const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-09')
     expect(res.status).toBe(200)

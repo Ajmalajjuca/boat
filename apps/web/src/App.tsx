@@ -540,11 +540,7 @@ function Workspace({ me }: { me: MePayload }) {
               />
             )}
             {screen === 'monthEnd' && (
-              <MonthEnd
-                data={data}
-                onOpenLot={(lot) => setLotTarget({ id: lot.id })}
-                csvRef={csvRef}
-              />
+              <MonthEnd onOpenLot={(id) => setLotTarget({ id })} csvRef={csvRef} />
             )}
             {screen === 'shipments' && (
               <Shipments data={data} onOpen={setSelectedShipment} csvRef={csvRef} />

@@ -11,6 +11,7 @@ import {
 import type { LookupItem, LotDetail } from '@boat/domain/api'
 import { addNote } from './api/activity'
 import { ConflictError, NotFoundError } from './api/client'
+import { deleteBatch, deleteReceipt, saveBatch, saveReceipt } from './api/entries'
 import { deleteLot, type LotView, saveLot, toLotView } from './api/lots'
 import { type LotRecord, values } from './api/mappers'
 import {
@@ -39,7 +40,6 @@ import {
   today,
   totalGrn,
 } from './calculations'
-import { deleteBatch, deleteReceipt, saveBatch, saveReceipt } from './repository'
 import {
   Badge,
   Button,
@@ -253,15 +253,30 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
   }
   const available = (r: GRNReceipt) =>
     draft.lotQty - totalGrn(rs) + (rs.find((x) => x.id === r.id)?.quantity || 0)
+  // A batch or receipt someone else deleted answers 404; reload the lot so it disappears.
+  const entryFailed = (form: ReturnType<typeof useFormErrors>) => (e: unknown) => {
+    form.fail(e)
+    if (e instanceof NotFoundError) void refreshLots()
+  }
   const saveBatchForm = async (e: FormEvent) => {
     e.preventDefault()
     if (!batch || !batchForm.check(validateBatch(batch))) return
-    if (await run(() => saveBatch(batch), batchForm.fail)) setBatch(null)
+    const existing = bs.some((b) => b.id === batch.id)
+    const ok = await run(async () => {
+      await saveBatch(draft.id, batch, lookups, existing)
+      await refreshLots()
+    }, entryFailed(batchForm))
+    if (ok) setBatch(null)
   }
   const saveReceiptForm = async (e: FormEvent) => {
     e.preventDefault()
     if (!receipt || !receiptForm.check(validateReceipt(receipt, available(receipt)))) return
-    if (await run(() => saveReceipt(receipt), receiptForm.fail)) setReceipt(null)
+    const existing = rs.some((r) => r.id === receipt.id)
+    const ok = await run(async () => {
+      await saveReceipt(draft.id, receipt, existing)
+      await refreshLots()
+    }, entryFailed(receiptForm))
+    if (ok) setReceipt(null)
   }
   const toggleComponent = (component: string) =>
     update(
@@ -832,7 +847,10 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                                 className="text-rose-700"
                                 onClick={async () => {
                                   if (window.confirm(`Delete ${b.label} material batch?`))
-                                    await run(() => deleteBatch(b))
+                                    await run(async () => {
+                                      await deleteBatch(b.id)
+                                      await refreshLots()
+                                    })
                                 }}
                               >
                                 Delete
@@ -912,7 +930,10 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                                   `Delete receipt ${r.label}? The lot's completion and balance will update.`,
                                 )
                               )
-                                await run(() => deleteReceipt(r))
+                                await run(async () => {
+                                  await deleteReceipt(r.id)
+                                  await refreshLots()
+                                })
                             }}
                           >
                             Delete
