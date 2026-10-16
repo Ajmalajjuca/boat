@@ -1,6 +1,6 @@
 import type { LookupItem, ProductItem } from '@boat/domain/api'
 import type { Product } from '@boat/domain/models'
-import { api } from './client'
+import { api, ConflictError } from './client'
 import { productField, productInput, toProduct } from './mappers'
 
 export const listProducts = () =>
@@ -19,3 +19,6 @@ export function saveProduct(product: Product & { version?: number }, lookups: Lo
       )
 }
 export const deleteProduct = (id: string) => api.delete(`/products/${id}`)
+// The server's current product when a save met a newer version; null for any other error.
+export const productConflict = (e: unknown) =>
+  e instanceof ConflictError && e.current ? toProduct(e.current as ProductItem) : null

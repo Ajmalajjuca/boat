@@ -9,7 +9,7 @@ import type {
   Page,
 } from '@boat/domain/api'
 import type { GRNReceipt, Lot, RMBatch } from '@boat/domain/models'
-import { api, download, queryString } from './client'
+import { api, ConflictError, download, queryString } from './client'
 import { type LotRecord, lotField, lotInput, toBatch, toLot, toReceipt } from './mappers'
 
 // GET /lots, /lots/groups and /lots/export.csv take the same filters.
@@ -60,3 +60,6 @@ export async function saveLot(lot: Lot & { version?: number }, lookups: LookupIt
   return toLotView(saved)
 }
 export const deleteLot = (id: string) => api.delete(`/lots/${id}`)
+// The server's current lot when a save met a newer version; null for any other error.
+export const lotConflict = (e: unknown) =>
+  e instanceof ConflictError && e.current ? toLotView(e.current as LotDetail) : null

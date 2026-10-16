@@ -9,7 +9,7 @@ import type {
   ShipmentSort,
 } from '@boat/domain/api'
 import type { Shipment, ShipmentItem } from '@boat/domain/models'
-import { api, download, queryString } from './client'
+import { api, ConflictError, download, queryString } from './client'
 import { type ShipmentRecord, shipmentField, shipmentInput, toLines, toShipment } from './mappers'
 
 // GET /shipments and /shipments/export.csv take the same filters.
@@ -68,3 +68,6 @@ export async function saveShipment(
   return toShipmentView(saved)
 }
 export const deleteShipment = (id: string) => api.delete(`/shipments/${id}`)
+// The server's current shipment when a save met a newer version; null for any other error.
+export const shipmentConflict = (e: unknown) =>
+  e instanceof ConflictError && e.current ? toShipmentView(e.current as ShipmentDetail) : null

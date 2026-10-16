@@ -337,6 +337,11 @@ export default function Production({
   const groupsQuery = useLotGroups(query)
   const groups = groupsQuery.data ?? []
   const flat = useLots(query, page, lotPageSize, !group)
+  // Deleting the last row of a later page moves back to the new last page.
+  const lastPage = Math.max(1, Math.ceil((flat.data?.total ?? 0) / lotPageSize))
+  useEffect(() => {
+    if (flat.data && page > lastPage) setPaging({ key: queryKey, page: lastPage })
+  }, [flat.data, page, lastPage, queryKey])
   const summary = useLotSummary().data
   const withLots = groups.filter((g) => g.lots > 0),
     emptyProducts = groups.filter((g) => g.lots === 0),

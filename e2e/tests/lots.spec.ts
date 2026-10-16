@@ -32,6 +32,9 @@ test('FR-2.1 adds a lot to a product, then edits and deletes it', async ({ page 
   page.once('dialog', (d) => d.accept())
   await remove.getByRole('button', { name: 'Delete lot' }).click()
   await expect(remove).toBeHidden()
+  // That message is for a lot someone else deleted.
+  await page.waitForTimeout(1000)
+  await expect(page.getByText('This lot was deleted.')).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Search product, variant, or lot' }).fill('')
   await expect(golf).toContainText('0 lots')
 })
@@ -94,4 +97,26 @@ test('closes the drawer when someone else deleted the lot', async ({ page }) => 
   await drawer.getByRole('button', { name: 'Save lot' }).click()
   await expect(drawer).toBeHidden()
   await expect(page.getByText('This lot was deleted.')).toBeVisible()
+})
+
+test('keeps what is typed while a save is still on its way', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  await seed.lot(golf.id, 'G-1')
+  await seed.done()
+  await page.goto('/')
+  const drawer = await openLot(page, 'G-1')
+  // Hold the save for a second, as a slow connection would.
+  await page.route('**/api/v1/lots/*', async (route) => {
+    if (route.request().method() === 'PATCH') await new Promise((r) => setTimeout(r, 1000))
+    await route.continue()
+  })
+  await drawer.getByLabel('Follow-up note', { exact: true }).fill('Call the EMS')
+  await drawer.getByRole('button', { name: 'Save lot' }).click()
+  await drawer.getByLabel('Blocker description', { exact: true }).fill('Typed during the save')
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+  await expect(drawer.getByLabel('Blocker description', { exact: true })).toHaveValue(
+    'Typed during the save',
+  )
+  await expect(drawer.getByLabel('Follow-up note', { exact: true })).toHaveValue('Call the EMS')
 })

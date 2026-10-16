@@ -41,6 +41,8 @@ test('FR-6.1 adds a shipment with two product lines, edits and deletes it', asyn
   page.once('dialog', (d) => d.accept())
   await remove.getByRole('button', { name: 'Delete shipment' }).click()
   await expect(remove).toBeHidden()
+  await page.waitForTimeout(1000)
+  await expect(page.getByText('This shipment was deleted.')).toHaveCount(0)
   await expect(page.getByText('No matching shipments')).toBeVisible()
 })
 
@@ -128,4 +130,25 @@ test('shows an error, not an empty list, when the shipments fail to load', async
   await page.unroute('**/api/v1/shipments?*')
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(shipment(page, 'INV-ERR')).toBeVisible()
+})
+
+test('goes back a page when the last shipment of a later page is deleted', async ({ page }) => {
+  const seed = await seeder()
+  const uniform = await seed.product('Uniform')
+  for (let i = 1; i <= 51; i++)
+    await seed.shipment(`INV-${String(i).padStart(2, '0')}`, {
+      items: [{ productId: uniform.id, quantity: 1 }],
+    })
+  await seed.done()
+  await page.goto('/')
+  await goTo(page, 'Finished Goods')
+  await page.getByRole('combobox', { name: 'Sort shipments' }).selectOption('number-asc')
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByText('51–51 of 51')).toBeVisible()
+  await shipment(page, 'INV-51').click()
+  const drawer = page.getByRole('dialog', { name: 'INV-51' })
+  page.once('dialog', (d) => d.accept())
+  await drawer.getByRole('button', { name: 'Delete shipment' }).click()
+  await expect(drawer).toBeHidden()
+  await expect(shipment(page, 'INV-50')).toBeVisible()
 })

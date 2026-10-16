@@ -54,3 +54,14 @@ test('saves the idle sign-out time', async ({ page }) => {
     await admin.dispose()
   }
 })
+
+test('saving the time zone refreshes the lot figures that depend on it', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: /^Overdue/ })).toBeVisible()
+  await goTo(page, 'Settings')
+  await page.getByRole('button', { name: 'Save sign-in settings' }).click()
+  await expect(toast(page)).toContainText('Settings saved.')
+  const summary = page.waitForRequest('**/api/v1/lots/summary')
+  await goTo(page, 'Production Tracker')
+  await summary
+})

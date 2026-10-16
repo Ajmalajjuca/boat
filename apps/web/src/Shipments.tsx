@@ -10,9 +10,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { LookupItem, ShipmentDetail, ShipmentFlag, ShipmentSort } from '@boat/domain/api'
+import type { LookupItem, ShipmentFlag, ShipmentSort } from '@boat/domain/api'
 import { addNote } from './api/activity'
-import { ConflictError, NotFoundError } from './api/client'
+import { NotFoundError } from './api/client'
 import { lookupId, type ShipmentRecord, values } from './api/mappers'
 import {
   activityKey,
@@ -33,7 +33,7 @@ import {
   type ShipmentQuery,
   shipmentPageSize,
   type ShipmentView,
-  toShipmentView,
+  shipmentConflict,
 } from './api/shipments'
 import type { Shipment, ShipmentItem } from '@boat/domain/models'
 import { productChoices, stamp } from '@boat/domain/models'
@@ -84,8 +84,7 @@ export default function Shipments({ onOpen, csvRef }: Props) {
     [stage, setStage] = useState(''),
     [vessel, setVessel] = useState(''),
     [sort, setSort] = useState<ShipmentSort>('eta-asc'),
-    [quick, setQuick] = useState<ShipmentFlag | ''>(''),
-    [page, setPage] = useState(1)
+    [quick, setQuick] = useState<ShipmentFlag | ''>('')
   const query: ShipmentQuery = {
     q: search,
     stageId: lookupId(lookups, 'shipmentStage', stage) ?? undefined,
@@ -93,12 +92,19 @@ export default function Shipments({ onOpen, csvRef }: Props) {
     flag: quick || undefined,
     sort,
   }
-  // A new filter starts again from the first page.
+  // The page belongs to one query, so a new filter starts again from page 1, as in Production.
   const queryText = JSON.stringify(query)
-  useEffect(() => setPage(1), [queryText])
+  const [paging, setPaging] = useState({ key: queryText, page: 1 })
+  const page = paging.key === queryText ? paging.page : 1
+  const setPage = (next: number) => setPaging({ key: queryText, page: next })
   const summary = useShipmentSummary().data
   const listQuery = useShipments(query, page),
     list = listQuery.data
+  // Deleting the last row of a later page moves back to the new last page.
+  const lastPage = Math.max(1, Math.ceil((list?.total ?? 0) / shipmentPageSize))
+  useEffect(() => {
+    if (list && page > lastPage) setPage(lastPage)
+  }, [list, page, lastPage])
   const shipments = list?.items ?? []
   const clear = () => {
     setSearch('')
@@ -453,8 +459,8 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
     )
   }
   const failed = (e: unknown) => {
-    if (e instanceof ConflictError && e.current)
-      return setConflict(toShipmentView(e.current as ShipmentDetail))
+    const current = shipmentConflict(e)
+    if (current) return setConflict(current)
     if (e instanceof NotFoundError) return onGone()
     form.fail(e)
   }
@@ -462,15 +468,21 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
     setTab('details')
     if (!form.check(validateShipment(draft, lines))) return
     let saved: ShipmentView | undefined
+    const sent = draft,
+      sentLines = lines
     const ok = await run(async () => {
-      saved = await saveShipment(draft, lines, reason, lookups)
+      saved = await saveShipment(sent, sentLines, reason, lookups)
       queryClient.setQueryData(shipmentKey(saved.shipment.id), saved)
       await refreshShipments()
     }, failed)
     if (!ok || !saved) return
     if (closeAfter) return onClose()
     if (!view) return onOpen(saved.shipment.id)
-    adopt(saved)
+    // Edits typed while the save was on its way stay, with the new version for their own save.
+    const next = saved
+    setDraft((d) => (d === sent ? next.shipment : { ...d, version: next.shipment.version }))
+    setLines((l) => (l === sentLines ? next.lines : l))
+    setBaseline(JSON.stringify({ shipment: next.shipment, lines: next.lines }))
     setReason('')
   }
   const submit = (e: FormEvent) => {
@@ -656,10 +668,14 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Field
                   label="ETA change reason"
                   help="Saved with each committed effective ETA change."
+                  error={form.errors.etaChangeReason}
                 >
                   <Input
                     value={reason}
-                    onChange={(e) => setReason(e.target.value)}
+                    onChange={(e) => {
+                      setReason(e.target.value)
+                      form.clear('etaChangeReason')
+                    }}
                     placeholder="Optional reason"
                   />
                 </Field>

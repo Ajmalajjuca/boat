@@ -4,8 +4,7 @@ import type { LookupItem } from '@boat/domain/api'
 import { fetchMe } from './api/auth'
 import { saveSettings } from './api/admin'
 import { addLookup, deleteLookup, renameLookup } from './api/lookups'
-import { keys, refreshEverything, useLookups, useSettings } from './api/queries'
-import { queryClient } from './api/queryClient'
+import { refreshEverything, useLookups, useSettings } from './api/queries'
 import { useAuth } from './auth/AuthProvider'
 import type { LookupKind } from '@boat/domain/models'
 import Users from './Users'
@@ -344,7 +343,8 @@ function SignInSettings({ run, onMessage }: { run: Run; onMessage: (message: str
   const save = async () => {
     const saved = await run(async () => {
       await saveSettings({ idleTimeoutMinutes: Number(idleValue), timeZone: zoneValue })
-      await queryClient.invalidateQueries({ queryKey: keys.settings })
+      // The time zone sets "today" for lot flags and month-end, so every read refreshes.
+      await refreshEverything()
       // This browser's idle timer reads the session's value, so refresh it now.
       auth.signedIn(await fetchMe())
     }, form.fail)

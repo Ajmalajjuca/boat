@@ -45,3 +45,16 @@ test('FR-7.2 posts a shipment note and lists it', async ({ page }) => {
   await drawer.getByRole('button', { name: 'Post update' }).click()
   await expect(drawer.getByText('Booked the truck')).toBeVisible()
 })
+
+test('FR-6.4 shows a server error on the ETA change reason under that field', async ({ page }) => {
+  await seedShipment()
+  await page.goto('/')
+  await goTo(page, 'Finished Goods')
+  const drawer = await openShipment(page, 'INV-ETA')
+  await drawer.getByLabel('Current revised ETA', { exact: true }).fill(day(14))
+  await drawer.getByLabel('ETA change reason', { exact: true }).fill('x'.repeat(501))
+  await drawer.getByRole('button', { name: 'Save shipment' }).click()
+  await expect(
+    drawer.locator('[data-invalid]').filter({ hasText: 'ETA change reason' }).getByRole('alert'),
+  ).toContainText('Keep this to 500 characters or fewer.')
+})
