@@ -70,3 +70,17 @@ test('FR-1.1 shows the conflict banner when someone else saved the product first
   await expect(edit.getByLabel('Product name', { exact: true })).toHaveValue('Foxtrot')
   await expect(edit.getByLabel('Variant', { exact: true })).toHaveValue('Blue')
 })
+
+test('closes the product editor when someone else deleted the product', async ({ page }) => {
+  const seed = await seeder()
+  const product = await seed.product('Hotel')
+  await page.goto('/')
+  await page.getByRole('group', { name: 'Hotel' }).getByRole('button', { name: 'Edit' }).click()
+  const edit = page.getByRole('dialog', { name: 'Edit product' })
+  await seed.api.delete(`/products/${product.id}`)
+  await seed.done()
+  await edit.getByLabel('Product name', { exact: true }).fill('Hotel Two')
+  await edit.getByRole('button', { name: 'Save product' }).click()
+  await expect(edit).toBeHidden()
+  await expect(toast(page)).toContainText('This product was deleted.')
+})

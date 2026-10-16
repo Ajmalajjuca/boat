@@ -8,11 +8,11 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import type { LookupItem, LotDetail } from '@boat/domain/api'
+import type { LookupItem } from '@boat/domain/api'
 import { addNote } from './api/activity'
-import { ConflictError, NotFoundError } from './api/client'
+import { NotFoundError } from './api/client'
 import { deleteBatch, deleteReceipt, saveBatch, saveReceipt } from './api/entries'
-import { deleteLot, type LotView, saveLot, toLotView } from './api/lots'
+import { deleteLot, lotConflict, type LotView, saveLot } from './api/lots'
 import { type LotRecord, values } from './api/mappers'
 import {
   activityKey,
@@ -185,8 +185,8 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     else if (keys.includes('rmComponents')) setTab('rm')
   }
   const failed = (e: unknown) => {
-    if (e instanceof ConflictError && e.current)
-      return setConflict(toLotView(e.current as LotDetail))
+    const current = lotConflict(e)
+    if (current) return setConflict(current)
     if (e instanceof NotFoundError) return onGone()
     lotForm.fail(e)
     showTabFor(fieldErrors(e))
@@ -195,15 +195,19 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     const found = validateLot(draft)
     if (!lotForm.check(found)) return showTabFor(found)
     let saved: LotView | undefined
+    const sent = draft
     const ok = await run(async () => {
-      saved = await saveLot(draft, lookups)
+      saved = await saveLot(sent, lookups)
       queryClient.setQueryData(lotKey(saved.lot.id), saved)
       await refreshLots()
     }, failed)
     if (!ok || !saved) return
     if (closeAfter) return onClose()
     if (!view) return onOpen(saved.lot.id)
-    adopt(saved.lot)
+    // Edits typed while the save was on its way stay, with the new version for their own save.
+    const next = saved.lot
+    setDraft((d) => (d === sent ? next : { ...d, version: next.version }))
+    setBaseline(JSON.stringify(next))
   }
   const remove = async () => {
     if (!stored) {

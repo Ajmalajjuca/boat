@@ -36,9 +36,9 @@ import { SignIn } from './auth/SignIn'
 import { AcceptInvite, ResetPassword } from './auth/TokenPages'
 import { AccessContext, accessFrom, can } from './access'
 import type { LookupItem } from '@boat/domain/api'
-import { ConflictError } from './api/client'
-import { type ProductRecord, toProduct, values } from './api/mappers'
-import { deleteProduct, saveProduct } from './api/products'
+import { NotFoundError } from './api/client'
+import { type ProductRecord, values } from './api/mappers'
+import { deleteProduct, productConflict as newerProduct, saveProduct } from './api/products'
 import { exportBackup, importBackup, resetAllData } from './api/admin'
 import {
   refreshEverything,
@@ -229,9 +229,14 @@ function Workspace({ me }: { me: MePayload }) {
   }
   // A 409 that carries the server's record is a stale version; other 409s are rules to explain.
   const productFailed = (e: unknown) => {
-    if (e instanceof ConflictError && e.current)
-      setProductConflict(toProduct(e.current as Parameters<typeof toProduct>[0]))
-    else productForm.fail(e)
+    const current = newerProduct(e)
+    if (current) return setProductConflict(current)
+    if (e instanceof NotFoundError) {
+      setProduct(null)
+      setMessage('This product was deleted.')
+      return void refreshProducts()
+    }
+    productForm.fail(e)
   }
   const saveProductForm = async (e: FormEvent) => {
     e.preventDefault()
