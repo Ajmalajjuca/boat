@@ -2,12 +2,14 @@ import { deniedMessage, PermissionError } from '@boat/domain/permissions'
 import type { SessionUser } from '../../core/access'
 import { NotFoundError } from '../../core/errors'
 import type { Db } from '../../core/prisma'
+import { holdDataLockShared } from '../../core/data-lock'
 import { lotAccess, lotInclude, type LotRow } from './lot-view'
 
 // Every change to a lot or its entries starts by locking the lot row. Concurrent changes to one
 // lot then run one after another, so checks such as "total GRN ≤ lot quantity" see every
 // committed receipt (PRD: over-receipt guard).
 export async function lockLot(db: Db, id: string) {
+  await holdDataLockShared(db)
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM lots WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`
   if (!rows.length) throw new NotFoundError()

@@ -6,6 +6,7 @@ const settingsIn = (timeZone: string) =>
   ({
     get: async () => ({ timeZone, idleTimeoutMinutes: 15 }),
     update: async () => ({ timeZone, idleTimeoutMinutes: 15 }),
+    forget: () => {},
   }) as SettingsService
 
 describe('createClock', () => {

@@ -161,3 +161,13 @@ export const lotBody = (w: RecordsWorld, overrides: Record<string, unknown> = {}
   lotQty: 100,
   ...overrides,
 })
+
+// A valid POST /shipments body with one line of the world's product; override any field.
+export const shipmentBody = (w: RecordsWorld, overrides: Record<string, unknown> = {}) => ({
+  number: unique('INV').replace(/\s/g, '-'),
+  vessel: 'MSC Aurora',
+  etd: '2026-09-26',
+  plannedEta: '2026-10-20',
+  items: [{ productId: w.product.id, quantity: 100 }],
+  ...overrides,
+})

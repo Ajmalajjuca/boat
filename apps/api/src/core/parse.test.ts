@@ -55,3 +55,23 @@ describe('parseId', () => {
     for (const bad of ['abc', '', 42, undefined]) expect(() => parseId(bad)).toThrow(NotFoundError)
   })
 })
+
+describe('NUL characters', () => {
+  const nested = z.object({
+    name: z.string(),
+    items: z.array(z.object({ label: z.string() })),
+  })
+  it('are refused wherever they appear, naming the field', () => {
+    expect(fieldsOf(() => parseInput(schema, { name: 'a\u0000b', qty: 1 }))).toEqual({
+      name: 'Remove the hidden NUL character from this text.',
+    })
+    expect(
+      fieldsOf(() =>
+        parseInput(nested, { name: 'ok', items: [{ label: 'x' }, { label: '\u0000' }] }),
+      ),
+    ).toEqual({ 'items.1.label': 'Remove the hidden NUL character from this text.' })
+  })
+  it('leave other control characters to the schema', () => {
+    expect(parseInput(schema, { name: 'tab\there', qty: 1 })).toEqual({ name: 'tab\there', qty: 1 })
+  })
+})

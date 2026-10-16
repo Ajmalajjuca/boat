@@ -105,6 +105,11 @@ const list = async (query = '') => {
 const labels = (items: Item[]) => items.map((i) => i.label).sort()
 
 describe('the list', () => {
+  it('answers a NUL character in the search with a field error, not a 500', async () => {
+    const res = await w.viewer.agent.get('/api/v1/lots?q=a%00b')
+    expect(res.status).toBe(422)
+    expect(res.body.fields).toEqual({ q: 'Remove the hidden NUL character from this text.' })
+  })
   it('FR-2.5 shows active lots by default and completed lots on request, never deleted ones', async () => {
     const active = await list()
     expect(active.items).toHaveLength(20)

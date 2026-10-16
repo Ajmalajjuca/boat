@@ -2,21 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { authOf, requirePermission, requireSignedIn } from '../../core/access'
 import { parseInput } from '../../core/parse'
-import type { SettingsService } from './settings.service'
-
-// IANA names only ("Asia/Kolkata", "America/Argentina/Buenos_Aires", "UTC"). Intl also accepts
-// offsets ("+05:30"), abbreviations ("IST") and any letter case, which other systems read
-// differently, so those are refused even though today() would cope.
-const ianaName = /^[A-Z][A-Za-z_-]*(\/[A-Z][A-Za-z0-9_+-]*)+$/
-const knownTimeZone = (tz: string) => {
-  if (tz !== 'UTC' && !ianaName.test(tz)) return false
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz })
-    return true
-  } catch {
-    return false
-  }
-}
+import { knownTimeZone, type SettingsService } from './settings.service'
 
 // Sessions also end 12 hours after sign-in, so a longer idle timeout would have no effect.
 const patchBody = z.strictObject({
