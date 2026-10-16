@@ -7,7 +7,7 @@ import { addLookup, deleteLookup, renameLookup } from './api/lookups'
 import { keys, refreshEverything, useLookups, useSettings } from './api/queries'
 import { queryClient } from './api/queryClient'
 import { useAuth } from './auth/AuthProvider'
-import type { LookupKind } from './models'
+import type { LookupKind } from '@boat/domain/models'
 import Users from './Users'
 import {
   Badge,
@@ -22,7 +22,7 @@ import {
   useFormErrors,
   type Run,
 } from './ui'
-import { validateLookupValue } from './validation'
+import { validateLookupValue } from '@boat/domain/validation'
 import { useAccess } from './access'
 
 const kinds: { kind: LookupKind; label: string; help: string }[] = [

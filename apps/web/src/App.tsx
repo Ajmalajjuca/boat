@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Activity,
   Archive,
@@ -18,10 +17,9 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { db, getData } from './db'
-import type { DataSet, Product } from './models'
-import { dataKeys, productChoices } from './models'
-import { quantity } from './calculations'
+import type { DataSet, Product } from '@boat/domain/models'
+import { dataKeys, productChoices } from '@boat/domain/models'
+import { quantity } from '@boat/domain/calculations'
 import { parseImport } from '@boat/domain/backup'
 import Production from './Production'
 import MonthEnd from './MonthEnd'
@@ -36,7 +34,7 @@ import { ChangePassword } from './auth/ChangePassword'
 import { ProfileCard } from './auth/ProfileCard'
 import { SignIn } from './auth/SignIn'
 import { AcceptInvite, ResetPassword } from './auth/TokenPages'
-import { AccessContext, accessFrom, can, setAccess } from './access'
+import { AccessContext, accessFrom, can } from './access'
 import type { LookupItem } from '@boat/domain/api'
 import { ConflictError } from './api/client'
 import { type ProductRecord, toProduct, values } from './api/mappers'
@@ -64,7 +62,7 @@ import {
   useFormErrors,
   type Run,
 } from './ui'
-import { validateProduct } from './validation'
+import { validateProduct } from '@boat/domain/validation'
 
 type Screen = 'production' | 'completed' | 'monthEnd' | 'shipments' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -85,7 +83,7 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
     title: 'Finished Goods',
     description: 'Track incoming shipments, revised ETAs, and warehouse arrivals.',
   },
-  settings: { title: 'Settings', description: 'Manage operational values and local browser data.' },
+  settings: { title: 'Settings', description: 'Manage operational values, users and data.' },
 }
 function Loading() {
   return (
@@ -126,9 +124,7 @@ function Root() {
 function Workspace({ me }: { me: MePayload }) {
   const auth = useAuth()
   const [passwordOpen, setPasswordOpen] = useState(false)
-  const data = useLiveQuery(getData, [])
-  const [dbError, setDbError] = useState(''),
-    [screen, setScreen] = useState<Screen>('production'),
+  const [screen, setScreen] = useState<Screen>('production'),
     [menuOpen, setMenuOpen] = useState(false)
   const [lotTarget, setLotTarget] = useState<LotTarget | null>(null),
     [shipmentTarget, setShipmentTarget] = useState<ShipmentTarget | null>(null)
@@ -154,7 +150,6 @@ function Workspace({ me }: { me: MePayload }) {
   const lookups: LookupItem[] = useLookups().data ?? [],
     products = useProducts().data ?? [],
     completedCount = useCompletedCount().data
-  setAccess(access)
   // Idle sign-out: no pointer or key activity for the workspace's idle timeout ends the session.
   const idleMinutes = me.idleTimeoutMinutes
   useEffect(() => {
@@ -173,9 +168,6 @@ function Workspace({ me }: { me: MePayload }) {
       clearInterval(timer)
     }
   }, [idleMinutes, auth.signOut])
-  useEffect(() => {
-    db.open().catch((e) => setDbError(e instanceof Error ? e.message : 'Could not open IndexedDB.'))
-  }, [])
   // Success messages fade; errors stay until dismissed or the next action.
   useEffect(() => {
     if (!message || saveState === 'failed') return
@@ -333,20 +325,6 @@ function Workspace({ me }: { me: MePayload }) {
     ['shipments', Ship],
     ['settings', Settings2],
   ]
-  if (dbError)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6] p-5">
-        <Card className="max-w-md p-6">
-          <CircleAlert className="mb-3 text-rose-600" />
-          <h1 className="text-lg font-bold">Local database unavailable</h1>
-          <p className="mt-2 text-sm text-slate-600">{dbError}</p>
-          <p className="mt-3 text-xs text-slate-500">
-            Enable browser storage and reload this page.
-          </p>
-        </Card>
-      </div>
-    )
-  if (!data) return <Loading />
   return (
     <AccessContext.Provider value={access}>
       <div className="min-h-screen bg-[#f5f7f6] lg:flex">
@@ -450,12 +428,12 @@ function Workspace({ me }: { me: MePayload }) {
               <div className="flex flex-wrap items-center gap-2">
                 {screen === 'production' || screen === 'completed' ? (
                   <>
-                    {can('editProducts') && (
+                    {can('editProducts', access) && (
                       <Button onClick={() => openProduct()}>
                         <Plus size={16} /> Add Product
                       </Button>
                     )}
-                    {products.length > 0 && can('createLots') && (
+                    {products.length > 0 && can('createLots', access) && (
                       <Button
                         variant="secondary"
                         onClick={() => {
@@ -467,18 +445,18 @@ function Workspace({ me }: { me: MePayload }) {
                       </Button>
                     )}
                   </>
-                ) : screen === 'shipments' && can('editShipments') ? (
+                ) : screen === 'shipments' && can('editShipments', access) ? (
                   <Button onClick={() => setShipmentTarget({ draft: newShipment(lookups) })}>
                     <Plus size={16} /> Add Shipment
                   </Button>
                 ) : null}
-                {can('manageData') && (
+                {can('manageData', access) && (
                   <Button variant="secondary" size="sm" onClick={openImport}>
                     <Upload size={15} /> <span className="hidden sm:inline">Import JSON</span>
                     <span className="sm:hidden">Import</span>
                   </Button>
                 )}
-                {can('exportBackup') && (
+                {can('exportBackup', access) && (
                   <Button variant="secondary" size="sm" onClick={exportJson}>
                     <Download size={15} /> <span className="hidden sm:inline">Export JSON</span>
                     <span className="sm:hidden">Export</span>
@@ -523,7 +501,7 @@ function Workspace({ me }: { me: MePayload }) {
                     ? 'Saved'
                     : saveState === 'failed'
                       ? 'Save failed'
-                      : 'Local data'}
+                      : 'Shared data'}
               </div>
             </div>
             {message &&
@@ -664,7 +642,7 @@ function Workspace({ me }: { me: MePayload }) {
               </Field>
               <div className="flex items-center justify-between pt-2">
                 <div>
-                  {product.version !== undefined && can('deleteProducts') && (
+                  {product.version !== undefined && can('deleteProducts', access) && (
                     <Button type="button" variant="danger" size="sm" onClick={removeProduct}>
                       Delete product
                     </Button>

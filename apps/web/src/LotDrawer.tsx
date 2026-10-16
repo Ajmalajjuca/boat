@@ -24,8 +24,8 @@ import {
   useProducts,
 } from './api/queries'
 import { queryClient } from './api/queryClient'
-import type { GRNReceipt, Lot, RMBatch } from './models'
-import { productChoices, stamp } from './models'
+import type { GRNReceipt, Lot, RMBatch } from '@boat/domain/models'
+import { productChoices, stamp } from '@boat/domain/models'
 import {
   balance,
   dateLabel,
@@ -39,7 +39,7 @@ import {
   rmMetrics,
   today,
   totalGrn,
-} from './calculations'
+} from '@boat/domain/calculations'
 import {
   Badge,
   Button,
@@ -62,7 +62,7 @@ import {
   validateLot,
   validateReceipt,
   type FieldErrors,
-} from './validation'
+} from '@boat/domain/validation'
 import { type LotAccess, roleInfo, useAccess } from './access'
 
 export type LotTarget = { id: string } | { draft: Lot }

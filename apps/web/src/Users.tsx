@@ -15,7 +15,7 @@ import {
 import { values } from './api/mappers'
 import { keys, useLookups, useUsers } from './api/queries'
 import { queryClient } from './api/queryClient'
-import type { Role } from './models'
+import type { Role } from '@boat/domain/models'
 import {
   Badge,
   Button,

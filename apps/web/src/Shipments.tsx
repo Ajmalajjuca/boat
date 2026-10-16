@@ -35,11 +35,18 @@ import {
   type ShipmentView,
   toShipmentView,
 } from './api/shipments'
-import type { Shipment, ShipmentItem } from './models'
-import { productChoices, stamp } from './models'
-import { arrivalDelay, dateLabel, etaSlip, quantity, shipmentQuantity, today } from './calculations'
+import type { Shipment, ShipmentItem } from '@boat/domain/models'
+import { productChoices, stamp } from '@boat/domain/models'
+import {
+  arrivalDelay,
+  dateLabel,
+  etaSlip,
+  quantity,
+  shipmentQuantity,
+  today,
+} from '@boat/domain/calculations'
 import { roleInfo, useAccess } from './access'
-import { lineField, validateShipment } from './validation'
+import { lineField, validateShipment } from '@boat/domain/validation'
 import {
   Badge,
   Button,

@@ -2,7 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { fieldErrors, type FieldErrors } from './validation'
+import { fieldErrors, type FieldErrors } from '@boat/domain/validation'
 import { Check, ChevronDown, CircleAlert, Lock, X } from 'lucide-react'
 import {
   createContext,
