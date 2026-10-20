@@ -21,6 +21,7 @@ describe('loadConfig', () => {
       DATABASE_URL,
       SESSION_SECRET,
       APP_URL: 'http://localhost:5173',
+      SMTP_PORT: 465,
       TRUST_PROXY: 0,
     })
   })
@@ -43,11 +44,27 @@ describe('loadConfig', () => {
   it('needs a sender address whenever a Resend key is set', () => {
     expect(() => loadConfig({ ...base, RESEND_API_KEY: 're_123' })).toThrow(/MAIL_FROM/)
   })
+  it('needs credentials and a sender whenever an SMTP host is set', () => {
+    const smtp = { ...base, SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'a@gmail.com', SMTP_PASS: 'p' }
+    expect(loadConfig({ ...smtp, MAIL_FROM: 'BOAT <a@gmail.com>' }).SMTP_HOST).toBe(
+      'smtp.gmail.com',
+    )
+    expect(() => loadConfig(smtp)).toThrow(/MAIL_FROM/)
+    expect(() => loadConfig({ ...smtp, SMTP_USER: undefined })).toThrow(/SMTP_USER/)
+    expect(() => loadConfig({ ...smtp, SMTP_PASS: undefined })).toThrow(/SMTP_PASS/)
+  })
+  it('refuses both Resend and SMTP at once', () => {
+    expect(() =>
+      loadConfig({ ...production, SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'a', SMTP_PASS: 'p' }),
+    ).toThrow(/SMTP_HOST/)
+  })
   it('accepts a complete production config', () => {
     expect(loadConfig(production).NODE_ENV).toBe('production')
+    const smtp = { SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'a@gmail.com', SMTP_PASS: 'p' }
+    expect(loadConfig({ ...production, RESEND_API_KEY: undefined, ...smtp }).SMTP_PORT).toBe(465)
   })
   it('requires email sending and an https APP_URL in production', () => {
-    expect(() => loadConfig({ ...production, RESEND_API_KEY: undefined })).toThrow(/RESEND_API_KEY/)
+    expect(() => loadConfig({ ...production, RESEND_API_KEY: undefined })).toThrow(/SMTP_HOST/)
     expect(() => loadConfig({ ...production, APP_URL: 'http://boat.onrender.com' })).toThrow(
       /APP_URL/,
     )

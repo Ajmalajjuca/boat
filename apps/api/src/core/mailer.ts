@@ -1,3 +1,4 @@
+import { createTransport } from 'nodemailer'
 import type { Logger } from 'pino'
 import type { Config } from '../config'
 
@@ -27,10 +28,23 @@ export function resendMailer({
   }
 }
 
+// Any SMTP server, e.g. Gmail with an App Password when there is no domain to verify in Resend.
+export const smtpMailer = ({
+  from,
+  transporter,
+}: {
+  from: string
+  transporter: { sendMail(message: Email & { from: string }): Promise<unknown> }
+}): Mailer => ({
+  async send({ to, subject, text }) {
+    await transporter.sendMail({ from, to, subject, text })
+  },
+})
+
 // Development without RESEND_API_KEY: the email, link included, is written to the log.
 export const logMailer = (logger: Logger): Mailer => ({
   async send(email) {
-    logger.info({ email }, 'email not sent: RESEND_API_KEY is not set')
+    logger.info({ email }, 'email not sent: neither RESEND_API_KEY nor SMTP_HOST is set')
   },
 })
 
@@ -50,11 +64,26 @@ export const failingMailer = (): Mailer => ({
   },
 })
 
-// loadConfig requires a key in production, and a sender whenever a key is set.
-export const createMailer = (config: Config, logger: Logger): Mailer =>
-  config.RESEND_API_KEY
-    ? resendMailer({ apiKey: config.RESEND_API_KEY, from: config.MAIL_FROM! })
-    : logMailer(logger)
+// loadConfig requires one provider in production, and a sender whenever one is set.
+export function createMailer(config: Config, logger: Logger): Mailer {
+  if (config.RESEND_API_KEY)
+    return resendMailer({ apiKey: config.RESEND_API_KEY, from: config.MAIL_FROM! })
+  if (config.SMTP_HOST)
+    return smtpMailer({
+      from: config.MAIL_FROM!,
+      transporter: createTransport({
+        host: config.SMTP_HOST,
+        port: config.SMTP_PORT,
+        // 465 speaks TLS from the start; 587 upgrades with STARTTLS.
+        secure: config.SMTP_PORT === 465,
+        auth: { user: config.SMTP_USER!, pass: config.SMTP_PASS! },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 10_000,
+      }),
+    })
+  return logMailer(logger)
+}
 
 // A failed email must not undo the change that triggered it (the user still exists, and an admin
 // can resend), so it is logged and reported to the caller instead of thrown.

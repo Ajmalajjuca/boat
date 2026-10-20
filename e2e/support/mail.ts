@@ -3,7 +3,7 @@ import { logFile } from './env'
 
 export type Email = { to: string; subject: string; text: string }
 
-// Without RESEND_API_KEY the API writes each email to its log instead of sending it (mailer.ts).
+// Without RESEND_API_KEY or SMTP_HOST the API writes each email to its log instead of sending it (mailer.ts).
 export function emailsTo(address: string): Email[] {
   let log = ''
   try {

@@ -69,8 +69,8 @@ export default async function globalSetup() {
       stdio: 'pipe',
     })
 
-  // No RESEND_API_KEY: emails go to the log, where the tests read their links.
-  const { RESEND_API_KEY: _key, MAIL_FROM: _from, ...inherited } = process.env
+  // No RESEND_API_KEY or SMTP_HOST: emails go to the log, where the tests read their links.
+  const { RESEND_API_KEY: _key, SMTP_HOST: _smtp, MAIL_FROM: _from, ...inherited } = process.env
   const env = {
     ...inherited,
     NODE_ENV: 'test',

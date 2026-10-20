@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { memoryMailer, resendMailer } from './mailer'
+import { memoryMailer, resendMailer, smtpMailer } from './mailer'
 
 const email = { to: 'asha@example.com', subject: 'Hi', text: 'Hello' }
 
@@ -27,6 +27,23 @@ describe('resendMailer', () => {
     await expect(resendMailer({ apiKey: 're_123', from: 'x', fetch }).send(email)).rejects.toThrow(
       /422/,
     )
+  })
+})
+
+describe('smtpMailer', () => {
+  it('hands the email to the SMTP transport from the configured sender', async () => {
+    const sent: unknown[] = []
+    const transporter = { sendMail: async (message: unknown) => sent.push(message) }
+    await smtpMailer({ from: 'BOAT <a@gmail.com>', transporter }).send(email)
+    expect(sent).toEqual([{ from: 'BOAT <a@gmail.com>', ...email }])
+  })
+  it('fails loudly when the server refuses', async () => {
+    const transporter = {
+      sendMail: async () => {
+        throw new Error('535 Username and Password not accepted')
+      },
+    }
+    await expect(smtpMailer({ from: 'x', transporter }).send(email)).rejects.toThrow(/535/)
   })
 })
 
