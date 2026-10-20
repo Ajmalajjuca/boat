@@ -23,7 +23,7 @@ pnpm --filter @boat/api dev      # http://localhost:3000/api/v1/health/ready
 pnpm --filter @boat/api test:int # needs Docker
 ```
 
-The first admin is invited from the command line. The link is printed, and also emailed when `RESEND_API_KEY` is set:
+The first admin is invited from the command line. The link is printed, and also emailed when `RESEND_API_KEY` or `SMTP_HOST` is set:
 
 ```bash
 pnpm api create-admin --email you@example.com --name "Your Name"

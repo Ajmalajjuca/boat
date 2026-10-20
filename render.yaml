@@ -28,9 +28,17 @@ services:
       # This service's public https URL. Invite and reset links point here.
       - key: APP_URL
         sync: false
+      # Set RESEND_API_KEY, or SMTP_HOST, SMTP_USER and SMTP_PASS (SMTP_PORT defaults to 465).
       - key: RESEND_API_KEY
         sync: false
-      # A sender on the domain verified in Resend, e.g. "BOAT <noreply@example.com>".
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      # Resend: a sender on its verified domain, e.g. "BOAT <noreply@example.com>". SMTP: the
+      # account's own address.
       - key: MAIL_FROM
         sync: false
       # Render's proxy sits in front of the app. Rate limits need the client IP behind it.
