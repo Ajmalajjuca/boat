@@ -1,4 +1,5 @@
 import type { GRNReceipt } from '@boat/domain/models'
+import { generatedLabel } from '../../core/generated-label'
 import { assertValid, validateReceipt } from '@boat/domain/validation'
 import type { SessionUser } from '../../core/access'
 import { actorOf, recordActivity } from '../../core/audit'
@@ -55,7 +56,12 @@ export async function createReceipt(
   const date = await clock.today()
   const row = await db.$transaction(async (tx) => {
     const lot = await lockLotForEdit(tx, user, lotId)
-    const r = checkReceipt(lotId, input, await available(tx, lot), date)
+    const r = checkReceipt(
+      lotId,
+      { ...input, label: await generatedLabel(tx, 'receipt', input.label) },
+      await available(tx, lot),
+      date,
+    )
     const created = await tx.grnReceipt.create({
       data: {
         lotId,
@@ -97,6 +103,8 @@ export async function updateReceipt(
       note: current.note,
       ...patch,
     }
+    if (input.label.trim() && input.label.trim().toLowerCase() !== current.label.toLowerCase())
+      input.label = await generatedLabel(tx, 'receipt', input.label)
     const r = checkReceipt(lotId, input, await available(tx, lot, id), date)
     const updated = await tx.grnReceipt.update({
       where: { id },

@@ -50,6 +50,7 @@ const fields = {
 // Unknown keys are refused, so a typo such as "status" for "statusId" fails loudly.
 const createBody = z.strictObject({
   ...fields,
+  label: fields.label.default(''),
   directFg: fields.directFg.default(false),
   emsId: fields.emsId.default(null),
   pocId: fields.pocId.default(null),

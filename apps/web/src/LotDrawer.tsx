@@ -195,7 +195,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     showTabFor(fieldErrors(e))
   }
   const save = async (closeAfter = false) => {
-    const found = validateLot(draft)
+    const found = validateLot(draft, !stored)
     if (!lotForm.check(found)) return showTabFor(found)
     let saved: LotView | undefined
     const sent = draft
@@ -267,8 +267,9 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
   }
   const saveBatchForm = async (e: FormEvent) => {
     e.preventDefault()
-    if (!batch || !batchForm.check(validateBatch(batch))) return
+    if (!batch) return
     const existing = bs.some((b) => b.id === batch.id)
+    if (!batchForm.check(validateBatch(batch, undefined, !existing))) return
     const ok = await run(async () => {
       await saveBatch(draft.id, batch, lookups, existing)
       await refreshLots()
@@ -277,8 +278,10 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
   }
   const saveReceiptForm = async (e: FormEvent) => {
     e.preventDefault()
-    if (!receipt || !receiptForm.check(validateReceipt(receipt, available(receipt)))) return
+    if (!receipt) return
     const existing = rs.some((r) => r.id === receipt.id)
+    if (!receiptForm.check(validateReceipt(receipt, available(receipt), undefined, !existing)))
+      return
     const ok = await run(async () => {
       await saveReceipt(draft.id, receipt, existing)
       await refreshLots()
@@ -423,15 +426,20 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                 </Field>
                 <Field
                   label="Lot label"
-                  required
+                  required={stored}
+                  help={
+                    stored
+                      ? undefined
+                      : 'Leave blank to generate a lot reference automatically when saved.'
+                  }
                   error={lotForm.errors.label}
                   locked={planLocked && !readOnly}
                 >
                   <Input
-                    required
+                    required={stored}
                     value={draft.label}
                     onChange={(e) => update('label', e.target.value)}
-                    placeholder="e.g. TWS-2403"
+                    placeholder="Generated automatically on save"
                   />
                 </Field>
                 <Field
@@ -1028,9 +1036,19 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                 onChange={(v) => editBatch({ component: v })}
               />
             </Field>
-            <Field label="Batch label" required error={batchForm.errors.label}>
+            <Field
+              label="Batch label"
+              required={bs.some((b) => b.id === batch.id)}
+              error={batchForm.errors.label}
+              help={
+                bs.some((b) => b.id === batch.id)
+                  ? undefined
+                  : 'Leave blank to generate a material batch reference automatically when saved.'
+              }
+            >
               <Input
-                required
+                required={bs.some((b) => b.id === batch.id)}
+                placeholder="Generated automatically on save"
                 value={batch.label}
                 onChange={(e) => editBatch({ label: e.target.value })}
               />
@@ -1106,9 +1124,19 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
         {receipt && (
           <form onSubmit={saveReceiptForm} noValidate className="space-y-4">
             <FormError message={receiptForm.errors.form} />
-            <Field label="Receipt label" required error={receiptForm.errors.label}>
+            <Field
+              label="Receipt label"
+              required={rs.some((r) => r.id === receipt.id)}
+              error={receiptForm.errors.label}
+              help={
+                rs.some((r) => r.id === receipt.id)
+                  ? undefined
+                  : 'Leave blank to generate a receipt reference automatically when saved.'
+              }
+            >
               <Input
-                required
+                required={rs.some((r) => r.id === receipt.id)}
+                placeholder="Generated automatically on save"
                 value={receipt.label}
                 onChange={(e) => editReceipt({ label: e.target.value })}
               />

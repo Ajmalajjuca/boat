@@ -21,6 +21,7 @@ const fields = {
 }
 const createBody = z.strictObject({
   ...fields,
+  label: fields.label.default(''),
   plannedQty: fields.plannedQty.default(0),
   plannedDate: fields.plannedDate.default(null),
   receivedQty: fields.receivedQty.default(0),

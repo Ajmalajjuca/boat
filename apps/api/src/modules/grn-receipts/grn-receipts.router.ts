@@ -15,7 +15,11 @@ const fields = {
   quantity: quantity('quantity'),
   note: text(1000),
 }
-const createBody = z.strictObject({ ...fields, note: fields.note.default('') })
+const createBody = z.strictObject({
+  ...fields,
+  label: fields.label.default(''),
+  note: fields.note.default(''),
+})
 const patchBody = z.strictObject(fields).partial()
 
 // Two routers: one posts receipts under /lots/:id, the other edits and deletes them by id.

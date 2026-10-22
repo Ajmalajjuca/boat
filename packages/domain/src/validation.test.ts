@@ -56,6 +56,10 @@ describe('validateProduct and validateLookupValue', () => {
 })
 
 describe('validateLot', () => {
+  it('allows an empty label only while creating an automatically labelled lot', () => {
+    expect(validateLot(makeLot({ label: '' }), true)).toEqual({})
+    expect(validateLot(makeLot({ label: '' })).label).toBeTruthy()
+  })
   it('accepts a complete lot', () => {
     expect(validateLot(makeLot())).toEqual({})
   })
@@ -94,6 +98,10 @@ describe('validateLot', () => {
 })
 
 describe('validateBatch', () => {
+  it('allows an empty label only while creating an automatically labelled batch', () => {
+    expect(validateBatch(makeBatch({ label: '' }), TODAY, true)).toEqual({})
+    expect(validateBatch(makeBatch({ label: '' }), TODAY).label).toBeTruthy()
+  })
   it('refuses a received date after the given day', () => {
     expect(validateBatch(makeBatch({ receivedDate: '2026-10-15' }), TODAY)).toEqual({
       receivedDate: 'Received date cannot be in the future.',
@@ -112,6 +120,10 @@ describe('validateBatch', () => {
 })
 
 describe('validateReceipt', () => {
+  it('allows an empty label only while creating an automatically labelled receipt', () => {
+    expect(validateReceipt(makeReceipt({ label: '' }), undefined, TODAY, true)).toEqual({})
+    expect(validateReceipt(makeReceipt({ label: '' }), undefined, TODAY).label).toBeTruthy()
+  })
   it('requires a dated, positive receipt', () => {
     expect(validateReceipt(makeReceipt(), undefined, TODAY)).toEqual({})
     expect(validateReceipt(makeReceipt({ date: '' }), undefined, TODAY).date).toBe(

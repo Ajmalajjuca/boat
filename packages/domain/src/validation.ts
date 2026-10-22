@@ -40,10 +40,11 @@ export const validateProduct = (p: Product) =>
     ['segment', blank(p.segment) && 'Choose a segment.'],
   ])
 
-export const validateLot = (l: Lot) =>
+// New forms may leave a label empty; the API assigns it before validating the saved record.
+export const validateLot = (l: Lot, autoLabel = false) =>
   collect([
     ['productId', blank(l.productId) && 'Choose a product.'],
-    ['label', blank(l.label) && 'Enter a lot label, e.g. Lot 1.'],
+    ['label', !autoLabel && blank(l.label) && 'Enter a lot label, e.g. Lot 1.'],
     ['category', blank(l.category) && 'Choose a product category.'],
     ['status', blank(l.status) && 'Choose an overall status.'],
     ['stage', blank(l.stage) && 'Choose the current stage.'],
@@ -65,18 +66,23 @@ export const validateLot = (l: Lot) =>
   ])
 
 // date is "today" for the no-future-date rules; the server passes the company date.
-export const validateBatch = (b: RMBatch, date = today()) =>
+export const validateBatch = (b: RMBatch, date = today(), autoLabel = false) =>
   collect([
     ['component', blank(b.component) && 'Choose a component.'],
-    ['label', blank(b.label) && 'Enter a batch label.'],
+    ['label', !autoLabel && blank(b.label) && 'Enter a batch label.'],
     ['plannedQty', wholeNumber(b.plannedQty, 'Planned quantity')],
     ['receivedQty', wholeNumber(b.receivedQty, 'Received quantity')],
     ['receivedDate', b.receivedDate > date && 'Received date cannot be in the future.'],
   ])
 
-export const validateReceipt = (r: GRNReceipt, available?: number, date = today()) =>
+export const validateReceipt = (
+  r: GRNReceipt,
+  available?: number,
+  date = today(),
+  autoLabel = false,
+) =>
   collect([
-    ['label', blank(r.label) && 'Enter a receipt label.'],
+    ['label', !autoLabel && blank(r.label) && 'Enter a receipt label.'],
     ['date', !r.date && 'Choose the receipt date.'],
     ['date', r.date > date && 'Receipt date cannot be in the future.'],
     ['quantity', wholeNumber(r.quantity, 'Quantity')],

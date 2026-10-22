@@ -2,6 +2,7 @@
 -- (pnpm --filter @boat/api db:migrate does both). Fails if boat_app does not exist.
 -- The app may read, insert and update; it may never delete, and history is insert-only.
 GRANT USAGE ON SCHEMA public TO boat_app;
+GRANT USAGE ON SEQUENCE lot_label_seq, rm_batch_label_seq, grn_receipt_label_seq TO boat_app;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM boat_app;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO boat_app;
 REVOKE ALL ON TABLE _prisma_migrations FROM boat_app;

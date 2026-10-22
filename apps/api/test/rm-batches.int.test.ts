@@ -72,14 +72,15 @@ describe('adding batches', () => {
     expect((await detail(lot.id)).rmBatches).toHaveLength(1)
     expect(await history(lot.id)).toEqual(['Added PCB batch B1 (70 received)'])
   })
-  it('FR-3.2 refuses a received date in the future, and a blank label', async () => {
+  it('FR-3.2 refuses a received date in the future and generates a blank label', async () => {
     const lot = await componentLot()
     // The test clock says 15 Oct 2026.
     const future = await addBatch(w.planner, lot.id, { receivedQty: 5, receivedDate: '2026-10-16' })
     expect(future.status).toBe(422)
     expect(future.body.fields).toEqual({ receivedDate: 'Received date cannot be in the future.' })
     const blank = await addBatch(w.planner, lot.id, { label: ' ' })
-    expect(blank.body.fields).toEqual({ label: 'Enter a batch label.' })
+    expect(blank.status).toBe(201)
+    expect(blank.body.label).toMatch(/^RM-\d{6,}$/)
     expect((await addBatch(w.planner, lot.id, { receivedDate: '2026-10-15' })).status).toBe(201)
   })
   it('FR-3.1 takes batches only on lots tracked by component', async () => {

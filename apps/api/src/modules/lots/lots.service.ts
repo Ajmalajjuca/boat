@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { generatedLabel } from '../../core/generated-label'
 import type { Lot } from '@boat/domain/models'
 import { changedPlanFields, deniedMessage, PermissionError } from '@boat/domain/permissions'
 import { assertValid, validateLot, ValidationError } from '@boat/domain/validation'
@@ -256,6 +257,7 @@ export async function createLot({ db, clock }: RecordsDeps, user: SessionUser, i
   const clean = { ...input, componentIds: [...new Set(input.componentIds)] }
   await db.$transaction(async (tx) => {
     await holdDataLockShared(tx)
+    clean.label = await generatedLabel(tx, 'lot', clean.label)
     const lot = await checkLot(tx, id, clean)
     await tx.lot.create({ data: { id, ...lotData(clean, lot) } }).catch(duplicateLabel(lot.label))
     if (clean.componentIds.length)
@@ -288,6 +290,8 @@ export async function updateLot(
         await getLotDetail(tx, id, date, user),
       )
     const merged = { ...inputOf(current), ...changes }
+    if (merged.label.trim() && merged.label.trim().toLowerCase() !== current.label.toLowerCase())
+      merged.label = await generatedLabel(tx, 'lot', merged.label)
     const input = { ...merged, componentIds: [...new Set(merged.componentIds)] }
     const old = toDomainLot(current)
     const next = await checkLot(tx, id, input)

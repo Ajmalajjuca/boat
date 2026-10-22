@@ -1,4 +1,5 @@
 import type { RMBatch } from '@boat/domain/models'
+import { generatedLabel } from '../../core/generated-label'
 import { assertValid, validateBatch, ValidationError } from '@boat/domain/validation'
 import type { SessionUser } from '../../core/access'
 import { actorOf, recordActivity } from '../../core/audit'
@@ -84,7 +85,11 @@ export async function createBatch(
   const date = await clock.today()
   const row = await db.$transaction(async (tx) => {
     const lot = await lockLotForEdit(tx, user, lotId)
-    const b = checkBatch(lot, input, date)
+    const b = checkBatch(
+      lot,
+      { ...input, label: await generatedLabel(tx, 'batch', input.label) },
+      date,
+    )
     const created = await tx.rmBatch.create({
       data: { lotId, ...batchData(input, b) },
       include: batchInclude,
@@ -123,6 +128,8 @@ export async function updateBatch(
       notes: current.notes,
       ...patch,
     }
+    if (input.label.trim() && input.label.trim().toLowerCase() !== current.label.toLowerCase())
+      input.label = await generatedLabel(tx, 'batch', input.label)
     const b = checkBatch(lot, input, date)
     const updated = await tx.rmBatch.update({
       where: { id },
