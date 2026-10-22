@@ -39,8 +39,8 @@ test('FR-3.2 adds, edits and deletes batches, and RM readiness follows', async (
   await expect(metric(drawer, 'Producible now')).toContainText('60')
   await expect(metric(drawer, 'Bottleneck')).toContainText('Housing')
 
-  page.once('dialog', (d) => d.accept())
   await drawer.getByRole('row', { name: /H-A/ }).getByRole('button', { name: 'Delete' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(drawer.getByRole('row', { name: /H-A/ })).toHaveCount(0)
   await expect(metric(drawer, 'Producible now')).toContainText('0')
 })

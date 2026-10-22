@@ -1,3 +1,4 @@
+import { useConfirm } from './ui'
 import { useState, type FormEvent } from 'react'
 import type { InviteResult, UserItem } from '@boat/domain/api'
 import { roleInfo, roles } from '@boat/domain/permissions'
@@ -17,6 +18,8 @@ import { keys, useLookups, useUsers } from './api/queries'
 import { queryClient } from './api/queryClient'
 import type { Role } from '@boat/domain/models'
 import {
+  LoadingState,
+  Empty,
   Badge,
   Button,
   Card,
@@ -41,7 +44,9 @@ const refreshUsers = () => queryClient.invalidateQueries({ queryKey: keys.users 
 // Admins invite users, change their role and POC link, and disable or delete them. The server
 // refuses what would leave no active admin; that message shows in the form or as a toast.
 export default function Users({ run, onMessage }: { run: Run; onMessage: (text: string) => void }) {
-  const users = useUsers(true).data ?? []
+  const confirm = useConfirm()
+  const usersQuery = useUsers(true)
+  const users = usersQuery.data ?? []
   const lookups = useLookups().data ?? []
   const [editing, setEditing] = useState<{ user: UserItem | null; form: UserForm } | null>(null)
   const form = useFormErrors()
@@ -99,7 +104,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
       await refreshUsers()
     })
   const remove = async (user: UserItem) => {
-    if (!window.confirm(`Delete ${user.name}? They will no longer be able to sign in.`)) return
+    if (!(await confirm(`Delete ${user.name}? They will no longer be able to sign in.`))) return
     await run(async () => {
       await deleteUser(user.id)
       await refreshUsers()
@@ -108,58 +113,112 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-bold text-[#173b3d]">Users</h2>
+        <div>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-[#ed1c24]">
+            Workspace access
+          </div>
+          <h2 className="text-lg font-bold text-[#1a2024]">
+            Users <span className="ml-1 text-sm font-medium text-slate-400">{users.length}</span>
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">Manage your team, roles and account access.</p>
+        </div>
         <Button size="sm" onClick={() => open(null)}>
           <Plus size={14} /> Invite user
         </Button>
       </div>
-      <ul aria-label="Users" className="mt-4 divide-y divide-slate-100">
-        {users.map((u) => (
-          <li key={u.id} className="py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold text-[#173b3d]">{u.name}</div>
-                <div className="truncate text-xs text-slate-500">{u.email}</div>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                <Badge tone="slate">{roleInfo[u.role].label}</Badge>
-                <Badge
-                  tone={u.status === 'active' ? 'green' : u.status === 'invited' ? 'blue' : 'amber'}
-                >
-                  {statusLabel[u.status]}
-                </Badge>
-              </div>
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              {u.poc && `POC ${u.poc.value} · `}Last sign-in{' '}
-              {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              <Button size="sm" variant="ghost" onClick={() => open(u)}>
-                Edit
-              </Button>
-              {u.status === 'invited' && (
-                <Button size="sm" variant="ghost" onClick={() => resend(u)}>
-                  Resend invite
-                </Button>
-              )}
-              {u.status === 'active' && (
-                <Button size="sm" variant="ghost" onClick={() => setStatus(u, 'disabled')}>
-                  Disable
-                </Button>
-              )}
-              {u.status === 'disabled' && (
-                <Button size="sm" variant="ghost" onClick={() => setStatus(u, 'active')}>
-                  Enable
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" className="text-rose-700" onClick={() => remove(u)}>
-                Delete
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {usersQuery.isPending ? (
+        <LoadingState label="Loading users" />
+      ) : usersQuery.isError ? (
+        <Empty
+          title="Couldn't load users"
+          description={usersQuery.error.message}
+          action={
+            <Button variant="secondary" onClick={() => usersQuery.refetch()}>
+              Try again
+            </Button>
+          }
+        />
+      ) : !users.length ? (
+        <Empty title="No users yet" description="Invite a teammate to get started." />
+      ) : (
+        <div
+          className="table-wrap mt-5 rounded-xl border border-slate-200"
+          role="region"
+          aria-label="User accounts"
+          tabIndex={0}
+        >
+          <p className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 sm:hidden">
+            Swipe horizontally to view all columns and actions.
+          </p>
+          <table aria-label="Users" className="data-table min-w-[900px]">
+            <thead>
+              <tr>
+                {['User', 'Role', 'Status', 'Point of contact', 'Last sign-in', 'Actions'].map(
+                  (label) => (
+                    <th scope="col" key={label}>
+                      {label}
+                    </th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <div className="font-bold text-[#1a2024]">{u.name}</div>
+                    <div className="mt-1 text-xs text-slate-500">{u.email}</div>
+                  </td>
+                  <td>
+                    <Badge>{roleInfo[u.role].label}</Badge>
+                  </td>
+                  <td>
+                    <Badge
+                      tone={
+                        u.status === 'active' ? 'green' : u.status === 'invited' ? 'blue' : 'amber'
+                      }
+                    >
+                      {statusLabel[u.status]}
+                    </Badge>
+                  </td>
+                  <td>{u.poc?.value ?? '—'}</td>
+                  <td>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
+                  <td>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => open(u)}>
+                        Edit
+                      </Button>
+                      {u.status === 'invited' && (
+                        <Button size="sm" variant="ghost" onClick={() => resend(u)}>
+                          Resend invite
+                        </Button>
+                      )}
+                      {u.status === 'active' && (
+                        <Button size="sm" variant="ghost" onClick={() => setStatus(u, 'disabled')}>
+                          Disable
+                        </Button>
+                      )}
+                      {u.status === 'disabled' && (
+                        <Button size="sm" variant="ghost" onClick={() => setStatus(u, 'active')}>
+                          Enable
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-rose-700"
+                        onClick={() => remove(u)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <Modal
         open={!!editing}
         onOpenChange={(v) => {

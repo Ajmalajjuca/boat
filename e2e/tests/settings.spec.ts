@@ -18,8 +18,8 @@ test('FR-8.1 adds, renames and deletes a dropdown value', async ({ page }) => {
   await rename.getByLabel('Value', { exact: true }).fill('Hyperloop Freight')
   await rename.getByRole('button', { name: 'Save value' }).click()
   await expect(page.getByRole('main').getByText('Hyperloop Freight', { exact: true })).toBeVisible()
-  page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Delete Hyperloop Freight' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(page.getByRole('main').getByText('Hyperloop Freight', { exact: true })).toHaveCount(
     0,
   )
@@ -33,8 +33,8 @@ test('FR-8.3 refuses to delete a value in use', async ({ page }) => {
   await page.goto('/')
   await goTo(page, 'Settings')
   await page.getByRole('button', { name: 'Logistics modes' }).click()
-  page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Delete Barge' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(toast(page)).toContainText('Barge is in use. Reassign those records first.')
 })
 

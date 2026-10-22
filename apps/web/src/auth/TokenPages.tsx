@@ -70,7 +70,7 @@ function PasswordForm({
           }}
         />
       </Field>
-      <Button type="submit" className="w-full" disabled={busy}>
+      <Button type="submit" className="w-full" loading={busy}>
         {submitLabel}
       </Button>
       <button
@@ -100,7 +100,10 @@ export function AcceptInvite({ onDone }: { onDone: () => void }) {
   const auth = useAuth(),
     token = useFragmentToken()
   return (
-    <AuthCard title="Welcome to BOAT" intro="Choose a password to finish setting up your account.">
+    <AuthCard
+      title="Welcome to Boat OS"
+      intro="Choose a password to finish setting up your account."
+    >
       {token ? (
         <PasswordForm
           submitLabel="Set password"

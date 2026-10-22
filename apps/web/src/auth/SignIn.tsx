@@ -1,7 +1,6 @@
-import { Box } from 'lucide-react'
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { forgotPassword, login } from '../api/auth'
-import { Button, Card, Field, FormError, Input, useFormErrors } from '../ui'
+import { Brand, Button, Card, Field, FormError, Input, useFormErrors } from '../ui'
 import { useAuth } from './AuthProvider'
 
 // The frame of every screen a signed-out user sees.
@@ -15,17 +14,17 @@ export function AuthCard({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#edf2f1] p-5">
+    <div className="flex min-h-screen items-center justify-center bg-[#f5f6f8] p-5">
       <Card className="w-full max-w-md overflow-hidden">
-        <div className="bg-[#123b3e] p-7 text-white">
-          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#d96d35]">
-            <Box size={23} />
+        <div className="bg-[#1a2024] p-7 text-white">
+          <div className="mb-8">
+            <Brand dark />
           </div>
-          <div className="text-xs font-bold uppercase tracking-[.22em] text-teal-200">
-            BOAT · Supply chain
+          <div className="text-[10px] font-bold uppercase tracking-[.2em] text-white/50">
+            Your operations workspace
           </div>
           <h1 className="mt-2 text-2xl font-extrabold tracking-tight">{title}</h1>
-          <p className="mt-2 text-sm leading-6 text-teal-100">{intro}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{intro}</p>
         </div>
         <div className="p-6">{children}</div>
       </Card>
@@ -35,7 +34,7 @@ export function AuthCard({
 
 export function Notice({ children }: { children: ReactNode }) {
   return (
-    <p role="status" className="mb-4 rounded-xl bg-teal-50 px-3 py-2.5 text-sm text-teal-800">
+    <p role="status" className="mb-4 rounded-xl bg-teal-50 px-3 py-2.5 text-sm text-slate-800">
       {children}
     </p>
   )
@@ -112,13 +111,19 @@ export function SignIn() {
               />
             </Field>
           )}
-          <Button type="submit" className="w-full" disabled={busy}>
-            {forgot ? 'Send reset link' : 'Sign in'}
+          <Button type="submit" className="w-full" loading={busy}>
+            {busy
+              ? forgot
+                ? 'Sending link…'
+                : 'Signing in…'
+              : forgot
+                ? 'Send reset link'
+                : 'Sign in'}
           </Button>
           <button
             type="button"
             onClick={toggle}
-            className="w-full text-center text-xs font-semibold text-teal-800 hover:underline"
+            className="w-full text-center text-xs font-semibold text-slate-800 hover:underline"
           >
             {forgot ? 'Back to sign in' : 'Forgot password?'}
           </button>

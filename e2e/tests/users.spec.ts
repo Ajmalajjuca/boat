@@ -8,7 +8,7 @@ import { choose, goTo, toast } from '../support/ui'
 test.use({ storageState: authFile('admin') })
 
 const row = (page: Page, email: string) =>
-  page.getByRole('list', { name: 'Users' }).getByRole('listitem').filter({ hasText: email })
+  page.getByRole('table', { name: 'Users' }).getByRole('row').filter({ hasText: email })
 
 async function openUsers(page: Page) {
   await page.goto('/')
@@ -67,8 +67,8 @@ test('disables, re-enables and deletes a user', async ({ page }) => {
   await row(page, user.email).getByRole('button', { name: 'Enable' }).click()
   await expect(row(page, user.email)).toContainText('Active')
   await (await signInApi(user.email, user.password)).dispose()
-  page.once('dialog', (d) => d.accept())
   await row(page, user.email).getByRole('button', { name: 'Delete' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(row(page, user.email)).toHaveCount(0)
 })
 

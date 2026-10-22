@@ -1,3 +1,5 @@
+import { LoadingState } from './ui'
+import { useConfirm } from './ui'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ArrowRight,
@@ -119,13 +121,14 @@ export default function LotDrawer({ target, ...props }: Props) {
       {detail.error && !gone ? (
         <FormError message={detail.error.message} />
       ) : (
-        <p className="text-sm text-slate-500">Loading lot...</p>
+        <LoadingState label="Loading lot" />
       )}
     </Sheet>
   )
 }
 
 function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: EditorProps) {
+  const confirm = useConfirm()
   const [draft, setDraft] = useState<Lot & { version?: number }>(initial),
     [baseline, setBaseline] = useState(JSON.stringify(initial)),
     [conflict, setConflict] = useState<LotView | null>(null),
@@ -161,8 +164,8 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
-  const close = () => {
-    if (dirty && !window.confirm('Discard unsaved lot changes?')) return
+  const close = async () => {
+    if (dirty && !(await confirm('Discard unsaved lot changes?'))) return
     onClose()
   }
   const rs = view?.receipts ?? [],
@@ -215,9 +218,9 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
       return
     }
     if (
-      !window.confirm(
+      !(await confirm(
         `Delete lot ${draft.label} and its ${bs.length} RM batches, ${rs.length} GRN receipts, and history records?`,
-      )
+      ))
     )
       return
     const removed = await run(async () => {
@@ -370,13 +373,13 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                 <s.icon size={13} />
                 {s.label}
               </div>
-              <div className="mt-1 text-xl font-extrabold text-[#173b3d]">{s.value}</div>
+              <div className="mt-1 text-xl font-extrabold text-[#1a2024]">{s.value}</div>
             </Card>
           ))}
         </div>
         <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-200">
           <div
-            className="h-full rounded-full bg-[#d96d35] transition-all"
+            className="h-full rounded-full bg-[#ed1c24] transition-all"
             style={{ width: `${grnProgress(draft, rs)}%` }}
           />
         </div>
@@ -693,7 +696,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
               ].map(([label, value]) => (
                 <Card key={label} className="p-3">
                   <div className="metric-label">{label}</div>
-                  <div className="mt-1 text-lg font-bold text-[#173b3d]">{value}</div>
+                  <div className="mt-1 text-lg font-bold text-[#1a2024]">{value}</div>
                 </Card>
               ))}
             </div>
@@ -850,7 +853,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                                 variant="ghost"
                                 className="text-rose-700"
                                 onClick={async () => {
-                                  if (window.confirm(`Delete ${b.label} material batch?`))
+                                  if (await confirm(`Delete ${b.label} material batch?`))
                                     await run(async () => {
                                       await deleteBatch(b.id)
                                       await refreshLots()
@@ -909,7 +912,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                       className="flex flex-wrap items-center justify-between gap-3 p-4"
                     >
                       <div>
-                        <div className="font-semibold text-[#173b3d]">
+                        <div className="font-semibold text-[#1a2024]">
                           {r.label} <Badge tone="teal">{quantity(r.quantity)} units</Badge>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
@@ -930,7 +933,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                             className="text-rose-700"
                             onClick={async () => {
                               if (
-                                window.confirm(
+                                await confirm(
                                   `Delete receipt ${r.label}? The lot's completion and balance will update.`,
                                 )
                               )

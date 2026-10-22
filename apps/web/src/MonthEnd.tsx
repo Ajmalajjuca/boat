@@ -1,3 +1,4 @@
+import { LoadingState } from './ui'
 import { useState, type MutableRefObject } from 'react'
 import type { LotProduct } from '@boat/domain/api'
 import { dateLabel, monthLabel, monthOf, quantity, today } from '@boat/domain/calculations'
@@ -34,7 +35,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
         }
       />
     )
-  if (!report) return <Empty title="Loading month-end summary..." description="" />
+  if (!report) return <LoadingState label="Loading month-end summary" />
   const summary = report,
     inProgress = report.inProgress
   const short = summary.lots.filter((row) => row.shortfall > 0)
@@ -105,7 +106,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
         <>
           <Card>
             <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-              <h2 className="text-base font-bold text-[#173b3d]">By product</h2>
+              <h2 className="text-base font-bold text-[#1a2024]">By product</h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 {summary.products.length} products planned in {monthLabel(month)}, largest shortfall
                 first
@@ -139,7 +140,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                           <div className="flex items-center gap-2">
                             <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
                               <div
-                                className="h-full bg-[#d96d35]"
+                                className="h-full bg-[#ed1c24]"
                                 style={{ width: `${percent}%` }}
                               />
                             </div>
@@ -155,7 +156,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
           </Card>
           <Card>
             <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-              <h2 className="text-base font-bold text-[#173b3d]">
+              <h2 className="text-base font-bold text-[#1a2024]">
                 {inProgress ? 'Lots still to receive' : 'Lots short of plan'}
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">

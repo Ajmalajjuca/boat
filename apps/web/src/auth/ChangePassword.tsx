@@ -86,7 +86,7 @@ export function ChangePassword({
           <Button type="button" variant="secondary" onClick={close}>
             Cancel
           </Button>
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" loading={busy}>
             Save password
           </Button>
         </div>

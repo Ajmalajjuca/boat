@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { fieldErrors, type FieldErrors } from '@boat/domain/validation'
-import { Check, ChevronDown, CircleAlert, Lock, X } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Eye, EyeOff, LoaderCircle, Lock, X } from 'lucide-react'
 import {
   createContext,
   useContext,
@@ -23,6 +23,132 @@ import {
 export const cn = (...values: ClassValue[]) => twMerge(clsx(values))
 // Runs a save; on failure it calls onError (forms show field errors) or shows a toast.
 export type Run = (fn: () => Promise<unknown>, onError?: (e: unknown) => void) => Promise<boolean>
+export const SavingContext = createContext(false)
+
+export function Brand({ dark = false }: { dark?: boolean }) {
+  return (
+    <div className="flex items-center gap-3" aria-label="Boat OS">
+      <img
+        src={dark ? '/boat-logo-white.svg' : '/boat-logo.svg'}
+        alt="boAt"
+        width="88"
+        height="36"
+      />
+      <span
+        className={cn(
+          'border-l pl-3 text-lg font-bold tracking-tight',
+          dark ? 'border-white/20 text-white' : 'border-slate-200 text-[#1a2024]',
+        )}
+      >
+        OS
+      </span>
+    </div>
+  )
+}
+
+export function LoadingState({ label = 'Loading' }: { label?: string }) {
+  return (
+    <div role="status" aria-label={label} className="space-y-5 p-5 sm:p-7">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+        <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-[#ed1c24]" />
+        {label}…
+      </div>
+      <div aria-hidden="true" className="space-y-3">
+        {[0, 1, 2, 3].map((row) => (
+          <div key={row} className="flex gap-4 rounded-xl border border-slate-100 p-4">
+            <span className="skeleton h-9 w-9 rounded-lg" />
+            <span className="flex-1 space-y-2">
+              <span className="skeleton block h-3 w-2/5 rounded" />
+              <span className="skeleton block h-3 w-3/4 rounded" />
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const ConfirmationContext = createContext<(message: string) => Promise<boolean>>(() =>
+  Promise.resolve(false),
+)
+export const useConfirm = () => useContext(ConfirmationContext)
+export function ConfirmationProvider({ children }: { children: ReactNode }) {
+  const [message, setMessage] = useState('')
+  const resolve = useRef<((confirmed: boolean) => void) | null>(null)
+  const cancel = useRef<HTMLButtonElement>(null)
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const finish = (confirmed: boolean) => {
+    resolve.current?.(confirmed)
+    resolve.current = null
+    setMessage('')
+  }
+  const confirm = (text: string) =>
+    new Promise<boolean>((done) => {
+      resolve.current?.(false)
+      resolve.current = done
+      returnFocus.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null
+      setMessage(text)
+    })
+  useEffect(
+    () => () => {
+      resolve.current?.(false)
+    },
+    [],
+  )
+  const discard = message.startsWith('Discard')
+  return (
+    <ConfirmationContext.Provider value={confirm}>
+      {children}
+      <DialogPrimitive.Root
+        open={!!message}
+        onOpenChange={(open) => {
+          if (!open) finish(false)
+        }}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm" />
+          <DialogPrimitive.Content
+            role="alertdialog"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+              cancel.current?.focus()
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              // The originating button becomes enabled after its confirmation promise settles.
+              requestAnimationFrame(() => returnFocus.current?.focus())
+            }}
+            className="fixed left-1/2 top-1/2 z-[101] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl outline-none"
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-[#ed1c24]">
+              <CircleAlert size={24} />
+            </div>
+            <DialogPrimitive.Title className="text-lg font-bold">
+              {discard ? 'Discard changes?' : 'Confirm action'}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description className="mt-2 text-sm leading-6 text-slate-600">
+              {message}
+            </DialogPrimitive.Description>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                ref={cancel}
+                type="button"
+                className={buttonVariants({ variant: 'secondary' })}
+                onClick={() => finish(false)}
+              >
+                Cancel
+              </button>
+              <Button variant="danger" onClick={() => finish(true)}>
+                {discard ? 'Discard changes' : 'Confirm'}
+              </Button>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </ConfirmationContext.Provider>
+  )
+}
 export function useFormErrors() {
   const [errors, setErrors] = useState<FieldErrors>({})
   return {
@@ -86,15 +212,15 @@ export function FormError({ message }: { message?: string }) {
   )
 }
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
   {
     variants: {
       variant: {
-        default: 'bg-[#db6d32] text-white hover:bg-[#c65d29] shadow-sm',
+        default: 'bg-[#ed1c24] text-white hover:bg-[#ce141c] shadow-sm',
         secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50',
         ghost: 'text-slate-600 hover:bg-slate-100',
         danger: 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200',
-        teal: 'bg-[#123b3e] text-white hover:bg-[#0c2e31]',
+        teal: 'bg-[#1a2024] text-white hover:bg-[#101416]',
       },
       size: { default: 'h-10 px-4', sm: 'h-8 px-3 text-xs', icon: 'h-9 w-9', lg: 'h-11 px-5' },
     },
@@ -105,19 +231,81 @@ export function Button({
   className,
   variant,
   size,
+  loading = false,
+  children,
+  onClick,
+  disabled,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants>) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />
+}: ButtonHTMLAttributes<HTMLButtonElement> &
+  VariantProps<typeof buttonVariants> & { loading?: boolean }) {
+  const [pending, setPending] = useState(false)
+  const saving = useContext(SavingContext)
+  const busy = loading || pending || (saving && props.type === 'submit')
+  return (
+    <button
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      onClick={async (event) => {
+        if (busy) return
+        const result: unknown = onClick?.(event)
+        if (result && typeof (result as unknown as Promise<unknown>).then === 'function') {
+          setPending(true)
+          try {
+            await result
+          } finally {
+            setPending(false)
+          }
+        }
+      }}
+    >
+      {busy && <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />}
+      {children}
+    </button>
+  )
 }
 // The caption id of the enclosing Field. Controls name themselves by the caption alone, because
 // the wrapping <label> also contains the control's own text (a textarea's value, a select's options).
-const FieldCaption = createContext<string | undefined>(undefined)
+const FieldCaption = createContext<{ id: string; label: string } | undefined>(undefined)
 const useCaption = (props: { 'aria-label'?: string; 'aria-labelledby'?: string }) => {
   const caption = useContext(FieldCaption)
-  return props['aria-label'] ? props['aria-labelledby'] : (props['aria-labelledby'] ?? caption)
+  return props['aria-label'] ? props['aria-labelledby'] : (props['aria-labelledby'] ?? caption?.id)
 }
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn('field', className)} aria-labelledby={useCaption(props)} {...props} />
+export function Input({ className, type, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false)
+  const caption = useCaption(props)
+  const field = useContext(FieldCaption)
+  const id = useId()
+  if (type !== 'password')
+    return (
+      <input type={type} className={cn('field', className)} aria-labelledby={caption} {...props} />
+    )
+  return (
+    <span className="relative block">
+      <input
+        className={cn('field pr-12', className)}
+        aria-labelledby={caption}
+        {...props}
+        id={props.id ?? id}
+        type={visible ? 'text' : 'password'}
+      />
+      <button
+        type="button"
+        disabled={props.disabled}
+        aria-label={`${visible ? 'Hide' : 'Show'} ${(field?.label || props['aria-label'] || 'password').toLowerCase()}`}
+        aria-controls={props.id ?? id}
+        aria-pressed={visible}
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-slate-500 hover:text-[#ed1c24]"
+        onClick={(event) => {
+          event.preventDefault()
+          setVisible(!visible)
+        }}
+      >
+        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </span>
+  )
 }
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
@@ -176,7 +364,7 @@ export function Field({
             </span>
           )}
         </span>
-        <FieldCaption.Provider value={captionId}>{children}</FieldCaption.Provider>
+        <FieldCaption.Provider value={{ id: captionId, label }}>{children}</FieldCaption.Provider>
       </label>
       {error ? (
         <span
@@ -272,19 +460,19 @@ export function Sheet({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[#092a2d]/50 backdrop-blur-[2px]" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[#101416]/50 backdrop-blur-[2px]" />
         <DialogPrimitive.Content
           onEscapeKeyDown={keepOpenForSearch}
           onPointerDownOutside={keepOpenForToast}
           onInteractOutside={keepOpenForToast}
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-[#f8faf9] shadow-2xl outline-none',
+            'fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-[#f8f9fb] shadow-2xl outline-none',
             width === 'wide' ? 'max-w-[780px]' : 'max-w-[560px]',
           )}
         >
           <div className="flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
             <div>
-              <DialogPrimitive.Title className="text-lg font-bold text-[#173b3d]">
+              <DialogPrimitive.Title className="text-lg font-bold text-[#1a2024]">
                 {title}
               </DialogPrimitive.Title>
               {subtitle && (
@@ -324,7 +512,7 @@ export function Modal({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-[#092a2d]/50" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-[#101416]/50" />
         {/* Centred with flexbox, not a transform, so fixed-position dropdowns are not clipped. */}
         <div className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center p-4">
           <DialogPrimitive.Content
@@ -334,7 +522,7 @@ export function Modal({
             className="pointer-events-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl outline-none sm:p-6"
           >
             <div className="mb-5 flex items-start justify-between gap-3">
-              <DialogPrimitive.Title className="text-lg font-bold text-[#173b3d]">
+              <DialogPrimitive.Title className="text-lg font-bold text-[#1a2024]">
                 {title}
               </DialogPrimitive.Title>
               <DialogPrimitive.Close asChild>

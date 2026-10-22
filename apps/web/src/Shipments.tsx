@@ -1,3 +1,5 @@
+import { LoadingState } from './ui'
+import { useConfirm } from './ui'
 import { useEffect, useState, type FormEvent, type MutableRefObject } from 'react'
 import {
   ArrowRight,
@@ -178,7 +180,7 @@ export default function Shipments({ onOpen, csvRef }: Props) {
               key={card.id}
               title={card.help}
               onClick={() => setQuick(quick === flag ? '' : flag)}
-              className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-orange-300 ${quick === flag ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200'}`}
+              className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-red-300 ${quick === flag ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200'}`}
             >
               <div className="flex items-center justify-between">
                 <span className="metric-label">{card.label}</span>
@@ -192,7 +194,7 @@ export default function Shipments({ onOpen, csvRef }: Props) {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
           <div>
-            <h2 className="text-base font-bold text-[#173b3d]">Finished goods shipments</h2>
+            <h2 className="text-base font-bold text-[#1a2024]">Finished goods shipments</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               {list?.total ?? 0} shipments · Arrival means actual warehouse arrival
             </p>
@@ -247,7 +249,7 @@ export default function Shipments({ onOpen, csvRef }: Props) {
           </Button>
         </div>
         {listQuery.isPending ? (
-          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading shipments…</p>
+          <LoadingState label="Loading shipments" />
         ) : listQuery.isError && !list ? (
           <div className="p-5">
             <Empty
@@ -281,7 +283,7 @@ export default function Shipments({ onOpen, csvRef }: Props) {
                 <tbody>
                   {shipments.map((s) => (
                     <tr key={s.id} className="cursor-pointer" onClick={() => onOpen(s.id)}>
-                      <td className="font-bold text-[#173b3d]">{s.number}</td>
+                      <td className="font-bold text-[#1a2024]">{s.number}</td>
                       <td>{s.vessel}</td>
                       <td className="max-w-56 truncate" title={names(s)}>
                         {names(s)}
@@ -315,7 +317,7 @@ export default function Shipments({ onOpen, csvRef }: Props) {
               {shipments.map((s) => (
                 <button key={s.id} onClick={() => onOpen(s.id)} className="w-full p-4 text-left">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#173b3d]">{s.number}</span>
+                    <span className="font-bold text-[#1a2024]">{s.number}</span>
                     <Badge tone={tone(s)}>{s.computed.status}</Badge>
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
@@ -398,7 +400,7 @@ export function ShipmentDrawer({ target, ...props }: DrawerProps) {
       {detail.error && !gone ? (
         <FormError message={detail.error.message} />
       ) : (
-        <p className="text-sm text-slate-500">Loading shipment...</p>
+        <LoadingState label="Loading shipment" />
       )}
     </Sheet>
   )
@@ -436,8 +438,9 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
-  const close = () => {
-    if (dirty && !window.confirm('Discard unsaved shipment changes?')) return
+  const confirm = useConfirm()
+  const close = async () => {
+    if (dirty && !(await confirm('Discard unsaved shipment changes?'))) return
     onClose()
   }
   const productOptions = productChoices(useProducts().data ?? [])
@@ -491,9 +494,9 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
   }
   const remove = async () => {
     if (
-      !window.confirm(
+      !(await confirm(
         `Delete shipment ${draft.number}, its ${lines.length} product lines, ETA revision history, and activity records?`,
-      )
+      ))
     )
       return
     const removed = await run(async () => {
@@ -585,7 +588,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
         ].map(([label, value]) => (
           <Card key={label} className="p-3">
             <div className="metric-label">{label}</div>
-            <div className="mt-1 text-lg font-bold text-[#173b3d]">{value}</div>
+            <div className="mt-1 text-lg font-bold text-[#1a2024]">{value}</div>
           </Card>
         ))}
       </div>
@@ -734,7 +737,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Button type="button" variant="secondary" size="sm" onClick={addLine}>
                   <Plus size={14} /> Add product line
                 </Button>
-                <div className="text-sm font-bold text-[#173b3d]">
+                <div className="text-sm font-bold text-[#1a2024]">
                   Total: {quantity(shipmentQuantity(lines))} units
                 </div>
               </div>
@@ -773,7 +776,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                   <Card key={r.id} className="p-4">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                       <span>{dateLabel(r.previousDate ?? '')}</span>
-                      <ArrowRight size={15} className="text-[#d96d35]" />
+                      <ArrowRight size={15} className="text-[#ed1c24]" />
                       <span>{dateLabel(r.newDate ?? '')}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">

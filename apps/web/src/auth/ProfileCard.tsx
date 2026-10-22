@@ -14,7 +14,7 @@ export function ProfileCard({ onChangePassword }: { onChangePassword: () => void
         </span>
         <div className="min-w-0">
           <div className="truncate text-xs font-bold">{user.name}</div>
-          <div className="truncate text-[11px] text-teal-100/70">
+          <div className="truncate text-[11px] text-white/50">
             {user.role === 'poc'
               ? `POC · ${user.poc?.value ?? 'not linked'}`
               : roleInfo[user.role].label}

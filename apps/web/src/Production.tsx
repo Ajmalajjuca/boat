@@ -1,3 +1,4 @@
+import { LoadingState } from './ui'
 import type { LotCards, LotFlag, LotGroup, LotSort } from '@boat/domain/api'
 import { dateLabel, effectiveLotEta, quantity, signedDays } from '@boat/domain/calculations'
 import type { LookupKind } from '@boat/domain/models'
@@ -399,7 +400,7 @@ export default function Production({
                 key={card.id}
                 title={card.help}
                 onClick={() => setQuick(quick === card.id ? '' : card.id)}
-                className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-orange-300 ${quick === card.id ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200'}`}
+                className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-red-300 ${quick === card.id ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200'}`}
               >
                 <div className="flex items-center justify-between">
                   <span className="metric-label">{card.label}</span>
@@ -420,7 +421,7 @@ export default function Production({
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
           <div>
-            <h2 className="text-base font-bold text-[#173b3d]">
+            <h2 className="text-base font-bold text-[#1a2024]">
               {mode === 'active' ? 'Active production lots' : 'Completed lots'}
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -551,7 +552,7 @@ export default function Production({
           </div>
         )}
         {groupsQuery.isPending ? (
-          <p className="px-5 py-8 text-center text-sm text-slate-500">Loading lots…</p>
+          <LoadingState label="Loading lots" />
         ) : groupsQuery.isError ? (
           <div className="p-5">
             <Empty
@@ -620,11 +621,11 @@ export default function Production({
                       aria-expanded={open}
                     >
                       {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-sm font-extrabold text-teal-700">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-extrabold text-slate-700">
                         {g.product.name.slice(0, 1)}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold text-[#173b3d]">
+                        <span className="block truncate text-sm font-bold text-[#1a2024]">
                           {g.product.name}{' '}
                           {g.product.variant && (
                             <span className="font-normal text-slate-500">
@@ -704,7 +705,7 @@ export default function Production({
                       className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
                     >
                       <div>
-                        <b className="text-sm text-[#173b3d]">{g.product.name}</b>
+                        <b className="text-sm text-[#1a2024]">{g.product.name}</b>
                         <span className="ml-2 text-xs text-slate-500">
                           {[g.product.variant, g.product.segment.value].filter(Boolean).join(' · ')}
                         </span>
@@ -792,7 +793,7 @@ function LotTable({
         {lots.map((l) => (
           <button key={l.id} onClick={() => onOpenLot(l.id)} className="w-full p-4 text-left">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-[#173b3d]">{l.label}</span>
+              <span className="font-bold text-[#1a2024]">{l.label}</span>
               {statuses(l)}
             </div>
             <div className="mt-1 text-xs text-slate-500">{l.computed.summary}</div>
@@ -823,7 +824,7 @@ function LotTable({
               </div>
             )}
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full bg-[#d96d35]" style={{ width: `${l.computed.grnPercent}%` }} />
+              <div className="h-full bg-[#ed1c24]" style={{ width: `${l.computed.grnPercent}%` }} />
             </div>
           </button>
         ))}

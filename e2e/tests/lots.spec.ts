@@ -29,8 +29,8 @@ test('FR-2.1 adds a lot to a product, then edits and deletes it', async ({ page 
   await expect(golf).toContainText(/Qty\s*300/)
 
   const remove = await openLot(page, 'G-100')
-  page.once('dialog', (d) => d.accept())
   await remove.getByRole('button', { name: 'Delete lot' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(remove).toBeHidden()
   // That message is for a lot someone else deleted.
   await page.waitForTimeout(1000)

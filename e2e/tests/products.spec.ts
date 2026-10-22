@@ -31,8 +31,8 @@ test('FR-1.1 adds, renames and deletes a product', async ({ page }) => {
     .getByRole('group', { name: 'CinemaBar 520 Matte Black' })
     .getByRole('button', { name: 'Edit' })
     .click()
-  page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Delete product' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(list.getByText('No products yet')).toBeVisible()
 })
 

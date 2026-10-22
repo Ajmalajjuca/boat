@@ -8,8 +8,8 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #173b3d;
-  background: #f5f7f6;
+  color: #1a2024;
+  background: #f5f6f8;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -30,7 +30,7 @@
   }
   button:focus-visible,
   a:focus-visible {
-    outline: 2px solid #df7b43;
+    outline: 2px solid #ed1c24;
     outline-offset: 2px;
   }
 }
@@ -44,7 +44,7 @@
     border-radius: 9px;
     background: #fff;
     padding: 9px 11px;
-    color: #273e43;
+    color: #30383e;
     font-size: 13px;
     outline: none;
     transition:
@@ -53,8 +53,8 @@
   }
   .field:focus,
   .field:focus-visible {
-    border-color: #d77a43;
-    box-shadow: 0 0 0 3px rgba(219, 109, 50, 0.14);
+    border-color: #ed1c24;
+    box-shadow: 0 0 0 3px rgba(237, 28, 36, 0.12);
   }
   [data-invalid] .field {
     border-color: #e11d48;
@@ -75,7 +75,7 @@
   .field-label {
     display: block;
     margin-bottom: 6px;
-    color: #486065;
+    color: #4b5563;
     font-size: 12px;
     font-weight: 700;
   }
@@ -100,8 +100,8 @@
 .data-table th {
   text-align: left;
   padding: 11px 13px;
-  background: #f7faf9;
-  color: #698087;
+  background: #f8f9fb;
+  color: #64748b;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.07em;
@@ -111,7 +111,7 @@
 .data-table td {
   padding: 12px 13px;
   border-bottom: 1px solid #edf1f1;
-  color: #344b50;
+  color: #374151;
   vertical-align: middle;
 }
 .data-table tbody tr:last-child td {
@@ -123,7 +123,7 @@
 .section-title {
   font-size: 12px;
   font-weight: 800;
-  color: #183d40;
+  color: #1a2024;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -138,20 +138,20 @@
   font-size: 23px;
   font-weight: 800;
   letter-spacing: -0.04em;
-  color: #183d40;
+  color: #1a2024;
 }
 .tab {
   padding: 10px 13px;
   border-bottom: 2px solid transparent;
-  color: #6f8388;
+  color: #64748b;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
 }
 .tab[data-active='true'] {
-  border-color: #d96c33;
-  color: #173b3d;
+  border-color: #ed1c24;
+  color: #1a2024;
 }
 .icon-dot {
   width: 7px;
@@ -159,6 +159,41 @@
   border-radius: 50%;
   background: currentColor;
   display: inline-block;
+}
+.skeleton {
+  background: linear-gradient(100deg, #f0f1f3 25%, #fafafa 45%, #f0f1f3 65%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+[role='dialog'],
+[role='alertdialog'],
+[data-toast] {
+  animation: appear 160ms ease-out;
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
 @media (max-width: 640px) {
   .data-table th,
