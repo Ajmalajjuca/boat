@@ -17,6 +17,8 @@ export type SessionUser = {
   role: Role
   pocId: string | null
   poc: { id: string; value: string } | null
+  // The backup admin: the only password sign-in (FR-11.6).
+  passwordLogin: boolean
 }
 export type AuthContext = { user: SessionUser; sessionId: string; csrfToken: string }
 

@@ -24,6 +24,8 @@ describe('loadConfig', () => {
       SMTP_PORT: 465,
       TRUST_PROXY: 0,
       FEATURE_GRN: false,
+      GOOGLE_ALLOWED_DOMAINS: [],
+      GOOGLE_ISSUER: 'https://accounts.google.com',
     })
   })
   it('reads FEATURE_GRN as a boolean, off by default', () => {
@@ -67,6 +69,28 @@ describe('loadConfig', () => {
     expect(loadConfig(production).NODE_ENV).toBe('production')
     const smtp = { SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'a@gmail.com', SMTP_PASS: 'p' }
     expect(loadConfig({ ...production, RESEND_API_KEY: undefined, ...smtp }).SMTP_PORT).toBe(465)
+  })
+  it('reads the Google sign-in settings, all or none', () => {
+    const google = {
+      GOOGLE_CLIENT_ID: 'id',
+      GOOGLE_CLIENT_SECRET: 'secret',
+      GOOGLE_ALLOWED_DOMAINS: ' Company.test, other.test ',
+    }
+    expect(loadConfig({ ...base, ...google })).toMatchObject({
+      GOOGLE_ALLOWED_DOMAINS: ['company.test', 'other.test'],
+      GOOGLE_ISSUER: 'https://accounts.google.com',
+    })
+    expect(loadConfig(base).GOOGLE_ALLOWED_DOMAINS).toEqual([])
+    expect(() => loadConfig({ ...base, GOOGLE_CLIENT_ID: 'id' })).toThrow(/GOOGLE_CLIENT_SECRET/)
+    expect(() => loadConfig({ ...base, ...google, GOOGLE_ALLOWED_DOMAINS: ' ' })).toThrow(
+      /GOOGLE_ALLOWED_DOMAINS/,
+    )
+    // A test issuer is only for tests: production talks to Google over https.
+    expect(() =>
+      loadConfig({ ...production, ...google, GOOGLE_ISSUER: 'http://127.0.0.1:9999' }),
+    ).toThrow(/GOOGLE_ISSUER/)
+    // Production without Google still starts, so the backup admin can sign in.
+    expect(loadConfig(production).GOOGLE_CLIENT_ID).toBeUndefined()
   })
   it('requires email sending and an https APP_URL in production', () => {
     expect(() => loadConfig({ ...production, RESEND_API_KEY: undefined })).toThrow(/SMTP_HOST/)

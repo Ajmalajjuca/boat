@@ -7,6 +7,7 @@ import { listen } from './core/listen'
 import { createLogger } from './core/logger'
 import { createMailer } from './core/mailer'
 import { createPrisma, databaseCheck } from './core/prisma'
+import { createGoogleSignIn } from './modules/auth/google'
 
 const config = loadConfig(process.env)
 const logger = createLogger(config.LOG_LEVEL)
@@ -27,6 +28,16 @@ const app = createApp({
     secureCookies: config.NODE_ENV === 'production',
     mailer: createMailer(config, logger),
     features: { grn: config.FEATURE_GRN },
+    google:
+      config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET
+        ? createGoogleSignIn({
+            issuer: config.GOOGLE_ISSUER,
+            clientId: config.GOOGLE_CLIENT_ID,
+            clientSecret: config.GOOGLE_CLIENT_SECRET,
+            redirectUri: `${config.APP_URL}/api/v1/auth/google/callback`,
+            allowedDomains: config.GOOGLE_ALLOWED_DOMAINS,
+          })
+        : null,
   },
 })
 const server = await listen(app, config.PORT).catch((err: unknown) => {

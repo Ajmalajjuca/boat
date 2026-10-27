@@ -28,6 +28,22 @@ const schema = z
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     // GRN receipts are hidden for now; on brings back their screens and routes.
     FEATURE_GRN: z.stringbool().default(false),
+    // Google sign-in for staff: an OAuth client of the company's Google Cloud project, and the
+    // Workspace domains allowed in. All three or none; without them only the backup admin's
+    // password sign-in works.
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    GOOGLE_ALLOWED_DOMAINS: z
+      .string()
+      .optional()
+      .transform((s) =>
+        (s ?? '')
+          .split(',')
+          .map((d) => d.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    // Tests point this at @boat/oidc-stub.
+    GOOGLE_ISSUER: z.url().default('https://accounts.google.com'),
   })
   .superRefine((c, ctx) => {
     const issue = (path: string, message: string) =>
@@ -40,7 +56,17 @@ const schema = z
       if (!c.SMTP_PASS) issue('SMTP_PASS', 'required when SMTP_HOST is set')
       if (!c.MAIL_FROM) issue('MAIL_FROM', 'required when SMTP_HOST is set')
     }
+    const google = [c.GOOGLE_CLIENT_ID, c.GOOGLE_CLIENT_SECRET, c.GOOGLE_ALLOWED_DOMAINS.length]
+    if (google.some(Boolean) && !google.every(Boolean)) {
+      if (!c.GOOGLE_CLIENT_ID) issue('GOOGLE_CLIENT_ID', 'set all three Google sign-in variables')
+      if (!c.GOOGLE_CLIENT_SECRET)
+        issue('GOOGLE_CLIENT_SECRET', 'set all three Google sign-in variables')
+      if (!c.GOOGLE_ALLOWED_DOMAINS.length)
+        issue('GOOGLE_ALLOWED_DOMAINS', 'list at least one company domain')
+    }
     if (c.NODE_ENV !== 'production') return
+    if (!c.GOOGLE_ISSUER.startsWith('https://'))
+      issue('GOOGLE_ISSUER', 'must use https in production')
     if (!c.RESEND_API_KEY && !c.SMTP_HOST)
       issue('RESEND_API_KEY', 'RESEND_API_KEY or SMTP_HOST is required in production')
     if (!c.APP_URL.startsWith('https://')) issue('APP_URL', 'must use https in production')

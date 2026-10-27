@@ -10,6 +10,26 @@ import { hashPassword } from '../../src/modules/auth/password'
 
 export const password = 'correct horse battery staple'
 
+// Signs in through the Google flow against @boat/oidc-stub: start, choose the identity at the
+// stub, then follow its redirect back to the callback with the agent's cookies. extra adds stub
+// parameters (e.g. '&email_verified=false'); forgedState replaces the state sent back.
+export async function googleSignIn(
+  agent: ReturnType<typeof request.agent>,
+  email: string,
+  extra = '',
+  forgedState?: string,
+) {
+  const start = await agent.get('/api/v1/auth/google/start')
+  if (start.status !== 302) throw new Error(`google start failed: ${start.status}`)
+  const chosen = await fetch(
+    `${start.headers.location}&email=${encodeURIComponent(email)}${extra}`,
+    { redirect: 'manual' },
+  )
+  const back = new URL(chosen.headers.get('location')!)
+  if (forgedState) back.searchParams.set('state', forgedState)
+  return agent.get(`${back.pathname}${back.search}`)
+}
+
 let counter = 0
 export const unique = (prefix: string) => `${prefix} ${++counter}-${Date.now().toString(36)}`
 

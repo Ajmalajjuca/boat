@@ -12,5 +12,6 @@ export const testDeps = (overrides: Partial<ApiDeps> = {}): ApiDeps => ({
   secureCookies: false,
   mailer: memoryMailer(),
   features: { grn: false },
+  google: null,
   ...overrides,
 })

@@ -41,6 +41,7 @@ const required = [
   'FR-11.2',
   'FR-11.3',
   'FR-11.4',
+  'FR-11.5',
 ]
 
 const testDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../test')

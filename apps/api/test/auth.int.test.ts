@@ -56,6 +56,7 @@ describe('each role signs in and sees its allowed actions', () => {
           role,
           pocId: poc?.id ?? null,
           poc: poc ? { id: poc.id, value: poc.value } : null,
+          passwordLogin: false,
         },
         allowedActions: expected[role],
         csrfToken: expect.any(String),

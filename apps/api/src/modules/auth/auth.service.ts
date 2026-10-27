@@ -14,6 +14,7 @@ import type { Db } from '../../core/prisma'
 import type { PrismaClient } from '../../generated/prisma/client'
 import type { SettingsService } from '../settings/settings.service'
 import { consumeToken, issueToken } from './auth-tokens'
+import type { GoogleIdentity } from './google'
 import { resetEmail } from './emails'
 import { hashPassword, verifyPassword } from './password'
 import { createSession, revokeUserSessions } from './sessions'
@@ -36,6 +37,41 @@ export async function signInWithPassword(
   if (!user || !ok || user.status !== 'active') throw new UnauthenticatedError(incorrect)
   const session = await createSession(db, user.id, userAgent)
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+  return session
+}
+
+// Why a Google sign-in was refused; the callback sends the browser to /sign-in?error=<code>.
+export type GoogleRefusal = 'unverified' | 'domain' | 'not_added' | 'disabled'
+export class GoogleSignInError extends Error {
+  constructor(readonly code: GoogleRefusal) {
+    super(code)
+  }
+}
+
+// FR-11.5: a verified Google account on an allowed Workspace domain whose email an admin has
+// added. Nothing is created here; the first sign-in turns an invited user active. The domain
+// comes from Google's hd claim, so a personal Gmail an admin added by mistake is still refused.
+export async function signInWithGoogle(
+  db: Db,
+  identity: GoogleIdentity,
+  allowedDomains: string[],
+  userAgent?: string,
+) {
+  if (!identity.emailVerified) throw new GoogleSignInError('unverified')
+  const email = normalizeEmail(identity.email)
+  const domain = (identity.hd ?? email.split('@')[1] ?? '').toLowerCase()
+  if (!allowedDomains.includes(domain)) throw new GoogleSignInError('domain')
+  const user = await db.user.findFirst({
+    where: { email, deletedAt: null },
+    select: { id: true, status: true },
+  })
+  if (!user) throw new GoogleSignInError('not_added')
+  if (user.status === 'disabled') throw new GoogleSignInError('disabled')
+  const session = await createSession(db, user.id, userAgent)
+  await db.user.update({
+    where: { id: user.id },
+    data: { status: 'active', lastLoginAt: new Date() },
+  })
   return session
 }
 

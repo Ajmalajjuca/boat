@@ -102,6 +102,7 @@ const user = (role: SessionUser['role'], pocId: string | null = null): SessionUs
   role,
   pocId,
   poc: null,
+  passwordLogin: false,
 })
 
 describe('toDomainLot', () => {

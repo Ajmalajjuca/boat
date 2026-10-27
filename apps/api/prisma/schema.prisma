@@ -66,7 +66,9 @@ model User {
   role         Role
   pocId        String?      @map("poc_id") @db.Uuid
   poc          LookupValue? @relation("UserPoc", fields: [pocId], references: [id])
-  passwordHash String?      @map("password_hash") // Argon2id; null until invite accepted
+  passwordHash String?      @map("password_hash") // Argon2id; only the backup admin keeps one
+  // The backup admin, set by the create-admin command, is the only password sign-in (FR-11.6).
+  passwordLogin Boolean     @default(false) @map("password_login")
   status       UserStatus   @default(invited)
   lastLoginAt  DateTime?    @map("last_login_at") @db.Timestamptz(3)
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)

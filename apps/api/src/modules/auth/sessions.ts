@@ -17,6 +17,7 @@ export const sessionUserSelect = {
   role: true,
   pocId: true,
   poc: { select: { id: true, value: true } },
+  passwordLogin: true,
 } satisfies Prisma.UserSelect
 
 export async function createSession(db: Db, userId: string, userAgent?: string) {

@@ -3,6 +3,7 @@ import { createClock, type Features } from './core/clock'
 import type { Mailer } from './core/mailer'
 import type { PrismaClient } from './generated/prisma/client'
 import { authRouter } from './modules/auth/auth.router'
+import type { GoogleSignIn } from './modules/auth/google'
 import { activityRouter } from './modules/activity/activity.router'
 import { loadSession } from './modules/auth/sessions'
 import { dataRouter } from './modules/data-transfer/data.router'
@@ -31,6 +32,8 @@ export type ApiDeps = {
   // The time for "today". Tests pass a fixed one; production uses the real time.
   now?: () => Date
   features: Features
+  // Google sign-in for staff; null when it isn't configured.
+  google: GoogleSignIn | null
 }
 
 const mountPaths = new WeakMap<object, string>()

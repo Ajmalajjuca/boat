@@ -13,7 +13,7 @@ import {
 import { errorHandler } from './errors'
 
 const signedInAs = (role: Role): AuthContext => ({
-  user: { id: 'u1', email: 'a@example.com', name: 'A', role, pocId: null, poc: null },
+  user: { id: 'u1', email: 'a@example.com', name: 'A', role, pocId: null, poc: null, passwordLogin: false },
   sessionId: 's1',
   csrfToken: 'csrf-1',
 })

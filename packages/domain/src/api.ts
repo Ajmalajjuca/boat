@@ -40,6 +40,8 @@ export type SessionUser = {
   role: Role
   pocId: string | null
   poc: Ref | null
+  // Only the backup admin signs in with a password; it alone can change one.
+  passwordLogin: boolean
 }
 export type MePayload = {
   user: SessionUser
