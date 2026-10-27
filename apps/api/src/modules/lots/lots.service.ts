@@ -109,8 +109,15 @@ const spaced = (field: string) => field.replace(/([A-Z])/g, ' $1').toLowerCase()
 
 // Checks every reference against Settings (FR-8.3) and the product table, runs the shared
 // validateLot, and returns the lot in the domain's shape for plan-field checks and history.
-// FOR SHARE on the product keeps a concurrent product delete from missing this lot.
-async function checkLot(db: Db, id: string, input: LotInput): Promise<Lot> {
+// FOR SHARE on the product keeps a concurrent product delete from missing this lot. previous is
+// the stored lot (null for a new one) and date the company's today, for the date rules.
+async function checkLot(
+  db: Db,
+  id: string,
+  input: LotInput,
+  previous: Lot | null,
+  date: string,
+): Promise<Lot> {
   const product = await db.$queryRaw<{ id: string }[]>`
     SELECT id FROM products WHERE id = ${input.productId}::uuid AND deleted_at IS NULL FOR SHARE`
   const { valueOf, errors } = await resolveLookups(db, [
@@ -152,7 +159,7 @@ async function checkLot(db: Db, id: string, input: LotInput): Promise<Lot> {
     followUpNote: input.followUpNote.trim(),
   }
   assertValid({
-    ...renameFields(validateLot(lot), apiNames),
+    ...renameFields(validateLot(lot, false, previous, date), apiNames),
     ...(!product.length && { productId: 'This product no longer exists. Choose another.' }),
     ...errors,
   })
@@ -255,10 +262,11 @@ async function syncComponents(db: Db, user: SessionUser, current: LotRow, ids: s
 export async function createLot({ db, clock }: RecordsDeps, user: SessionUser, input: LotInput) {
   const id = randomUUID()
   const clean = { ...input, componentIds: [...new Set(input.componentIds)] }
+  const date = await clock.today()
   await db.$transaction(async (tx) => {
     await holdDataLockShared(tx)
     clean.label = await generatedLabel(tx, 'lot', clean.label)
-    const lot = await checkLot(tx, id, clean)
+    const lot = await checkLot(tx, id, clean, null, date)
     await tx.lot.create({ data: { id, ...lotData(clean, lot) } }).catch(duplicateLabel(lot.label))
     if (clean.componentIds.length)
       await tx.lotComponent.createMany({
@@ -271,7 +279,7 @@ export async function createLot({ db, clock }: RecordsDeps, user: SessionUser, i
       message: `Lot ${lot.label} created`,
     })
   })
-  return getLotDetail(db, id, await clock.today(), user)
+  return getLotDetail(db, id, date, user)
 }
 
 export async function updateLot(
@@ -294,7 +302,7 @@ export async function updateLot(
       merged.label = await generatedLabel(tx, 'lot', merged.label)
     const input = { ...merged, componentIds: [...new Set(merged.componentIds)] }
     const old = toDomainLot(current)
-    const next = await checkLot(tx, id, input)
+    const next = await checkLot(tx, id, input, old, date)
     if (lotAccess(user, current) === 'progress' && changedPlanFields(old, next).length)
       throw new PermissionError(
         deniedMessage(

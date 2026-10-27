@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PrismaClient } from '../src/generated/prisma/client'
 import { createTestDatabase } from './support/db'
-import { fixedNow, lotBody, makeRecordsWorld, type RecordsWorld, testApp } from './support/fixtures'
+import {
+  day,
+  fixedNow,
+  lotBody,
+  makeRecordsWorld,
+  type RecordsWorld,
+  testApp,
+} from './support/fixtures'
 
 let db: PrismaClient
 let close: () => Promise<void>
@@ -123,7 +130,12 @@ describe('completion', () => {
     })
   })
   it('FR-4.4 shows the full-GRN date, days against plan and RM-to-GRN lead time', async () => {
-    const lot = await newLot({ lotQty: 100, plannedDate: '2026-10-10', rmReadyDate: '2026-10-01' })
+    const lot = await newLot({ lotQty: 100 })
+    // Past forecast dates, set directly: the API only accepts them while they are in the future.
+    await db.lot.update({
+      where: { id: lot.id },
+      data: { plannedDate: day('2026-10-10'), rmReadyDate: day('2026-10-01') },
+    })
     await receive(w.planner, lot.id, 100, '2026-10-12')
     expect((await detail(lot.id)).computed).toMatchObject({
       fullGrnDate: '2026-10-12',

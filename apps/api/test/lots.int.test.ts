@@ -8,6 +8,7 @@ import {
   fixedNow,
   lotBody,
   makeLookup,
+  makeLot,
   makeProduct,
   makeRecordsWorld,
   type RecordsWorld,
@@ -69,7 +70,7 @@ describe('creating lots', () => {
       freshProductionQty: 120,
       reworkQty: 20,
       reworkReason: 'Solder ',
-      rmReadyDate: '2026-10-01',
+      rmReadyDate: '2026-10-16',
       plannedDate: '2026-10-20',
       revisedEta: '2026-10-24',
       actualDate: '',
@@ -92,7 +93,7 @@ describe('creating lots', () => {
       freshProductionQty: 120,
       reworkQty: 20,
       reworkReason: 'Solder',
-      rmReadyDate: '2026-10-01',
+      rmReadyDate: '2026-10-16',
       plannedDate: '2026-10-20',
       revisedEta: '2026-10-24',
       actualDate: null,
@@ -188,7 +189,7 @@ describe('the lot detail', () => {
   it('FR-2.7 carries the one-line status in the client format', async () => {
     const created = await create({
       statusId: w.lookups.delayed.id,
-      plannedDate: '2026-10-10',
+      plannedDate: '2026-10-15',
       revisedEta: '2026-10-16',
       blockerId: w.lookups.rmBlocker.id,
     })
@@ -363,5 +364,32 @@ describe('deleting lots', () => {
       (await w.admin.send('patch', `/api/v1/lots/${created.body.id}`, { lotQty: 1, version: 1 }))
         .status,
     ).toBe(404)
+  })
+})
+
+describe('date rules', () => {
+  // The test clock says 15 Oct 2026.
+  it('FR-10.1 refuses a forecast date before today and an actual date after it', async () => {
+    const res = await create({ plannedDate: '2026-10-14', actualDate: '2026-10-16' })
+    expect(res.status).toBe(422)
+    expect(res.body.fields).toEqual({
+      plannedDate: 'Planned completion cannot be before today.',
+      actualDate: 'Actual date cannot be in the future.',
+    })
+  })
+  it('FR-10.1 keeps a past planned date that the edit does not touch', async () => {
+    // Seeded directly, so no rule ran when the planned date was set.
+    const lot = await makeLot(db, { productId: w.product.id, plannedDate: day('2026-09-01') })
+    const res = await w.planner.send('patch', `/api/v1/lots/${lot.id}`, {
+      version: lot.version,
+      plannedDate: '2026-09-01',
+      blockerDescription: 'waiting on PCB',
+    })
+    expect(res.status).toBe(200)
+    const moved = await w.planner.send('patch', `/api/v1/lots/${lot.id}`, {
+      version: lot.version + 1,
+      plannedDate: '2026-09-02',
+    })
+    expect(moved.body.fields).toEqual({ plannedDate: 'Planned completion cannot be before today.' })
   })
 })

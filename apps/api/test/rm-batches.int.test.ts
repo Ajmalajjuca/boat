@@ -51,7 +51,7 @@ describe('adding batches', () => {
     const res = await addBatch(w.planner, lot.id, {
       label: ' B1 ',
       plannedQty: 100,
-      plannedDate: '2026-10-10',
+      plannedDate: '2026-10-15',
       receivedQty: 70,
       receivedDate: '2026-10-12',
       status: 'Partial',
@@ -63,7 +63,7 @@ describe('adding batches', () => {
       component: { id: w.lookups.pcb.id, value: 'PCB' },
       label: 'B1',
       plannedQty: 100,
-      plannedDate: '2026-10-10',
+      plannedDate: '2026-10-15',
       receivedQty: 70,
       receivedDate: '2026-10-12',
       status: 'Partial',
@@ -71,6 +71,13 @@ describe('adding batches', () => {
     })
     expect((await detail(lot.id)).rmBatches).toHaveLength(1)
     expect(await history(lot.id)).toEqual(['Added PCB batch B1 (70 received)'])
+  })
+  it('FR-10.2 refuses a new batch planned before today', async () => {
+    const lot = await componentLot()
+    // The test clock says 15 Oct 2026.
+    const res = await addBatch(w.planner, lot.id, { plannedDate: '2026-10-14' })
+    expect(res.status).toBe(422)
+    expect(res.body.fields).toEqual({ plannedDate: 'Planned date cannot be before today.' })
   })
   it('FR-3.2 refuses a received date in the future and generates a blank label', async () => {
     const lot = await componentLot()

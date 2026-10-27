@@ -9,7 +9,7 @@ import { NotFoundError } from '../../core/errors'
 import type { Db } from '../../core/prisma'
 import { renameFields } from '../lookups/resolve'
 import { lockLot, lockLotForEdit } from '../lots/lot-lock'
-import { batchInclude, batchView, type LotRow } from '../lots/lot-view'
+import { batchInclude, batchView, type LotRow, toDomainBatch } from '../lots/lot-view'
 
 export type BatchInput = {
   componentId: string
@@ -24,7 +24,12 @@ export type BatchInput = {
 
 // FR-3.1 to FR-3.3: batches belong to lots tracked by component, and only to a component
 // selected on the lot. validateBatch refuses received dates after the company's today.
-function checkBatch(lot: LotRow, input: BatchInput, date: string): RMBatch {
+function checkBatch(
+  lot: LotRow,
+  input: BatchInput,
+  date: string,
+  previous: RMBatch | null,
+): RMBatch {
   if (lot.rmMode !== 'components')
     throw new ValidationError({
       form: 'Switch the lot to Track by Component before adding batches.',
@@ -45,7 +50,7 @@ function checkBatch(lot: LotRow, input: BatchInput, date: string): RMBatch {
     notes: input.notes.trim(),
   }
   assertValid({
-    ...renameFields(validateBatch(batch, date), { component: 'componentId' }),
+    ...renameFields(validateBatch(batch, date, false, previous), { component: 'componentId' }),
     ...(!component && { componentId: 'Select this component on the lot first.' }),
   })
   return batch
@@ -89,6 +94,7 @@ export async function createBatch(
       lot,
       { ...input, label: await generatedLabel(tx, 'batch', input.label) },
       date,
+      null,
     )
     const created = await tx.rmBatch.create({
       data: { lotId, ...batchData(input, b) },
@@ -115,7 +121,10 @@ export async function updateBatch(
   const lotId = await lotOfBatch(db, id)
   const row = await db.$transaction(async (tx) => {
     const lot = await lockLotForEdit(tx, user, lotId)
-    const current = await tx.rmBatch.findFirst({ where: { id, deletedAt: null } })
+    const current = await tx.rmBatch.findFirst({
+      where: { id, deletedAt: null },
+      include: batchInclude,
+    })
     if (!current) throw new NotFoundError()
     const input: BatchInput = {
       componentId: current.componentId,
@@ -130,7 +139,7 @@ export async function updateBatch(
     }
     if (input.label.trim() && input.label.trim().toLowerCase() !== current.label.toLowerCase())
       input.label = await generatedLabel(tx, 'batch', input.label)
-    const b = checkBatch(lot, input, date)
+    const b = checkBatch(lot, input, date, toDomainBatch(current))
     const updated = await tx.rmBatch.update({
       where: { id },
       data: batchData(input, b),
