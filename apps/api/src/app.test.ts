@@ -101,6 +101,15 @@ describe('web app', () => {
     expect(res.status).toBe(200)
     expect(res.text).toContain('<title>Boat</title>')
   })
+  it('serves index.html from a build inside a dot directory', async () => {
+    const parent = mkdtempSync(path.join(tmpdir(), 'boat-'))
+    const dir = path.join(parent, '.checkout', 'dist')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>Boat</title>')
+    const res = await request(app(dir)).get('/shipments')
+    expect(res.status).toBe(200)
+    expect(res.text).toContain('<title>Boat</title>')
+  })
   it('serves static assets', async () => {
     const res = await request(app(fakeWebBuild())).get('/assets/app.js')
     expect(res.status).toBe(200)

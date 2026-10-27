@@ -63,7 +63,9 @@ export function createApp({
   if (webDist && existsSync(path.join(webDist, 'index.html'))) {
     app.use(express.static(webDist, { index: false }))
     app.get('/{*splat}', (_req, res) => {
-      res.sendFile(path.join(webDist, 'index.html'))
+      // root keeps send's dot-file check to the file name, so a build under a dot directory
+      // (e.g. a git worktree in .claude/worktrees) still serves.
+      res.sendFile('index.html', { root: webDist })
     })
   }
 
