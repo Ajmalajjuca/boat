@@ -95,14 +95,8 @@ export const validateLot = (
     ['category', blank(l.category) && 'Choose a product category.'],
     ['status', blank(l.status) && 'Choose an overall status.'],
     ['stage', blank(l.stage) && 'Choose the current stage.'],
+    // Rework and fresh production are hidden and never written, so they aren't checked.
     ['lotQty', wholeNumber(l.lotQty, 'Lot quantity')],
-    ['freshProductionQty', wholeNumber(l.freshProductionQty, 'Fresh production quantity')],
-    ['reworkQty', wholeNumber(l.reworkQty, 'Rework quantity')],
-    [
-      'reworkQty',
-      l.reworkQty > l.freshProductionQty &&
-        'Rework is part of fresh production, so it cannot be larger.',
-    ],
     ['readyQty', l.rmMode === 'all' && wholeNumber(l.readyQty, 'Ready quantity')],
     [
       'rmComponents',

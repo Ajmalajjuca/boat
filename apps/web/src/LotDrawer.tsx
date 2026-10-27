@@ -702,9 +702,7 @@ function LotEditor({
                   </div>
                   <div>
                     <b>Against planned date:</b>{' '}
-                    {planDelay(draft, rs) === null
-                      ? 'Not available'
-                      : signedDays(planDelay(draft, rs))}
+                    {planDelay(draft) === null ? 'Not available' : signedDays(planDelay(draft))}
                   </div>
                   <div>
                     <b>RM ready:</b> {dateLabel(effectiveRmReadyDate(draft, bs))}
@@ -712,9 +710,7 @@ function LotEditor({
                   </div>
                   <div>
                     <b>RM-to-GRN lead time:</b>{' '}
-                    {leadTime(draft, rs, bs) === null
-                      ? 'Not available'
-                      : `${leadTime(draft, rs, bs)} days`}
+                    {leadTime(draft, bs) === null ? 'Not available' : `${leadTime(draft, bs)} days`}
                   </div>
                 </div>
               </div>

@@ -4,13 +4,13 @@ import {
   balance,
   clampPercent,
   dateLabel,
-  completed,
   dayDiff,
   dayOffset,
   effectiveRmReadyDate,
   etaSlip,
   fullGrnDate,
   grnProgress,
+  isCompleted,
   leadTime,
   lotFlags,
   lotSummary,
@@ -90,7 +90,7 @@ describe('date helpers', () => {
   })
 })
 
-describe('GRN and completion', () => {
+describe('GRN totals', () => {
   const lot = makeLot({ lotQty: 100, plannedDate: '2026-10-20' })
   const first = makeReceipt({ date: '2026-10-05', quantity: 40 })
   const second = makeReceipt({ date: '2026-10-09', quantity: 60 })
@@ -98,22 +98,41 @@ describe('GRN and completion', () => {
   it('tracks a partial receipt', () => {
     expect(totalGrn([first])).toBe(40)
     expect(balance(lot, [first])).toBe(60)
-    expect(completed(lot, [first])).toBe(false)
     expect(grnProgress(lot, [first])).toBe(40)
     expect(fullGrnDate(lot, [first])).toBe('')
-    expect(planDelay(lot, [first])).toBeNull()
   })
-  it('completes at full GRN and dates it by the latest receipt', () => {
+  it('dates full GRN by the latest receipt', () => {
     expect(balance(lot, [second, first])).toBe(0)
-    expect(completed(lot, [second, first])).toBe(true)
     expect(grnProgress(lot, [second, first])).toBe(100)
     expect(fullGrnDate(lot, [first, second])).toBe('2026-10-09')
-    expect(planDelay(lot, [first, second])).toBe(-11)
   })
-  it('never completes a zero-quantity lot', () => {
+  it('never reaches full GRN on a zero-quantity lot', () => {
     const empty = makeLot({ lotQty: 0 })
-    expect(completed(empty, [])).toBe(false)
+    expect(fullGrnDate(empty, [])).toBe('')
     expect(grnProgress(empty, [])).toBe(0)
+  })
+})
+
+describe('completion', () => {
+  it('FR-11.3 a lot is complete once its actual date is set', () => {
+    expect(isCompleted(makeLot({ actualDate: '' }))).toBe(false)
+    expect(isCompleted(makeLot({ actualDate: '2026-10-10' }))).toBe(true)
+    expect(
+      lotFlags(makeLot({ actualDate: '2026-10-10', plannedDate: '2026-10-01' }), TODAY).overdue,
+    ).toBe(false)
+    expect(lotSummary(makeLot({ actualDate: '2026-10-10', stage: 'Dispatch' }), TODAY)).toBe(
+      'Completed (Dispatch)',
+    )
+  })
+  it('measures delay and lead time from the actual date', () => {
+    const lot = makeLot({
+      plannedDate: '2026-10-10',
+      rmReadyDate: '2026-10-01',
+      actualDate: '2026-10-12',
+    })
+    expect(planDelay(lot)).toBe(2)
+    expect(leadTime(lot)).toBe(11)
+    expect(planDelay(makeLot({ actualDate: '' }))).toBeNull()
   })
 })
 
@@ -144,17 +163,14 @@ describe('RM readiness', () => {
     const undated = [makeBatch({ component: 'PCB', receivedQty: 100, receivedDate: '' })]
     expect(effectiveRmReadyDate({ ...components, rmComponents: ['PCB'] }, undated)).toBe('')
   })
-  it('measures RM-to-GRN lead time', () => {
+  it('measures RM-to-actual lead time from component readiness', () => {
     const covered = [
       ...batches,
       makeBatch({ component: 'Enclosure', receivedQty: 10, receivedDate: '2026-10-03' }),
     ]
-    const receipts = [
-      makeReceipt({ date: '2026-10-05', quantity: 40 }),
-      makeReceipt({ date: '2026-10-09', quantity: 60 }),
-    ]
-    expect(leadTime(components, receipts, covered)).toBe(5)
-    expect(leadTime(components, receipts)).toBeNull()
+    const done = { ...components, actualDate: '2026-10-09' }
+    expect(leadTime(done, covered)).toBe(5)
+    expect(leadTime(done)).toBeNull()
   })
   it('reports a kit in all-received mode', () => {
     expect(rmMetrics(makeLot({ lotQty: 100, readyQty: 80 }), [])).toEqual({
@@ -194,29 +210,34 @@ describe('RM readiness', () => {
 
 describe('lot flags and summary', () => {
   it('flags overdue, due soon and follow-up from the effective ETA', () => {
-    expect(lotFlags(makeLot({ plannedDate: '2026-10-10' }), [], TODAY)).toMatchObject({
+    expect(lotFlags(makeLot({ plannedDate: '2026-10-10' }), TODAY)).toMatchObject({
       overdue: true,
       dueSoon: false,
     })
-    expect(lotFlags(makeLot({ plannedDate: '2026-10-17' }), [], TODAY).dueSoon).toBe(true)
-    expect(lotFlags(makeLot({ plannedDate: '2026-10-18' }), [], TODAY).dueSoon).toBe(false)
+    expect(lotFlags(makeLot({ plannedDate: '2026-10-17' }), TODAY).dueSoon).toBe(true)
+    expect(lotFlags(makeLot({ plannedDate: '2026-10-18' }), TODAY).dueSoon).toBe(false)
     expect(
-      lotFlags(makeLot({ plannedDate: '2026-10-10', revisedEta: '2026-10-16' }), [], TODAY),
+      lotFlags(makeLot({ plannedDate: '2026-10-10', revisedEta: '2026-10-16' }), TODAY),
     ).toMatchObject({ overdue: false, dueSoon: true })
-    expect(lotFlags(makeLot({ followUpDate: TODAY }), [], TODAY).followUp).toBe(true)
+    expect(lotFlags(makeLot({ followUpDate: TODAY }), TODAY).followUp).toBe(true)
   })
   it('flags blocked and approval-blocked lots', () => {
-    expect(lotFlags(makeLot({ status: 'Delayed' }), [], TODAY).blocked).toBe(true)
-    expect(lotFlags(makeLot({ status: 'Hold' }), [], TODAY).blocked).toBe(true)
-    expect(lotFlags(makeLot({ blockerCategory: 'Approval Blocker' }), [], TODAY)).toMatchObject({
+    expect(lotFlags(makeLot({ status: 'Delayed' }), TODAY).blocked).toBe(true)
+    expect(lotFlags(makeLot({ status: 'Hold' }), TODAY).blocked).toBe(true)
+    expect(lotFlags(makeLot({ blockerCategory: 'Approval Blocker' }), TODAY)).toMatchObject({
       blocked: true,
       approval: true,
     })
-    expect(lotFlags(makeLot(), [], TODAY).blocked).toBe(false)
+    expect(lotFlags(makeLot(), TODAY).blocked).toBe(false)
   })
   it('clears every flag once the lot is complete', () => {
-    const lot = makeLot({ lotQty: 100, plannedDate: '2026-10-01', status: 'Delayed' })
-    expect(lotFlags(lot, [makeReceipt({ quantity: 100 })], TODAY)).toEqual({
+    const lot = makeLot({
+      lotQty: 100,
+      plannedDate: '2026-10-01',
+      status: 'Delayed',
+      actualDate: '2026-10-05',
+    })
+    expect(lotFlags(lot, TODAY)).toEqual({
       done: true,
       overdue: false,
       dueSoon: false,
@@ -232,19 +253,17 @@ describe('lot flags and summary', () => {
       blockerCategory: 'RM Blocker',
       stage: 'Factory Production',
     })
-    expect(lotSummary(delayed, [], TODAY)).toBe(
-      'Delayed, 1d left — RM Blocker (Factory Production)',
-    )
-    expect(lotSummary(makeLot({ plannedDate: '2026-10-11', stage: '' }), [], TODAY)).toBe(
+    expect(lotSummary(delayed, TODAY)).toBe('Delayed, 1d left — RM Blocker (Factory Production)')
+    expect(lotSummary(makeLot({ plannedDate: '2026-10-11', stage: '' }), TODAY)).toBe(
       'On Track, 3d overdue',
     )
-    expect(lotSummary(makeLot({ plannedDate: TODAY }), [], TODAY)).toBe(
+    expect(lotSummary(makeLot({ plannedDate: TODAY }), TODAY)).toBe(
       'On Track, due today (Factory Production)',
     )
-    expect(lotSummary(makeLot({ plannedDate: '', status: '' }), [], TODAY)).toBe(
+    expect(lotSummary(makeLot({ plannedDate: '', status: '' }), TODAY)).toBe(
       'No status, no ETA (Factory Production)',
     )
-    expect(lotSummary(makeLot({ lotQty: 10 }), [makeReceipt({ quantity: 10 })], TODAY)).toBe(
+    expect(lotSummary(makeLot({ lotQty: 10, actualDate: '2026-10-13' }), TODAY)).toBe(
       'Completed (Factory Production)',
     )
   })

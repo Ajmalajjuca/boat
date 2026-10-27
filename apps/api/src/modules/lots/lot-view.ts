@@ -104,19 +104,21 @@ export const lotAccess = (user: SessionUser, row: { pocId: string | null }) =>
   actorLotAccess({ role: user.role, poc: user.pocId ?? '' }, { poc: row.pocId ?? '' })
 
 export function computeLot(lot: Lot, batches: RMBatch[], receipts: GRNReceipt[], date: string) {
-  const { done, ...flags } = lotFlags(lot, receipts, date)
+  const { done, ...flags } = lotFlags(lot, date)
   const rm = rmMetrics(lot, batches)
   return {
+    // The GRN figures stay in the view for when GRN is switched back on; completion, delay and
+    // lead time come from the actual date.
     grnTotal: totalGrn(receipts),
     balance: balance(lot, receipts),
     completed: done,
     grnPercent: grnProgress(lot, receipts),
     fullGrnDate: fullGrnDate(lot, receipts) || null,
-    planDelay: planDelay(lot, receipts),
-    leadTime: leadTime(lot, receipts, batches),
+    planDelay: planDelay(lot),
+    leadTime: leadTime(lot, batches),
     rmReadyDate: effectiveRmReadyDate(lot, batches) || null,
     flags,
-    summary: lotSummary(lot, receipts, date),
+    summary: lotSummary(lot, date),
     rm: {
       producible: rm.producible,
       bottleneck: rm.bottleneck,

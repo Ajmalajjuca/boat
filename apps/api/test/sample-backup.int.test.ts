@@ -82,11 +82,7 @@ describe('the sample backup', () => {
   it("shows each lot's status line as the demo would", async () => {
     const data = parseImport(sample())
     for (const lot of data.lots) {
-      const expected = lotSummary(
-        lot,
-        data.grnReceipts.filter((r) => r.lotId === lot.id),
-        testToday,
-      )
+      const expected = lotSummary(lot, testToday)
       const res = await w.viewer.agent.get(`/api/v1/lots/${lot.id}`)
       expect(res.body.computed.summary, lot.label).toBe(expected)
     }

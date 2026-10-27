@@ -167,19 +167,30 @@ describe('computeLot', () => {
       rm: { producible: 420, bottleneck: 'Enclosure', percent: 84, complete: false },
     })
   })
-  it('reports completion with the full-GRN date, days against plan and lead time', () => {
+  it('FR-11.3 reports completion, days against plan and lead time from the actual date', () => {
     const done = toDomainLot(
-      lotRow({ lotQty: 100, rmReadyDate: d('2026-10-01'), plannedDate: d('2026-10-10') }),
+      lotRow({
+        lotQty: 100,
+        rmReadyDate: d('2026-10-01'),
+        plannedDate: d('2026-10-10'),
+        actualDate: d('2026-10-12'),
+      }),
     )
-    const receipts = [receipt(40, '2026-10-05'), receipt(60, '2026-10-12')].map(toDomainReceipt)
-    expect(computeLot(done, [], receipts, '2026-10-15')).toMatchObject({
+    expect(computeLot(done, [], [], '2026-10-15')).toMatchObject({
       completed: true,
-      balance: 0,
-      fullGrnDate: '2026-10-12',
       planDelay: 2,
       leadTime: 11,
       rmReadyDate: '2026-10-01',
       summary: 'Completed (Factory Production)',
+    })
+  })
+  it('keeps the GRN figures for when GRN is switched back on', () => {
+    const lot = toDomainLot(lotRow({ lotQty: 100 }))
+    const receipts = [receipt(40, '2026-10-05'), receipt(60, '2026-10-12')].map(toDomainReceipt)
+    expect(computeLot(lot, [], receipts, '2026-10-15')).toMatchObject({
+      completed: false,
+      balance: 0,
+      fullGrnDate: '2026-10-12',
     })
   })
 })

@@ -39,14 +39,19 @@ export function totalGrn(receipts: GRNReceipt[]) {
 export function balance(lot: Lot, receipts: GRNReceipt[]) {
   return lot.lotQty - totalGrn(receipts)
 }
-export function completed(lot: Lot, receipts: GRNReceipt[]) {
-  return lot.lotQty > 0 && totalGrn(receipts) === lot.lotQty
+// Every unit received through GRN. GRN is hidden for now (FEATURE_GRN); completion no longer
+// depends on it.
+const grnComplete = (lot: Lot, receipts: GRNReceipt[]) =>
+  lot.lotQty > 0 && totalGrn(receipts) === lot.lotQty
+// A lot is finished once its actual date is entered (FR-11.3).
+export function isCompleted(lot: Lot) {
+  return !!lot.actualDate
 }
 export function grnProgress(lot: Lot, receipts: GRNReceipt[]) {
   return lot.lotQty ? clampPercent((totalGrn(receipts) / lot.lotQty) * 100) : 0
 }
 export function fullGrnDate(lot: Lot, receipts: GRNReceipt[]) {
-  return completed(lot, receipts)
+  return grnComplete(lot, receipts)
     ? [...receipts].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || ''
     : ''
 }
@@ -69,23 +74,22 @@ export function effectiveRmReadyDate(lot: Lot, batches: RMBatch[]) {
   })
   return dates.every(Boolean) ? dates.sort()[dates.length - 1] : ''
 }
-export function leadTime(lot: Lot, receipts: GRNReceipt[], batches: RMBatch[] = []) {
-  const date = fullGrnDate(lot, receipts),
-    ready = effectiveRmReadyDate(lot, batches)
-  return date && ready ? dayDiff(date, ready) : null
+// Days from RM ready to the actual date.
+export function leadTime(lot: Lot, batches: RMBatch[] = []) {
+  const ready = effectiveRmReadyDate(lot, batches)
+  return lot.actualDate && ready ? dayDiff(lot.actualDate, ready) : null
 }
-// Days between full GRN and the planned date; positive means the lot completed late.
-export function planDelay(lot: Lot, receipts: GRNReceipt[]) {
-  const date = fullGrnDate(lot, receipts)
-  return date && lot.plannedDate ? dayDiff(date, lot.plannedDate) : null
+// Days between the actual and planned dates; positive means the lot completed late.
+export function planDelay(lot: Lot) {
+  return lot.actualDate && lot.plannedDate ? dayDiff(lot.actualDate, lot.plannedDate) : null
 }
 export const signedDays = (n: number | null) =>
   n === null ? '—' : n === 0 ? 'On time' : `${Math.abs(n)}d ${n > 0 ? 'late' : 'early'}`
 export function effectiveLotEta(lot: Lot) {
   return lot.revisedEta || lot.plannedDate
 }
-export function lotFlags(lot: Lot, receipts: GRNReceipt[], date = today()) {
-  const done = completed(lot, receipts),
+export function lotFlags(lot: Lot, date = today()) {
+  const done = isCompleted(lot),
     eta = effectiveLotEta(lot),
     soon = dayOffset(date, 3)
   return {
@@ -179,8 +183,8 @@ export function dateLabel(value: string) {
   return `${d} ${new Date(Date.UTC(Number(y), Number(m) - 1, 1)).toLocaleString('en', { month: 'short', timeZone: 'UTC' })} ${y}`
 }
 // One-line lot summary in the client's format: "Delayed, 1d left — RM Blocker (Factory Production)".
-export function lotSummary(lot: Lot, receipts: GRNReceipt[], date = today()) {
-  if (completed(lot, receipts)) return `Completed (${lot.stage})`
+export function lotSummary(lot: Lot, date = today()) {
+  if (isCompleted(lot)) return `Completed (${lot.stage})`
   const eta = effectiveLotEta(lot),
     days = eta ? dayDiff(eta, date) : null
   const timing =

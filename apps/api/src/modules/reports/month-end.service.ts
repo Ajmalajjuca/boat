@@ -68,11 +68,7 @@ export async function monthEndReport({ db, clock }: RecordsDeps, month: string) 
         planned: r.planned,
         received: r.received,
         shortfall: r.shortfall,
-        statusToday: lotSummary(
-          r.lot,
-          domainReceipts.filter((g) => g.lotId === r.lot.id),
-          date,
-        ),
+        statusToday: lotSummary(r.lot, date),
       }
     }),
   }

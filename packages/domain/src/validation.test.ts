@@ -68,14 +68,10 @@ describe('validateLot', () => {
     expect(validateLot(makeLot({ lotQty: 1.5 })).lotQty).toBe(
       'Lot quantity must be a whole number, zero or more.',
     )
-    expect(validateLot(makeLot({ reworkQty: -1 })).reworkQty).toBe(
-      'Rework quantity must be a whole number, zero or more.',
-    )
   })
-  it('keeps rework within fresh production', () => {
-    expect(validateLot(makeLot({ freshProductionQty: 3, reworkQty: 5 })).reworkQty).toBe(
-      'Rework is part of fresh production, so it cannot be larger.',
-    )
+  it('no longer checks the hidden rework and fresh production fields', () => {
+    const e = validateLot(makeLot({ freshProductionQty: 3, reworkQty: 5.5 }), false, null, TODAY)
+    expect(e).toEqual({})
   })
   it('checks ready quantity only in all-received mode', () => {
     expect(validateLot(makeLot({ rmMode: 'all', readyQty: -1 })).readyQty).toBe(
