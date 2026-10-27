@@ -40,8 +40,55 @@ export const validateProduct = (p: Product) =>
     ['segment', blank(p.segment) && 'Choose a segment.'],
   ])
 
+// A date the user entered or changed; an untouched stored date keeps passing after it goes past.
+const fresh = <T>(next: T, previous: T | null, key: keyof T) =>
+  !previous || previous[key] !== next[key]
+const beforeToday = (value: string, date: string) => !!value && value < date
+
+// Forecast dates are today or later when entered or changed and not before the RM ready date;
+// the actual date can't be in the future. previous is the stored lot, or null for a new one.
+const lotDates = (l: Lot, previous: Lot | null, date: string): [string, string | false][] => {
+  const rmFresh = fresh(l, previous, 'rmReadyDate')
+  const beforeRm = (key: 'plannedDate' | 'revisedEta') =>
+    !!l.rmReadyDate && !!l[key] && l[key] < l.rmReadyDate && (rmFresh || fresh(l, previous, key))
+  return [
+    [
+      'rmReadyDate',
+      rmFresh &&
+        beforeToday(l.rmReadyDate, date) &&
+        'RM ready date at factory cannot be before today.',
+    ],
+    [
+      'plannedDate',
+      fresh(l, previous, 'plannedDate') &&
+        beforeToday(l.plannedDate, date) &&
+        'Planned completion cannot be before today.',
+    ],
+    [
+      'plannedDate',
+      beforeRm('plannedDate') && 'Planned completion cannot be before the RM ready date.',
+    ],
+    [
+      'revisedEta',
+      fresh(l, previous, 'revisedEta') &&
+        beforeToday(l.revisedEta, date) &&
+        'Current revised ETA cannot be before today.',
+    ],
+    [
+      'revisedEta',
+      beforeRm('revisedEta') && 'Current revised ETA cannot be before the RM ready date.',
+    ],
+    ['actualDate', l.actualDate > date && 'Actual date cannot be in the future.'],
+  ]
+}
+
 // New forms may leave a label empty; the API assigns it before validating the saved record.
-export const validateLot = (l: Lot, autoLabel = false) =>
+export const validateLot = (
+  l: Lot,
+  autoLabel = false,
+  previous: Lot | null = null,
+  date = today(),
+) =>
   collect([
     ['productId', blank(l.productId) && 'Choose a product.'],
     ['label', !autoLabel && blank(l.label) && 'Enter a lot label, e.g. Lot 1.'],
@@ -63,15 +110,28 @@ export const validateLot = (l: Lot, autoLabel = false) =>
         l.rmComponents.includes('Kit (All Together)') &&
         'Kit is an alternative to individual components. Use All RM Received mode for a kit.',
     ],
+    ...lotDates(l, previous, date),
   ])
 
-// date is "today" for the no-future-date rules; the server passes the company date.
-export const validateBatch = (b: RMBatch, date = today(), autoLabel = false) =>
+// date is "today" for the date rules; the server passes the company date. previous is the
+// stored batch, so an untouched planned date that has gone past still saves.
+export const validateBatch = (
+  b: RMBatch,
+  date = today(),
+  autoLabel = false,
+  previous: RMBatch | null = null,
+) =>
   collect([
     ['component', blank(b.component) && 'Choose a component.'],
     ['label', !autoLabel && blank(b.label) && 'Enter a batch label.'],
     ['plannedQty', wholeNumber(b.plannedQty, 'Planned quantity')],
     ['receivedQty', wholeNumber(b.receivedQty, 'Received quantity')],
+    [
+      'plannedDate',
+      fresh(b, previous, 'plannedDate') &&
+        beforeToday(b.plannedDate, date) &&
+        'Planned date cannot be before today.',
+    ],
     ['receivedDate', b.receivedDate > date && 'Received date cannot be in the future.'],
   ])
 
