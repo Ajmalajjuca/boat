@@ -34,13 +34,6 @@ export const failedAttemptLimiters = () => [
   limiter({ countSuccess: false, key: byEmail }),
 ]
 
-// Forgot-password always succeeds, so every request counts: 5 per 15 minutes per IP and per
-// email, which stops anyone flooding an inbox with reset emails.
-export const requestLimiters = () => [
-  limiter({ countSuccess: true }),
-  limiter({ countSuccess: true, key: byEmail }),
-]
-
 // Changing a password needs a session, but a stolen session must not be able to guess the
 // current password at full speed.
 export const ipFailureLimiter = () => limiter({ countSuccess: false })

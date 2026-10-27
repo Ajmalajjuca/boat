@@ -1,21 +1,17 @@
-import { allowedActions } from '@boat/domain/permissions'
+import { allowedActions, PermissionError } from '@boat/domain/permissions'
 import {
   assertValid,
   normalizeEmail,
   validatePassword,
   ValidationError,
 } from '@boat/domain/validation'
-import type { Logger } from 'pino'
 import type { AuthContext } from '../../core/access'
 import type { Features } from '../../core/clock'
 import { UnauthenticatedError } from '../../core/errors'
-import { type Mailer, sendOrLog } from '../../core/mailer'
 import type { Db } from '../../core/prisma'
 import type { PrismaClient } from '../../generated/prisma/client'
 import type { SettingsService } from '../settings/settings.service'
-import { consumeToken, issueToken } from './auth-tokens'
 import type { GoogleIdentity } from './google'
-import { resetEmail } from './emails'
 import { hashPassword, verifyPassword } from './password'
 import { createSession, revokeUserSessions } from './sessions'
 
@@ -31,10 +27,12 @@ export async function signInWithPassword(
 ) {
   const user = await db.user.findFirst({
     where: { email: normalizeEmail(email), deletedAt: null },
-    select: { id: true, status: true, passwordHash: true },
+    select: { id: true, status: true, passwordHash: true, passwordLogin: true },
   })
   const ok = await verifyPassword(user?.passwordHash, password)
-  if (!user || !ok || user.status !== 'active') throw new UnauthenticatedError(incorrect)
+  // FR-11.6: password sign-in is the backup admin's alone.
+  if (!user || !ok || user.status !== 'active' || !user.passwordLogin)
+    throw new UnauthenticatedError(incorrect)
   const session = await createSession(db, user.id, userAgent)
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
   return session
@@ -89,70 +87,9 @@ export async function mePayload(settings: SettingsService, features: Features, a
 }
 export type MePayload = Awaited<ReturnType<typeof mePayload>>
 
-const expiredInvite =
-  'This invite link has expired or was already used. Ask an admin to send a new one.'
-const expiredReset = 'This reset link has expired or was already used. Request a new one.'
-
-// The password is checked and hashed before the transaction: a short password leaves the link
-// usable, and the slow hash doesn't hold row locks.
-export async function acceptInvite(
-  db: PrismaClient,
-  token: string,
-  password: string,
-  userAgent?: string,
-) {
-  assertValid(validatePassword(password))
-  const passwordHash = await hashPassword(password)
-  return db.$transaction(async (tx) => {
-    const userId = await consumeToken(tx, token, 'invite')
-    const { count } = await tx.user.updateMany({
-      where: { id: userId, status: 'invited', deletedAt: null },
-      data: { passwordHash, status: 'active', lastLoginAt: new Date() },
-    })
-    if (count !== 1) throw new ValidationError({ token: expiredInvite })
-    return createSession(tx, userId, userAgent)
-  })
-}
-
-// Sends a reset link to an active user. The caller answers the same way whatever happens here,
-// so the reply never reveals whether an account exists.
-export async function requestPasswordReset(
-  deps: { db: PrismaClient; mailer: Mailer; appUrl: string },
-  email: string,
-  log: Logger,
-) {
-  const user = await deps.db.user.findFirst({
-    where: { email: normalizeEmail(email), status: 'active', deletedAt: null },
-    select: { id: true, name: true, email: true },
-  })
-  if (!user) return
-  const token = await issueToken(deps.db, user.id, 'password_reset')
-  await sendOrLog(deps.mailer, log, {
-    to: user.email,
-    ...resetEmail(deps.appUrl, user.name, token),
-  })
-}
-
-export async function resetPassword(db: PrismaClient, token: string, password: string) {
-  assertValid(validatePassword(password))
-  const passwordHash = await hashPassword(password)
-  await db.$transaction(async (tx) => {
-    const userId = await consumeToken(tx, token, 'password_reset')
-    const { count } = await tx.user.updateMany({
-      where: { id: userId, status: 'active', deletedAt: null },
-      data: { passwordHash },
-    })
-    if (count !== 1) throw new ValidationError({ token: expiredReset })
-    await revokeUserSessions(tx, userId)
-    await tx.authToken.updateMany({
-      where: { userId, purpose: 'password_reset', usedAt: null },
-      data: { usedAt: new Date() },
-    })
-  })
-}
-
 // PRD: changing a password revokes all of the user's sessions. The request that made the change
-// moves to a fresh session so the person stays signed in here.
+// moves to a fresh session so the person stays signed in here. Only the backup admin has a
+// password (FR-11.6); everyone else signs in with Google.
 export async function changePassword(
   db: PrismaClient,
   userId: string,
@@ -160,10 +97,12 @@ export async function changePassword(
   next: string,
   userAgent?: string,
 ) {
-  const { passwordHash } = await db.user.findUniqueOrThrow({
+  const { passwordHash, passwordLogin } = await db.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { passwordHash: true },
+    select: { passwordHash: true, passwordLogin: true },
   })
+  if (!passwordLogin)
+    throw new PermissionError('You sign in with Google, so there is no password to change.')
   if (!(await verifyPassword(passwordHash, current)))
     throw new ValidationError({ currentPassword: 'That is not your current password.' })
   assertValid(validatePassword(next, 'newPassword'))

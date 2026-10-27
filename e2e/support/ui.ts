@@ -1,5 +1,14 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
+// Google sign-in in the browser: the start route sends the page to @boat/oidc-stub's account
+// chooser, which sends it back through the callback to the app.
+export async function signInWithGoogle(page: Page, email: string) {
+  await page.goto('/api/v1/auth/google/start')
+  await page.getByLabel('Email', { exact: true }).fill(email)
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(page.getByRole('heading', { name: 'Production Tracker' })).toBeVisible()
+}
+
 export async function signInWithForm(page: Page, email: string, password: string) {
   await page.goto('/')
   await page.getByLabel('Email', { exact: true }).fill(email)

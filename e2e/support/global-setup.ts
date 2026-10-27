@@ -3,11 +3,14 @@ import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'no
 import path from 'node:path'
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import { Client } from 'pg'
-import { acceptInvite, apiAs } from './api'
+import { startOidcStub } from '@boat/oidc-stub'
+import { apiAs, googleSignInApi, signInApi } from './api'
 import {
   apiDir,
   appUrl,
   authFile,
+  companyDomain,
+  googleClient,
   logFile,
   pocValue,
   port,
@@ -16,7 +19,6 @@ import {
   sessionSecret,
   users,
 } from './env'
-import { nextEmail, tokenIn } from './mail'
 
 const built = [
   'apps/web/dist/index.html',
@@ -69,7 +71,12 @@ export default async function globalSetup() {
       stdio: 'pipe',
     })
 
-  // No RESEND_API_KEY or SMTP_HOST: emails go to the log, where the tests read their links.
+  // Google sign-in goes to a local OpenID Connect provider standing in for Google.
+  const google = await startOidcStub({
+    clientId: googleClient.id,
+    clientSecret: googleClient.secret,
+  })
+  // No RESEND_API_KEY or SMTP_HOST: emails go to the log, where the tests read them.
   const { RESEND_API_KEY: _key, SMTP_HOST: _smtp, MAIL_FROM: _from, ...inherited } = process.env
   const env = {
     ...inherited,
@@ -80,6 +87,10 @@ export default async function globalSetup() {
     SESSION_SECRET: sessionSecret,
     APP_URL: appUrl,
     TRUST_PROXY: '0',
+    GOOGLE_ISSUER: google.issuer,
+    GOOGLE_CLIENT_ID: googleClient.id,
+    GOOGLE_CLIENT_SECRET: googleClient.secret,
+    GOOGLE_ALLOWED_DOMAINS: companyDomain,
   }
   const log = openSync(logFile, 'w')
   // The repository root has no .env, so nothing overrides this environment.
@@ -95,25 +106,33 @@ export default async function globalSetup() {
     ['apps/api/dist/create-admin.js', '--email', users.admin.email, '--name', users.admin.name],
     { cwd: repo, env, encoding: 'utf8' },
   )
-  const first = await acceptInvite(tokenIn(created))
-  await first.ctx.storageState({ path: authFile('admin') })
-  await first.ctx.dispose()
+  // The admin is the backup admin and signs in with the password the command prints once.
+  const adminPassword = /Password \(shown once\): (\S+)/.exec(created)?.[1]
+  if (!adminPassword) throw new Error(`create-admin printed no password:\n${created}`)
+  const first = await signInApi(users.admin.email, adminPassword)
+  await first.storageState(authFile('admin'))
+  await first.dispose()
 
   const admin = await apiAs('admin')
   const poc = await admin.post('/lookups', { kind: 'poc', value: pocValue })
   for (const role of ['planner', 'poc', 'viewer'] as const) {
     const { email, name } = users[role]
     await admin.post('/users', { email, name, role, pocId: role === 'poc' ? poc.id : null })
-    const invited = await acceptInvite(tokenIn((await nextEmail(email, 0)).text))
-    await invited.ctx.storageState({ path: authFile(role) })
-    await invited.ctx.dispose()
+    const signedIn = await googleSignInApi(email)
+    await signedIn.ctx.storageState({ path: authFile(role) })
+    await signedIn.ctx.dispose()
   }
   await admin.dispose()
-  // ownerUrl lets the seeder set past forecast dates the API refuses (see seed.ts).
-  writeFileSync(path.join(runDir, 'seeded.json'), JSON.stringify({ pocId: poc.id, ownerUrl }))
+  // ownerUrl lets the seeder set past forecast dates the API refuses (see seed.ts);
+  // adminPassword lets a spec sign in as the backup admin in a fresh browser.
+  writeFileSync(
+    path.join(runDir, 'seeded.json'),
+    JSON.stringify({ pocId: poc.id, ownerUrl, adminPassword }),
+  )
 
   return async () => {
     server.kill()
+    await google.close()
     await container.stop()
   }
 }

@@ -1,8 +1,7 @@
 import type { MePayload, NewUser } from '@boat/domain/api'
 import type { Role } from '@boat/domain/models'
 import { type APIRequestContext, request } from '@playwright/test'
-import { appUrl, authFile, password, type RoleName } from './env'
-import { nextEmail, tokenIn } from './mail'
+import { appUrl, authFile, type RoleName } from './env'
 
 // Test setup and checks go through the API, as a real signed-in user with the CSRF token.
 export type Api = {
@@ -13,6 +12,7 @@ export type Api = {
   patch<T = any>(path: string, data: unknown): Promise<T>
   delete(path: string): Promise<void>
   dispose(): Promise<void>
+  storageState(path: string): Promise<unknown>
 }
 
 function wrap(ctx: APIRequestContext, me: MePayload): Api {
@@ -35,6 +35,7 @@ function wrap(ctx: APIRequestContext, me: MePayload): Api {
       await call('DELETE', path)
     },
     dispose: () => ctx.dispose(),
+    storageState: (path) => ctx.storageState({ path }),
   }
 }
 
@@ -53,18 +54,24 @@ export async function signInApi(email: string, pw: string) {
   return wrap(ctx, await res.json())
 }
 
-// Accepting an invite starts a session; the returned context holds its cookie.
-export async function acceptInvite(token: string, pw = password) {
+// Signs in through Google sign-in against @boat/oidc-stub, as a click on "Sign in with Google"
+// would: start, choose the identity at the stub, and follow its redirects back through the
+// callback. The returned context holds the session cookie.
+export async function googleSignInApi(email: string) {
   const ctx = await request.newContext({ baseURL: appUrl })
-  const res = await ctx.post('/api/v1/auth/invites/accept', { data: { token, password: pw } })
-  if (!res.ok())
-    throw new Error(`Accepting the invite answered ${res.status()}: ${await res.text()}`)
-  return { ctx, me: (await res.json()) as MePayload }
+  const start = await ctx.get('/api/v1/auth/google/start', { maxRedirects: 0 })
+  const location = start.headers()['location']
+  if (start.status() !== 302 || !location)
+    throw new Error(`Google sign-in did not start (${start.status()})`)
+  const landed = await ctx.get(`${location}&email=${encodeURIComponent(email)}`)
+  const me = await ctx.get('/api/v1/auth/me')
+  if (!me.ok()) throw new Error(`Google sign-in as ${email} failed and landed on ${landed.url()}`)
+  return { ctx, me: (await me.json()) as MePayload }
 }
 
 let counter = 0
-// A user of its own, for tests that sign out, change a password or disable an account: doing
-// that to a seeded user would end the saved session the other tests rely on.
+// A user of its own, for tests that sign out or disable an account: doing that to a seeded user
+// would end the saved session the other tests rely on. They sign in with Google.
 export async function newUser(role: Role, pocId: string | null = null) {
   const admin = await apiAs('admin')
   counter += 1
@@ -72,9 +79,7 @@ export async function newUser(role: Role, pocId: string | null = null) {
   const name = `Test ${role} ${counter}`
   await admin.post('/users', { email, name, role, pocId } satisfies NewUser)
   await admin.dispose()
-  const { ctx } = await acceptInvite(tokenIn((await nextEmail(email, 0)).text))
-  await ctx.dispose()
-  return { email, name, password }
+  return { email, name }
 }
 
 export const resetPhrase = 'RESET ALL DATA'

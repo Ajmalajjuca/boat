@@ -42,8 +42,11 @@ type UserFields = {
   pocId?: string | null
   email?: string
   name?: string
-  // null: no password yet, like a user who hasn't accepted their invite.
+  // null: no password, like everyone who signs in with Google.
   password?: string | null
+  // Password sign-in is the backup admin's alone in production (FR-11.6). Tests that sign in
+  // with signIn() need it, so it defaults to on whenever the user has a password.
+  passwordLogin?: boolean
 }
 export async function makeUser(db: PrismaClient, fields: UserFields = {}) {
   const pw = fields.password === undefined ? password : fields.password
@@ -55,6 +58,7 @@ export async function makeUser(db: PrismaClient, fields: UserFields = {}) {
       status: fields.status ?? 'active',
       pocId: fields.pocId ?? null,
       passwordHash: pw ? await hashPassword(pw) : null,
+      passwordLogin: fields.passwordLogin ?? !!pw,
     },
   })
 }

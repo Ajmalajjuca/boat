@@ -11,8 +11,9 @@ import { type Mailer, sendOrLog } from '../../core/mailer'
 import { type Page, pageArgs, pageOf } from '../../core/pagination'
 import type { Db } from '../../core/prisma'
 import { Prisma, type PrismaClient } from '../../generated/prisma/client'
-import { issueToken } from '../auth/auth-tokens'
-import { accessEmail, inviteEmail, linkFor } from '../auth/emails'
+import { randomBytes } from 'node:crypto'
+import { hashPassword } from '../auth/password'
+import { accessEmail } from '../auth/emails'
 import { revokeUserSessions } from '../auth/sessions'
 
 // allowedDomains: the company's Workspace domains when Google sign-in is set up, else empty.
@@ -92,14 +93,6 @@ async function lockForUserChange(db: Db, userId: string) {
 }
 const lastAdmin = (name: string) =>
   new ConflictError(`${name} is the last active admin. Make someone else an admin first.`)
-
-async function sendInvite(deps: UsersDeps, user: UserView, token: string, log: Logger) {
-  const inviteEmailSent = await sendOrLog(deps.mailer, log, {
-    to: user.email,
-    ...inviteEmail(deps.appUrl, user.name, token),
-  })
-  return { user, inviteEmailSent, inviteUrl: linkFor(deps.appUrl, 'invite', token) }
-}
 
 // The courtesy "you've been given access" email; failures are logged and never block access.
 const sendAccessEmail = (deps: UsersDeps, user: { email: string; name: string }, log: Logger) =>
@@ -204,43 +197,36 @@ export async function deleteUser(db: PrismaClient, actorId: string, id: string) 
   })
 }
 
-// A new deployment has no one to sign in as. This refuses once an active admin exists, so the
-// command cannot quietly add admins later. Run again for a first admin who hasn't accepted yet,
-// it sends a fresh invite.
-export async function inviteFirstAdmin(
-  deps: UsersDeps,
-  input: { email: string; name: string },
-  log: Logger,
-) {
-  const active = await deps.db.user.findFirst({
-    where: { role: 'admin', status: 'active', deletedAt: null },
-    select: { id: true },
-  })
-  if (active)
-    throw new ConflictError(
-      'An active admin already exists. Sign in as that admin to invite more people.',
-    )
+// FR-11.6: the backup admin keeps the app reachable if Google sign-in fails. It is the only
+// password account, so this refuses a second one; run again for the same email, it sets a new
+// password and ends that admin's sessions. It may be outside the company domains, so the domain
+// check doesn't apply. The password is shown once by the create-admin command.
+export async function setBackupAdmin(db: PrismaClient, input: { email: string; name: string }) {
   const email = normalizeEmail(input.email)
-  const existing = await deps.db.user.findFirst({
-    where: { email, deletedAt: null },
-    select: { id: true, role: true },
-  })
-  if (existing && existing.role !== 'admin')
-    throw new ConflictError(`${email} already belongs to a ${existing.role} user.`)
   const account = { email, name: input.name.trim(), role: 'admin' as const, pocId: null }
-  if (!existing) assertValid(validateAccount(account))
-  // The first admin chooses a password from an emailed link.
-  const { user, token } = await deps.db.$transaction(async (tx) => {
-    const user = existing
-      ? await tx.user.update({
-          where: { id: existing.id },
-          data: { status: 'invited' },
-          select: userSelect,
-        })
-      : await tx.user
-          .create({ data: { ...account, status: 'invited' }, select: userSelect })
-          .catch(rethrowDuplicateEmail)
-    return { user, token: await issueToken(tx, user.id, 'invite') }
+  assertValid(validateAccount(account))
+  const password = randomBytes(18).toString('base64url')
+  const passwordHash = await hashPassword(password)
+  const user = await db.$transaction(async (tx) => {
+    const backup = await tx.user.findFirst({
+      where: { passwordLogin: true, deletedAt: null },
+      select: { email: true },
+    })
+    if (backup && backup.email !== email)
+      throw new ConflictError(`${backup.email} is already the backup admin.`)
+    const existing = await tx.user.findFirst({
+      where: { email, deletedAt: null },
+      select: { id: true, role: true },
+    })
+    if (existing && existing.role !== 'admin')
+      throw new ConflictError(`${email} already belongs to a ${existing.role} user.`)
+    const data = { passwordHash, passwordLogin: true, status: 'active' as const }
+    if (!existing)
+      return tx.user
+        .create({ data: { ...account, ...data }, select: userSelect })
+        .catch(rethrowDuplicateEmail)
+    await revokeUserSessions(tx, existing.id)
+    return tx.user.update({ where: { id: existing.id }, data, select: userSelect })
   })
-  return sendInvite(deps, user, token, log)
+  return { user, password }
 }

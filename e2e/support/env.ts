@@ -18,6 +18,10 @@ export const users: Record<RoleName, { email: string; name: string }> = {
   poc: { email: 'poc@e2e.test', name: 'Maya Shah' },
   viewer: { email: 'viewer@e2e.test', name: 'Vic Viewer' },
 }
+// Google sign-in runs against @boat/oidc-stub with this client; every e2e user is on the
+// company domain.
+export const googleClient = { id: 'e2e-client', secret: 'e2e-client-secret' }
+export const companyDomain = 'e2e.test'
 // The point-of-contact value the seeded POC user owns.
 export const pocValue = 'Maya Shah'
 // Each seeded user's signed-in browser state, written by global setup.

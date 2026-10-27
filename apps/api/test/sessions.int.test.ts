@@ -64,7 +64,7 @@ describe('loadSession', () => {
         role: 'poc',
         pocId: poc.id,
         poc: { id: poc.id, value: poc.value },
-        passwordLogin: false,
+        passwordLogin: true,
       },
     })
   })
