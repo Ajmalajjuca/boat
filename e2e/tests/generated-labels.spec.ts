@@ -5,7 +5,7 @@ import { choose } from '../support/ui'
 
 test.use({ storageState: authFile('admin') })
 
-test('creates a lot, material batch and receipt without typing labels', async ({ page }) => {
+test('creates a lot and material batch without typing labels', async ({ page }) => {
   const seed = await seeder()
   await seed.product('Automatic references')
   await seed.lookup('component', 'Housing')
@@ -33,13 +33,7 @@ test('creates a lot, material batch and receipt without typing labels', async ({
   await batch.getByRole('button', { name: 'Save batch' }).click()
   await expect(batch).toBeHidden()
   await expect(lot.getByRole('row', { name: /RM-\d{6,}/ })).toBeVisible()
-  await lot.getByRole('tab', { name: 'GRN Receipts' }).click()
-  await lot.getByRole('button', { name: 'Add receipt' }).click()
-  const receipt = page.getByRole('dialog', { name: 'Add GRN receipt' })
-  await receipt.getByLabel('Quantity', { exact: true }).fill('5')
-  await receipt.getByRole('button', { name: 'Save receipt' }).click()
-  await expect(receipt).toBeHidden()
-  await expect(lot.getByText(/^GRN-\d{6,}/)).toBeVisible()
+  // GRN receipts are hidden (FEATURE_GRN off); their generated labels are pinned by the API tests.
   await expect(lot.getByLabel('Lot label', { exact: true })).toHaveCount(0)
   await lot.getByRole('tab', { name: 'Overview', exact: true }).click()
   await expect(lot.getByLabel('Lot label', { exact: true })).toHaveValue(label)

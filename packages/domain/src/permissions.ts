@@ -8,12 +8,12 @@ export const roleInfo: Record<Role, { label: string; description: string }> = {
   planner: {
     label: 'Planner',
     description:
-      'Adds and edits products, lots, and shipments, and corrects RM batches and GRN receipts. No Settings, restore, reset, or record deletes.',
+      'Adds and edits products, lots, and shipments, and corrects RM batches. No Settings, restore, reset, or record deletes.',
   },
   poc: {
     label: 'POC',
     description:
-      'Updates progress on lots assigned to them: status, quantities, ETAs, blockers, RM batches, GRN receipts, and notes.',
+      'Updates progress on lots assigned to them: status, quantities, ETAs, blockers, RM batches, and notes.',
   },
   viewer: {
     label: 'Viewer',
@@ -43,7 +43,7 @@ export const actionVerbs: Record<Action, string> = {
   deleteLots: 'delete lots',
   editShipments: 'add or edit shipments',
   deleteShipments: 'delete shipments',
-  deleteEntries: 'delete RM batches or GRN receipts',
+  deleteEntries: 'delete RM batches',
 }
 export const actions = Object.keys(actionVerbs) as Action[]
 const grants: Record<Role, Action[]> = {

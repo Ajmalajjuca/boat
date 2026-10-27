@@ -128,9 +128,7 @@ export function lotInput(lot: Lot & { refs?: KnownValue[] }, lookups: LookupItem
     componentIds: lot.rmComponents.map((c) => id('component', c) ?? ''),
     readyQty: lot.readyQty,
     lotQty: lot.lotQty,
-    freshProductionQty: lot.freshProductionQty,
-    reworkQty: lot.reworkQty,
-    reworkReason: lot.reworkReason,
+    // Rework and fresh production are hidden; the API keeps their stored values.
     rmReadyDate: orNull(lot.rmReadyDate),
     plannedDate: orNull(lot.plannedDate),
     revisedEta: orNull(lot.revisedEta),

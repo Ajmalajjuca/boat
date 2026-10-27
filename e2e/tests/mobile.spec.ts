@@ -20,7 +20,6 @@ async function seedSome() {
   const seed = await seeder()
   const alpha = await seed.product('Alpha Long Product Name', { variant: 'Midnight Black' })
   const lot = await seed.lot(alpha.id, 'A-1', { plannedDate: day(), lotQty: 1200 })
-  await seed.receipt(lot.id, 300)
   await seed.shipment('INV-MOBILE-0001', { items: [{ productId: alpha.id, quantity: 900 }] })
   await seed.done()
   return lot

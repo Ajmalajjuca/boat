@@ -30,10 +30,12 @@ The list is grouped by product. Expand **Test EchoPods Lite**, or search for a l
 
 | Lot | What to inspect |
 | --- | --- |
-| `TEST-EP-001` | 1,000 lot units, 200 GRN, 800 balance; delayed, blocked by battery supply, and due soon. |
-| `TEST-WB-001` | 750 lot units, 100 GRN, 650 balance; overdue. |
-| `TEST-SD-001` | 400 lot units, no GRN; required RM components are fully received. |
-| `TEST-EP-002` | Absent from active production because its 500 GRN equals its 500-unit lot quantity. |
+| `TEST-EP-001` | 1,000 lot units; delayed, blocked by battery supply, and due soon. |
+| `TEST-WB-001` | 750 lot units; overdue. |
+| `TEST-SD-001` | 400 lot units; required RM components are fully received. |
+| `TEST-EP-002` | Absent from active production because its actual date is set. |
+
+GRN receipts in the backup are kept but hidden while `FEATURE_GRN` is off (the default).
 
 Open `TEST-EP-001`. In **Overview**, inspect ownership, quantities, dates, blocker, and follow-up. In **Updates & History**, see the supplier follow-up note.
 
@@ -44,19 +46,19 @@ Open `TEST-EP-001` → **RM Readiness**. It requires Plastic, PCBA, and Battery.
 1. Edit batch `TEST-BT-01` and change **Received quantity** from 600 to 1,000. Save it. PCBA becomes the bottleneck at **800**, so readiness becomes **80%**.
 2. Edit `TEST-PC-01` and change **Received quantity** from 800 to 1,000. Save it. Readiness becomes **100%**.
 
-This demonstrates that material readiness is calculated separately from production quantity and warehouse GRN.
+This demonstrates that material readiness is calculated separately from production quantity.
 
-## 4. Complete a lot through GRN
+## 4. Complete a lot by its actual date
 
-In `TEST-EP-001` → **GRN Receipts**, inspect the existing 200-unit receipt. Add another receipt dated **6 October 2026**, labeled `TEST-EP-001 final receipt`, for **800 units**. The total becomes 1,000, the balance becomes zero, and the lot moves to **Completed** automatically.
+In `TEST-EP-001` → **Overview**, set **Actual date** to today and save. The lot moves to **Completed**. A date in the future is refused; actual dates record what has happened.
 
-Open **Completed** and inspect `TEST-EP-002`. Its two receipts are 300 and 200 units. **Full GRN date** is **5 October 2026** and **RM-to-GRN lead time** is **10 days**.
+Open **Completed** and inspect `TEST-EP-002`. Its actual date is **5 October 2026**; **Actual against planned date** and **RM ready to actual date** are measured from it.
 
-To see completion reverse, edit the 200-unit receipt on `TEST-EP-002` to **100**. Its GRN becomes 400, its balance becomes 100, and it returns to Production Tracker. Change the receipt back to 200 to restore completion. Completion depends on receipt totals, not the manually selected status or stage.
+To see completion reverse, clear the actual date on `TEST-EP-002` and save. It returns to Production Tracker. Completion depends on the actual date, not the manually selected status or stage.
 
 ## 5. Track finished-goods shipments
 
-Open **Finished Goods**. The shipment list is separate from production lots and GRN.
+Open **Finished Goods**. The shipment list is separate from production lots.
 
 | Shipment | Starting state |
 | --- | --- |
@@ -70,9 +72,9 @@ Open `TEST-SEA-001` → **ETA revisions & history** to see the recorded port-con
 
 Back in **Production Tracker**, find **Test PartyPulse 500**. It has no active lot but still has an **Add lot** action.
 
-1. Select **Add lot** and enter label `TEST-PP-001`, lot quantity **250**, All RM Received ready quantity **250**, and a planned date.
-2. Save the lot, then open **GRN Receipts** and add a 100-unit receipt. The balance is **150**.
-3. Add a second receipt for 150 units. The lot moves to **Completed**.
+1. Select **Add lot** and enter label `TEST-PP-001`, lot quantity **250**, All RM Received ready quantity **250**, and a planned date of today or later.
+2. Switch **RM Readiness** to **Track by Component** and tick **Battery**. **Add batch** is available at once; it saves the lot first and opens the batch form.
+3. Set the lot's **Actual date** to today and save. The lot moves to **Completed**.
 
 ## 7. Check settings, export, and persistence
 

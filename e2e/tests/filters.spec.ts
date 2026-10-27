@@ -18,8 +18,7 @@ async function seedThree() {
   await seed.product('Charlie')
   await seed.lot(alpha.id, 'A-overdue', { plannedDate: day(-2) })
   await seed.lot(alpha.id, 'A-delayed', { status: 'Delayed', plannedDate: day(10) })
-  const soon = await seed.lot(bravo.id, 'B-soon', { plannedDate: day(1), lotQty: 200 })
-  await seed.receipt(soon.id, 50)
+  await seed.lot(bravo.id, 'B-soon', { plannedDate: day(1), lotQty: 200 })
   await seed.done()
 }
 
@@ -29,8 +28,6 @@ test('FR-2.5 groups lots under their products with totals', async ({ page }) => 
   const alpha = page.getByRole('group', { name: 'Alpha' })
   await expect(alpha).toContainText('2 lots · 1 delayed')
   await expect(page.getByRole('group', { name: 'Bravo' })).toContainText(/Qty\s*200/)
-  await expect(page.getByRole('group', { name: 'Bravo' })).toContainText(/GRN\s*50/)
-  await expect(page.getByRole('group', { name: 'Bravo' })).toContainText(/Balance\s*150/)
   await expect(page.getByRole('group', { name: 'Charlie' })).toContainText('0 lots')
   await alpha.getByRole('button', { expanded: false }).click()
   await expect(lot(page, 'A-overdue')).toBeVisible()
@@ -107,11 +104,10 @@ test('FR-2.5 downloads the CSV of the current view, and says when it is empty', 
   await expect(page.getByText('Nothing to export: the current view has no rows.')).toBeVisible()
 })
 
-test('FR-2.5 lists fully received lots under Completed', async ({ page }) => {
+test('FR-11.3 lists lots with an actual date under Completed', async ({ page }) => {
   const seed = await seeder()
   const echo = await seed.product('Echo')
-  const done = await seed.lot(echo.id, 'E-done', { lotQty: 30, plannedDate: day(-5) })
-  await seed.receipt(done.id, 30)
+  await seed.lot(echo.id, 'E-done', { lotQty: 30, plannedDate: day(-5), actualDate: day(-1) })
   await seed.done()
   await page.goto('/')
   await goTo(page, 'Completed')

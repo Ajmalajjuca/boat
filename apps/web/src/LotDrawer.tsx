@@ -66,7 +66,7 @@ import {
   validateReceipt,
   type FieldErrors,
 } from '@boat/domain/validation'
-import { type LotAccess, roleInfo, useAccess } from './access'
+import { type LotAccess, roleInfo, useAccess, useFeatures } from './access'
 
 // addBatch opens the material batch form once the lot has loaded, for "Add batch" on a new lot.
 // It names the component to start with; empty starts with the first one.
@@ -97,8 +97,6 @@ const overviewFields = [
   'status',
   'stage',
   'lotQty',
-  'freshProductionQty',
-  'reworkQty',
   'readyQty',
   'rmReadyDate',
   'plannedDate',
@@ -173,7 +171,8 @@ function LotEditor({
   const lotForm = useFormErrors(),
     batchForm = useFormErrors(),
     receiptForm = useFormErrors()
-  const access = useAccess()
+  const access = useAccess(),
+    { grn } = useFeatures()
   const products = useProducts().data ?? []
   const dirty = JSON.stringify(draft) !== baseline,
     stored = !!view
@@ -273,7 +272,9 @@ function LotEditor({
     }
     if (
       !(await confirm(
-        `Delete lot ${draft.label} and its ${bs.length} RM batches, ${rs.length} GRN receipts, and history records?`,
+        grn
+          ? `Delete lot ${draft.label} and its ${bs.length} RM batches, ${rs.length} GRN receipts, and history records?`
+          : `Delete lot ${draft.label} and its ${bs.length} RM batches and history records?`,
       ))
     )
       return
@@ -363,14 +364,26 @@ function LotEditor({
         : [...draft.rmComponents, component],
     )
   }
+  // GRN figures show only while GRN is switched on (FEATURE_GRN); rework and fresh production
+  // are hidden for good.
   const stats = useMemo(
     () => [
       { label: 'Lot quantity', value: quantity(draft.lotQty), icon: ClipboardList },
-      { label: 'Fresh produced', value: quantity(draft.freshProductionQty), icon: PackageCheck },
-      { label: 'Total GRN', value: quantity(totalGrn(rs)), icon: CheckCircle2 },
-      { label: 'Balance', value: quantity(balance(draft, rs)), icon: Clock3 },
+      { label: 'RM ready', value: `${Math.round(metrics.percent)}%`, icon: PackageCheck },
+      ...(grn
+        ? [
+            { label: 'Total GRN', value: quantity(totalGrn(rs)), icon: CheckCircle2 },
+            { label: 'Balance', value: quantity(balance(draft, rs)), icon: Clock3 },
+          ]
+        : [
+            {
+              label: 'Actual date',
+              value: draft.actualDate ? dateLabel(draft.actualDate) : 'Open',
+              icon: CheckCircle2,
+            },
+          ]),
     ],
-    [draft, rs],
+    [draft, rs, grn, metrics.percent],
   )
   return (
     <>
@@ -437,7 +450,7 @@ function LotEditor({
               : 'You can update progress on this lot. Locked fields such as product, lot quantity, planned date, and POC are set by a planner or admin.'}
           </div>
         )}
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={`mb-5 grid grid-cols-2 gap-3 ${grn ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
           {stats.map((s) => (
             <Card key={s.label} className="p-3">
               <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
@@ -451,7 +464,7 @@ function LotEditor({
         <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-200">
           <div
             className="h-full rounded-full bg-[#ed1c24] transition-all"
-            style={{ width: `${grnProgress(draft, rs)}%` }}
+            style={{ width: `${grn ? grnProgress(draft, rs) : metrics.percent}%` }}
           />
         </div>
         <div className="mb-5 flex flex-wrap border-b border-slate-200" role="tablist">
@@ -459,7 +472,7 @@ function LotEditor({
             [
               ['overview', 'Overview'],
               ['rm', 'RM Readiness'],
-              ['grn', 'GRN Receipts'],
+              ...(grn ? ([['grn', 'GRN Receipts']] as const) : []),
               ['history', 'Updates & History'],
             ] as const
           ).map(([id, label]) => (
@@ -599,35 +612,6 @@ function LotEditor({
                     onChange={(e) => update('lotQty', number(e.target.value))}
                   />
                 </Field>
-                <Field label="Fresh production quantity" error={lotForm.errors.freshProductionQty}>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={draft.freshProductionQty}
-                    onChange={(e) => update('freshProductionQty', number(e.target.value))}
-                  />
-                </Field>
-                <Field
-                  label="Rework quantity"
-                  error={lotForm.errors.reworkQty}
-                  help="A subset of produced units; it is not added to fresh production."
-                >
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={draft.reworkQty}
-                    onChange={(e) => update('reworkQty', number(e.target.value))}
-                  />
-                </Field>
-                <Field label="Rework reason">
-                  <Input
-                    value={draft.reworkReason}
-                    onChange={(e) => update('reworkReason', e.target.value)}
-                    placeholder="Issue being corrected"
-                  />
-                </Field>
                 <Field label="RM readiness mode" locked={planLocked && !readOnly}>
                   <Select
                     value={draft.rmMode}
@@ -693,7 +677,7 @@ function LotEditor({
                 <Field
                   label="Actual date"
                   error={lotForm.errors.actualDate}
-                  help="Optional note. Completion timing is measured from the full GRN date."
+                  help="Entering the actual date marks the lot as completed."
                 >
                   <Input
                     type="date"
@@ -710,11 +694,13 @@ function LotEditor({
                   />
                 </Field>
                 <div className="space-y-1 rounded-xl bg-teal-50 p-3 text-xs text-teal-800">
+                  {grn && (
+                    <div>
+                      <b>Full GRN date:</b> {dateLabel(fullGrnDate(draft, rs))}
+                    </div>
+                  )}
                   <div>
-                    <b>Full GRN date:</b> {dateLabel(fullGrnDate(draft, rs))}
-                  </div>
-                  <div>
-                    <b>Against planned date:</b>{' '}
+                    <b>Actual against planned date:</b>{' '}
                     {planDelay(draft) === null ? 'Not available' : signedDays(planDelay(draft))}
                   </div>
                   <div>
@@ -722,7 +708,7 @@ function LotEditor({
                     {!draft.rmReadyDate && effectiveRmReadyDate(draft, bs) && ' (from batches)'}
                   </div>
                   <div>
-                    <b>RM-to-GRN lead time:</b>{' '}
+                    <b>RM ready to actual date:</b>{' '}
                     {leadTime(draft, bs) === null ? 'Not available' : `${leadTime(draft, bs)} days`}
                   </div>
                 </div>

@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { type MutableRefObject, type ReactNode, useEffect, useMemo, useState } from 'react'
-import { useAccess } from './access'
+import { useAccess, useFeatures } from './access'
 import { downloadLotsCsv, type LotQuery, lotPageSize } from './api/lots'
 import type { LotRecord, ProductRecord } from './api/mappers'
 import { useLookups, useLotGroups, useLots, useLotSummary, useProducts } from './api/queries'
@@ -35,7 +35,7 @@ type Column =
   | 'ems'
   | 'stage'
   | 'lotQty'
-  | 'produced'
+  | 'actualDate'
   | 'grn'
   | 'balance'
   | 'plannedDate'
@@ -55,7 +55,7 @@ const columnLabels: Record<Column, string> = {
   ems: 'EMS',
   stage: 'Stage',
   lotQty: 'Lot Qty',
-  produced: 'Produced',
+  actualDate: 'Actual Date',
   grn: 'GRN',
   balance: 'Balance',
   plannedDate: 'Planned Date',
@@ -67,7 +67,7 @@ const columnLabels: Record<Column, string> = {
   followUp: 'Follow-up',
   fullGrn: 'Full GRN Date',
   planDelay: 'Vs Plan',
-  leadTime: 'RM→GRN Days',
+  leadTime: 'RM→Actual Days',
 }
 const defaultCols: Column[] = [
   'label',
@@ -76,7 +76,7 @@ const defaultCols: Column[] = [
   'ems',
   'stage',
   'lotQty',
-  'produced',
+  'rm',
   'grn',
   'balance',
   'plannedDate',
@@ -88,15 +88,17 @@ const completedCols: Column[] = [
   'category',
   'ems',
   'lotQty',
-  'produced',
   'grn',
   'plannedDate',
+  'actualDate',
   'fullGrn',
   'planDelay',
   'leadTime',
 ]
 const simpleCols: Column[] = ['label', 'status', 'stage', 'lotQty', 'grn', 'balance', 'eta']
 const allCols = Object.keys(columnLabels) as Column[]
+// Shown only while GRN is switched on (FEATURE_GRN).
+const grnCols: Column[] = ['grn', 'balance', 'fullGrn']
 
 // Dropdown filters hold lookup ids; the API filters by id.
 type Filters = {
@@ -262,8 +264,8 @@ function renderCell(l: LotRecord, col: Column): ReactNode {
       return l.stage
     case 'lotQty':
       return quantity(l.lotQty)
-    case 'produced':
-      return quantity(l.freshProductionQty)
+    case 'actualDate':
+      return dateLabel(l.actualDate)
     case 'grn':
       return <span className="font-semibold">{quantity(c.grnTotal)}</span>
     case 'balance':
@@ -313,7 +315,9 @@ export default function Production({
   onAddProduct,
   csvRef,
 }: Props) {
-  const access = useAccess()
+  const access = useAccess(),
+    { grn } = useFeatures()
+  const shown = (cols: Column[]) => (grn ? cols : cols.filter((c) => !grnCols.includes(c)))
   const lookups = useLookups().data ?? [],
     products = useProducts().data ?? []
   const [search, setSearch] = useState(''),
@@ -323,8 +327,9 @@ export default function Production({
   const [sort, setSort] = useState<LotSort>('eta-asc'),
     [group, setGroup] = useState(true),
     [expanded, setExpanded] = useState<string[]>([]),
-    [columns, setColumns] = useState<Column[]>(defaultCols),
+    [chosen, setColumns] = useState<Column[]>(defaultCols),
     [quick, setQuick] = useState('')
+  const columns = shown(chosen)
   const term = useDebounced(search)
   const query = useMemo(
     () => toQuery(mode, term, filters, quick, sort),
@@ -425,7 +430,7 @@ export default function Production({
               {mode === 'active' ? 'Active production lots' : 'Completed lots'}
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              {total} lots across {groups.length} products · Completion is based on full GRN
+              {total} lots across {groups.length} products · Completion is based on the actual date
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -537,7 +542,7 @@ export default function Production({
             <Button variant="ghost" size="sm" onClick={() => setColumns(allCols)}>
               Show All Details
             </Button>
-            {allCols.map((c) => (
+            {shown(allCols).map((c) => (
               <label key={c} className="flex items-center gap-1 text-xs text-slate-600">
                 <input
                   type="checkbox"
@@ -577,7 +582,7 @@ export default function Production({
               }
               description={
                 mode === 'completed'
-                  ? 'A lot appears here when its GRN receipts equal its positive lot quantity.'
+                  ? 'A lot appears here once its actual date is entered.'
                   : products.length
                     ? 'Try clearing filters or add a lot to a product.'
                     : access.can('editProducts')
@@ -643,15 +648,16 @@ export default function Production({
                       <span title="Total lot quantity">
                         Qty <b>{quantity(g.lotQty)}</b>
                       </span>
-                      <span title="Fresh production quantity">
-                        Produced <b>{quantity(g.produced)}</b>
-                      </span>
-                      <span title="Total GRN">
-                        GRN <b>{quantity(g.grnTotal)}</b>
-                      </span>
-                      <span title="Remaining balance">
-                        Balance <b className="text-[#c46736]">{quantity(g.balance)}</b>
-                      </span>
+                      {grn && (
+                        <>
+                          <span title="Total GRN">
+                            GRN <b>{quantity(g.grnTotal)}</b>
+                          </span>
+                          <span title="Remaining balance">
+                            Balance <b className="text-[#c46736]">{quantity(g.balance)}</b>
+                          </span>
+                        </>
+                      )}
                       {productButtons(g)}
                     </div>
                   </div>
@@ -761,6 +767,7 @@ function LotTable({
   onOpenLot: (id: string) => void
   showProduct?: boolean
 }) {
+  const { grn } = useFeatures()
   return (
     <>
       <div className="table-wrap hidden md:block">
@@ -802,19 +809,27 @@ function LotTable({
               <span>
                 Qty <b>{quantity(l.lotQty)}</b>
               </span>
-              <span>
-                GRN <b>{quantity(l.computed.grnTotal)}</b>
-              </span>
-              <span>
-                Balance <b>{quantity(l.computed.balance)}</b>
-              </span>
+              {grn ? (
+                <>
+                  <span>
+                    GRN <b>{quantity(l.computed.grnTotal)}</b>
+                  </span>
+                  <span>
+                    Balance <b>{quantity(l.computed.balance)}</b>
+                  </span>
+                </>
+              ) : (
+                <span>
+                  RM <b>{Math.round(l.computed.rm.percent)}%</b>
+                </span>
+              )}
             </div>
             {l.computed.completed ? (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 text-xs text-slate-500">
-                <span>Full GRN {dateLabel(l.computed.fullGrnDate ?? '')}</span>
+                <span>Completed {dateLabel(l.actualDate)}</span>
                 <span>
-                  {signedDays(l.computed.planDelay)} vs plan · RM→GRN {l.computed.leadTime ?? '—'}{' '}
-                  days
+                  {signedDays(l.computed.planDelay)} vs plan · RM→actual{' '}
+                  {l.computed.leadTime ?? '—'} days
                 </span>
               </div>
             ) : (
@@ -824,7 +839,10 @@ function LotTable({
               </div>
             )}
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full bg-[#ed1c24]" style={{ width: `${l.computed.grnPercent}%` }} />
+              <div
+                className="h-full bg-[#ed1c24]"
+                style={{ width: `${grn ? l.computed.grnPercent : l.computed.rm.percent}%` }}
+              />
             </div>
           </button>
         ))}

@@ -286,9 +286,10 @@ export type LotInput = {
   componentIds: string[]
   readyQty: number
   lotQty: number
-  freshProductionQty: number
-  reworkQty: number
-  reworkReason: string
+  // Hidden: accepted for older clients and ignored; the stored values are kept.
+  freshProductionQty?: number
+  reworkQty?: number
+  reworkReason?: string
   rmReadyDate: string | null
   plannedDate: string | null
   revisedEta: string | null

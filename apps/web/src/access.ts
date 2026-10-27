@@ -16,8 +16,13 @@ export {
 // The signed-in user and what their role allows, from GET /auth/me. Hiding controls is a
 // convenience: the API checks every request itself.
 export type AccessUser = { id: string; name: string; email: string; role: Role; poc: string }
-export type AccessState = { user: AccessUser | null; actions: Action[] }
-const signedOut: AccessState = { user: null, actions: [] }
+// features: switched-off areas to hide (GRN receipts unless FEATURE_GRN is on).
+export type AccessState = {
+  user: AccessUser | null
+  actions: Action[]
+  features: MePayload['features']
+}
+const signedOut: AccessState = { user: null, actions: [], features: { grn: false } }
 export const accessFrom = (me: MePayload): AccessState => ({
   user: {
     id: me.user.id,
@@ -27,6 +32,7 @@ export const accessFrom = (me: MePayload): AccessState => ({
     poc: me.user.poc?.value ?? '',
   },
   actions: me.allowedActions,
+  features: me.features,
 })
 
 export function can(action: Action, state: AccessState) {
@@ -45,3 +51,4 @@ export function useAccess() {
     lotAccess: (lot: Pick<Lot, 'poc'>) => lotAccess(lot, state),
   }
 }
+export const useFeatures = () => useContext(AccessContext).features

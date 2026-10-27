@@ -378,6 +378,10 @@ describe('hidden fields', () => {
 })
 
 describe('completion', () => {
+  it('FR-11.3 a lot created with an actual date is complete at once', async () => {
+    const res = await create({ actualDate: '2026-10-14' })
+    expect(res.body).toMatchObject({ completedOn: '2026-10-14', computed: { completed: true } })
+  })
   it('FR-11.3 setting the actual date completes the lot and clearing it reopens it', async () => {
     const id = (await create()).body.id
     let res = await w.planner.send('patch', `/api/v1/lots/${id}`, {

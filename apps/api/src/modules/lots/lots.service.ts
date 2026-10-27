@@ -41,9 +41,9 @@ export type LotInput = {
   componentIds: string[]
   readyQty: number
   lotQty: number
-  freshProductionQty: number
-  reworkQty: number
-  reworkReason: string
+  freshProductionQty?: number
+  reworkQty?: number
+  reworkReason?: string
   rmReadyDate: string | null
   plannedDate: string | null
   revisedEta: string | null
@@ -145,9 +145,9 @@ async function checkLot(
     rmComponents: input.componentIds.map(valueOf).sort(),
     readyQty: input.readyQty,
     lotQty: input.lotQty,
-    freshProductionQty: input.freshProductionQty,
-    reworkQty: input.reworkQty,
-    reworkReason: input.reworkReason.trim(),
+    freshProductionQty: input.freshProductionQty ?? 0,
+    reworkQty: input.reworkQty ?? 0,
+    reworkReason: (input.reworkReason ?? '').trim(),
     rmReadyDate: input.rmReadyDate ?? '',
     plannedDate: input.plannedDate ?? '',
     revisedEta: input.revisedEta ?? '',
@@ -205,8 +205,8 @@ const lotData = (input: LotInput, lot: Lot) => ({
   rmMode: input.rmMode,
   readyQty: input.readyQty,
   lotQty: input.lotQty,
-  freshProductionQty: input.freshProductionQty,
-  reworkQty: input.reworkQty,
+  freshProductionQty: input.freshProductionQty ?? 0,
+  reworkQty: input.reworkQty ?? 0,
   reworkReason: lot.reworkReason,
   rmReadyDate: toDbDate(input.rmReadyDate),
   plannedDate: toDbDate(input.plannedDate),
@@ -275,6 +275,8 @@ export async function createLot({ db, clock }: RecordsDeps, user: SessionUser, i
     clean.label = await generatedLabel(tx, 'lot', clean.label)
     const lot = await checkLot(tx, id, clean, null, date)
     await tx.lot.create({ data: { id, ...lotData(clean, lot) } }).catch(duplicateLabel(lot.label))
+    // A lot entered with its actual date is complete from the start (FR-11.3).
+    await refreshCompletion(tx, id)
     if (clean.componentIds.length)
       await tx.lotComponent.createMany({
         data: clean.componentIds.map((componentId) => ({ lotId: id, componentId })),

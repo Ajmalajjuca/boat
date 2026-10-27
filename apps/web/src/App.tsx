@@ -77,11 +77,11 @@ const screenInfo: Record<Screen, { title: string; description: string }> = {
   },
   completed: {
     title: 'Completed',
-    description: 'Lots with full GRN, including their dates, receipts, and history.',
+    description: 'Lots with an actual date, with their dates, RM batches, and history.',
   },
   monthEnd: {
     title: 'Month-end Summary',
-    description: 'Units planned for a month against GRN received by the end of that month.',
+    description: 'Units planned for a month against lots completed by the end of that month.',
   },
   shipments: {
     title: 'Finished Goods',
@@ -262,7 +262,7 @@ function Workspace({ me }: { me: MePayload }) {
     if (!product) return
     if (
       !(await confirm(
-        `Delete ${product.name} and all its lots, RM batches, GRN receipts, and lot history? Products used in shipment lines cannot be deleted.`,
+        `Delete ${product.name} and all its lots, RM batches, and lot history? Products used in shipment lines cannot be deleted.`,
       ))
     )
       return

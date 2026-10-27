@@ -138,8 +138,6 @@ export async function seeder() {
       await backdate(created.id, past)
       return api.get(`/lots/${created.id}`)
     },
-    receipt: (lotId: string, quantity: number, date = day(), label = `GRN ${quantity}`) =>
-      api.post(`/lots/${lotId}/grn-receipts`, { label, date, quantity }),
     batch: async (
       lotId: string,
       component: string,

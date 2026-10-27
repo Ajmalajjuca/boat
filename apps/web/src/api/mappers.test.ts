@@ -125,6 +125,12 @@ describe('lots', () => {
     })
     expect(input).not.toHaveProperty('id')
   })
+  it('leaves out the hidden rework and fresh production fields', () => {
+    const input = lotInput(toLot(item), lookups)
+    expect(input).not.toHaveProperty('freshProductionQty')
+    expect(input).not.toHaveProperty('reworkQty')
+    expect(input).not.toHaveProperty('reworkReason')
+  })
   it('sends an empty id for a required value that no longer exists, so the server names the field', () => {
     expect(lotInput({ ...toLot(item), status: 'Gone' }, lookups).statusId).toBe('')
   })

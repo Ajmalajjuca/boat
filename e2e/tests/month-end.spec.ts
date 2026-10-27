@@ -7,13 +7,13 @@ import { goTo } from '../support/ui'
 
 test.use({ storageState: authFile('admin') })
 
-// Two lots planned for today, so both fall in the current month: 150 planned, 60 received.
+// Two lots planned for today, so both fall in the current month: 150 planned, and J-1's 100
+// completed today by its actual date.
 async function seedMonth() {
   const seed = await seeder()
   const juliet = await seed.product('Juliet')
-  const j1 = await seed.lot(juliet.id, 'J-1', { lotQty: 100, plannedDate: day() })
+  await seed.lot(juliet.id, 'J-1', { lotQty: 100, plannedDate: day(), actualDate: day() })
   await seed.lot(juliet.id, 'J-2', { lotQty: 50, plannedDate: day(), revisedEta: day(20) })
-  await seed.receipt(j1.id, 60)
   await seed.done()
 }
 
@@ -25,13 +25,11 @@ test('FR-5.1 shows the month-end figures for the lots planned this month', async
   const card = (help: string) => page.getByTitle(help)
   await expect(card('Lot quantity of lots planned for this month.')).toContainText('150')
   await expect(
-    card('GRN for those lots dated on or before the last day of the month.'),
-  ).toContainText('60')
-  await expect(card('Planned units not yet received by month end.')).toContainText('90')
-  await expect(card('Received as a share of planned units.')).toContainText('40%')
-  await expect(
-    card('Every receipt dated this month, including lots planned for other months.'),
-  ).toContainText('60')
+    card('Lots from that plan whose actual date is on or before the last day of the month.'),
+  ).toContainText('100')
+  await expect(card('Planned units of lots not completed by month end.')).toContainText('50')
+  await expect(card('Completed as a share of planned units.')).toContainText('67%')
+  await expect(page.getByText(/All GRN in month/)).toHaveCount(0)
 })
 
 test('FR-5.2 lists short lots with their current ETA and opens them', async ({ page }) => {

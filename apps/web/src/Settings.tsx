@@ -220,9 +220,9 @@ export default function Settings({
                 </h3>
                 <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-600 sm:grid-cols-2">
                   <p>
-                    <b>GRN</b> is Goods Received Note. <b>Lot Qty</b> is the client's arrived
-                    raw-material quantity, provisionally in finished-product-equivalent units.
-                    Balance + GRN = Lot Qty.
+                    <b>Lot Qty</b> is the client's arrived raw-material quantity, provisionally in
+                    finished-product-equivalent units. A lot is completed once its{' '}
+                    <b>actual date</b> is entered.
                   </p>
                   <p>
                     <b>EMS</b> are manufacturing partners. <b>PDI</b> is the quality check before
@@ -233,9 +233,8 @@ export default function Settings({
                     New Product Integration. <b>BAU</b> is business as usual for launched products.
                   </p>
                   <p>
-                    <b>Rework</b> is correction work. Rework quantity is a subset of fresh
-                    production and is never added a second time. Component quantities are
-                    finished-product-equivalent units; Kit mode replaces individual components.
+                    Component quantities are finished-product-equivalent units; Kit mode replaces
+                    individual components.
                   </p>
                   <p>
                     <b>RM readiness</b> is the lowest received total among required components,

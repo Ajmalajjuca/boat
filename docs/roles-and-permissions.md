@@ -7,7 +7,7 @@ This document describes the permissions currently enforced by the application. R
 | Role | Purpose | Access summary |
 | --- | --- | --- |
 | **Admin** (`admin`) | Application administration and operational oversight | Can manage business records, users, Settings, backups, imports and resets. |
-| **Planner** (`planner`) | Production and shipment planning | Can create and edit products, lots and shipments; manage RM batches and GRN receipts; and export JSON backups. Cannot manage users or Settings, import/reset data, or delete products, lots or shipments. |
+| **Planner** (`planner`) | Production and shipment planning | Can create and edit products, lots and shipments; manage RM batches; and export JSON backups. Cannot manage users or Settings, import/reset data, or delete products, lots or shipments. |
 | **POC** (`poc`) | Point of contact responsible for production progress | Can view all operational records. Can update progress, batches, receipts and notes only on lots assigned to their linked point of contact. Cannot change the production plan or delete records. |
 | **Viewer** (`viewer`) | Monitoring and reporting | Can browse operational screens, read history and download CSV reports. Cannot change business records or administration settings. |
 
@@ -34,8 +34,8 @@ Roles are predefined. The application does not currently provide custom roles or
 | Delete lots | Yes | No | No | No |
 | Add or edit RM batches | Yes | Yes | Assigned lots | No |
 | Delete RM batches | Yes | Yes | No | No |
-| Add or edit GRN receipts | Yes | Yes | Assigned lots | No |
-| Delete GRN receipts | Yes | Yes | No | No |
+| Add or edit GRN receipts (only while `FEATURE_GRN` is on) | Yes | Yes | Assigned lots | No |
+| Delete GRN receipts (only while `FEATURE_GRN` is on) | Yes | Yes | No | No |
 | Post lot update notes | Yes | Yes | Assigned lots | No |
 | Create or edit shipments and product lines | Yes | Yes | No | No |
 | Revise shipment ETAs or record warehouse arrival | Yes | Yes | No | No |
@@ -52,7 +52,7 @@ Roles are predefined. The application does not currently provide custom roles or
 | Reset all application business data | Yes | No | No | No |
 | Change their own password and sign out | Yes | Yes | Yes | Yes |
 
-**Planner deletion exception:** Planners can delete RM batches and GRN receipts. The executable `deleteEntries` grant allows this, even though the short Planner description in the application currently says “No … record deletes.” Products, lots and shipments remain Admin-only deletes.
+**Planner deletion exception:** Planners can delete RM batches (and GRN receipts while `FEATURE_GRN` is on). The executable `deleteEntries` grant allows this, even though the short Planner description in the application currently says “No … record deletes.” Products, lots and shipments remain Admin-only deletes.
 
 ## 3. POC assignment and field restrictions
 
@@ -82,8 +82,8 @@ Assignment limits editing, not visibility: POC users can still read other lots, 
 | Overall status | `status` |
 | Current production stage | `stage` |
 | Ready quantity | `readyQty` |
-| Fresh production quantity | `freshProductionQty` |
-| Rework quantity and reason | `reworkQty`, `reworkReason` |
+| Fresh production quantity (hidden; kept in backups) | `freshProductionQty` |
+| Rework quantity and reason (hidden; kept in backups) | `reworkQty`, `reworkReason` |
 | RM ready date | `rmReadyDate` |
 | Revised completion / receipt ETA | `revisedEta` |
 | Actual completion / receipt date | `actualDate` |
