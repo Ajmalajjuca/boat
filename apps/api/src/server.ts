@@ -26,6 +26,7 @@ const app = createApp({
     appUrl: config.APP_URL,
     secureCookies: config.NODE_ENV === 'production',
     mailer: createMailer(config, logger),
+    features: { grn: config.FEATURE_GRN },
   },
 })
 const server = await listen(app, config.PORT).catch((err: unknown) => {

@@ -7,6 +7,7 @@ import {
   lotBody,
   makeRecordsWorld,
   type RecordsWorld,
+  signIn,
   testApp,
 } from './support/fixtures'
 
@@ -17,10 +18,25 @@ let w: RecordsWorld
 
 beforeAll(async () => {
   ;({ db, close } = await createTestDatabase())
-  app = testApp(db, { now: fixedNow })
+  // GRN is off by default (FEATURE_GRN); these tests pin how it works when switched on.
+  app = testApp(db, { now: fixedNow, features: { grn: true } })
   w = await makeRecordsWorld(db, app)
 })
 afterAll(() => close())
+
+describe('the GRN switch', () => {
+  it('FR-11.4 GRN routes are off unless FEATURE_GRN is on', async () => {
+    const off = testApp(db, { now: fixedNow })
+    const admin = await signIn(off, w.admin.me.user.email)
+    const lot = await newLot()
+    expect((await admin.agent.get(`/api/v1/lots/${lot.id}/grn-receipts`)).status).toBe(404)
+    expect(
+      (await admin.send('post', `/api/v1/lots/${lot.id}/grn-receipts`, { quantity: 1 })).status,
+    ).toBe(404)
+    expect((await admin.agent.get('/api/v1/auth/me')).body.features).toEqual({ grn: false })
+    expect((await w.admin.agent.get('/api/v1/auth/me')).body.features).toEqual({ grn: true })
+  })
+})
 
 type Signed = RecordsWorld['planner']
 const newLot = async (overrides: Record<string, unknown> = {}) =>

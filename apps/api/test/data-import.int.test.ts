@@ -21,7 +21,7 @@ let fresh: Awaited<ReturnType<typeof createTestDatabase>>
 afterEach(() => fresh.close())
 async function world() {
   fresh = await createTestDatabase()
-  const app = testApp(fresh.db, { now: fixedNow })
+  const app = testApp(fresh.db, { now: fixedNow, features: { grn: true } })
   const w = await makeRecordsWorld(fresh.db, app)
   const importFile = (body: unknown, mode = 'replace', user = w.admin) =>
     user.send('post', `/api/v1/data/import?mode=${mode}`, body as object)

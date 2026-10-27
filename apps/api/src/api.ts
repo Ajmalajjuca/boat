@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createClock } from './core/clock'
+import { createClock, type Features } from './core/clock'
 import type { Mailer } from './core/mailer'
 import type { PrismaClient } from './generated/prisma/client'
 import { authRouter } from './modules/auth/auth.router'
@@ -30,6 +30,7 @@ export type ApiDeps = {
   mailer: Mailer
   // The time for "today". Tests pass a fixed one; production uses the real time.
   now?: () => Date
+  features: Features
 }
 
 const mountPaths = new WeakMap<object, string>()
@@ -44,7 +45,11 @@ export const mountPathOf = (router: object) => mountPaths.get(router)
 export function buildApiRouter(deps: ApiDeps) {
   const api = Router()
   const settings = createSettingsService(deps.db)
-  const records = { db: deps.db, clock: createClock(settings, deps.now) }
+  const records = {
+    db: deps.db,
+    clock: createClock(settings, deps.now),
+    features: deps.features,
+  }
   api.use(loadSession({ db: deps.db, settings, sessionSecret: deps.sessionSecret }))
   mount(api, '/health', healthRouter(deps.checkDatabase))
   mount(api, '/auth', authRouter({ ...deps, settings }))
@@ -56,9 +61,11 @@ export function buildApiRouter(deps: ApiDeps) {
   const batches = rmBatchRouters(records)
   mount(api, '/lots', batches.underLots)
   mount(api, '/rm-batches', batches.batches)
-  const receipts = grnReceiptRouters(records)
-  mount(api, '/lots', receipts.underLots)
-  mount(api, '/grn-receipts', receipts.receipts)
+  if (deps.features.grn) {
+    const receipts = grnReceiptRouters(records)
+    mount(api, '/lots', receipts.underLots)
+    mount(api, '/grn-receipts', receipts.receipts)
+  }
   mount(api, '/lots', activityRouter(deps.db))
   mount(api, '/shipments', shipmentsRouter(records))
   mount(api, '/reports', reportsRouter(records))

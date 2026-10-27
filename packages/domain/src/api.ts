@@ -46,6 +46,8 @@ export type MePayload = {
   allowedActions: Action[]
   csrfToken: string
   idleTimeoutMinutes: number
+  // Switched-off areas the browser hides. GRN receipts are off unless FEATURE_GRN is on.
+  features: { grn: boolean }
 }
 export type Settings = { timeZone: string; idleTimeoutMinutes: number }
 

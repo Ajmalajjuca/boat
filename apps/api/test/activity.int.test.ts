@@ -10,7 +10,7 @@ let w: RecordsWorld
 
 beforeAll(async () => {
   ;({ db, close } = await createTestDatabase())
-  app = testApp(db, { now: fixedNow })
+  app = testApp(db, { now: fixedNow, features: { grn: true } })
   w = await makeRecordsWorld(db, app)
 })
 afterAll(() => close())

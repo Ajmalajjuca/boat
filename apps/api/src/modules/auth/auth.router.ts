@@ -1,6 +1,7 @@
 import { type Response, Router } from 'express'
 import { z } from 'zod'
 import { authOf, publicRoute, requireSignedIn } from '../../core/access'
+import type { Features } from '../../core/clock'
 import type { Mailer } from '../../core/mailer'
 import { parseInput } from '../../core/parse'
 import type { PrismaClient } from '../../generated/prisma/client'
@@ -23,6 +24,7 @@ export type AuthRouterDeps = {
   secureCookies: boolean
   mailer: Mailer
   appUrl: string
+  features: Features
 }
 
 const loginBody = z.object({
@@ -49,7 +51,11 @@ export function authRouter(deps: AuthRouterDeps) {
   ) {
     setSessionCookie(res, session.token, deps.secureCookies)
     res.json(
-      await mePayload(deps.settings, await authContext(deps.db, deps.sessionSecret, session)),
+      await mePayload(
+        deps.settings,
+        deps.features,
+        await authContext(deps.db, deps.sessionSecret, session),
+      ),
     )
   }
 
@@ -68,7 +74,7 @@ export function authRouter(deps: AuthRouterDeps) {
   })
 
   router.get('/me', requireSignedIn(), async (req, res) => {
-    res.json(await mePayload(deps.settings, authOf(req)))
+    res.json(await mePayload(deps.settings, deps.features, authOf(req)))
   })
 
   router.post('/invites/accept', publicRoute(), async (req, res) => {

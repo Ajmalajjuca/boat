@@ -23,7 +23,12 @@ describe('loadConfig', () => {
       APP_URL: 'http://localhost:5173',
       SMTP_PORT: 465,
       TRUST_PROXY: 0,
+      FEATURE_GRN: false,
     })
+  })
+  it('reads FEATURE_GRN as a boolean, off by default', () => {
+    expect(loadConfig({ ...base, FEATURE_GRN: 'on' }).FEATURE_GRN).toBe(true)
+    expect(loadConfig({ ...base, FEATURE_GRN: 'off' }).FEATURE_GRN).toBe(false)
   })
   it('reads PORT and TRUST_PROXY as numbers', () => {
     expect(loadConfig({ ...base, PORT: '8080', TRUST_PROXY: '1' })).toMatchObject({

@@ -11,5 +11,6 @@ export const testDeps = (overrides: Partial<ApiDeps> = {}): ApiDeps => ({
   appUrl: 'http://localhost:5173',
   secureCookies: false,
   mailer: memoryMailer(),
+  features: { grn: false },
   ...overrides,
 })

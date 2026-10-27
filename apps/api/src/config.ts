@@ -26,6 +26,8 @@ const schema = z
     MAIL_FROM: z.string().min(1).optional(),
     // Proxy hops in front of the app (Render: 1). Rate limits key on the client IP behind them.
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+    // GRN receipts are hidden for now; on brings back their screens and routes.
+    FEATURE_GRN: z.stringbool().default(false),
   })
   .superRefine((c, ctx) => {
     const issue = (path: string, message: string) =>

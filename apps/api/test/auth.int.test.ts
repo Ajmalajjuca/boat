@@ -60,6 +60,7 @@ describe('each role signs in and sees its allowed actions', () => {
         allowedActions: expected[role],
         csrfToken: expect.any(String),
         idleTimeoutMinutes: 15,
+        features: { grn: false },
       })
     })
   }

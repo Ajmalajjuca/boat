@@ -8,7 +8,7 @@ let close: () => Promise<void>
 let w: RecordsWorld
 beforeAll(async () => {
   ;({ db, close } = await createTestDatabase())
-  w = await makeRecordsWorld(db, testApp(db, { now: fixedNow }))
+  w = await makeRecordsWorld(db, testApp(db, { now: fixedNow, features: { grn: true } }))
 })
 afterAll(() => close())
 

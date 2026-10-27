@@ -22,7 +22,7 @@ let shipmentId: string
 
 beforeAll(async () => {
   ;({ db, close } = await createTestDatabase())
-  app = testApp(db, { now: fixedNow })
+  app = testApp(db, { now: fixedNow, features: { grn: true } })
   w = await makeRecordsWorld(db, app)
   const lot = await w.planner.send(
     'post',

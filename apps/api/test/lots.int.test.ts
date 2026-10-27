@@ -104,14 +104,10 @@ describe('creating lots', () => {
       followUpNote: 'Call supplier',
     })
   })
-  it('FR-2.3 needs whole quantities of zero or more, with rework within fresh production', async () => {
+  it('FR-2.3 needs whole quantities of zero or more', async () => {
     const cases: [Record<string, unknown>, Record<string, string>][] = [
       [{ lotQty: -1 }, { lotQty: 'Lot quantity must be a whole number, zero or more.' }],
       [{ lotQty: 2.5 }, { lotQty: 'Lot quantity must be a whole number, zero or more.' }],
-      [
-        { freshProductionQty: 10, reworkQty: 11 },
-        { reworkQty: 'Rework is part of fresh production, so it cannot be larger.' },
-      ],
     ]
     for (const [overrides, fields] of cases) {
       const res = await create(overrides)

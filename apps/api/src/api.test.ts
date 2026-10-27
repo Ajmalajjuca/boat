@@ -28,7 +28,9 @@ function routesOf(router: { stack?: Layer[] }, prefix = ''): string[] {
   return found
 }
 
-const routes = routesOf(buildApiRouter(testDeps()) as unknown as { stack: Layer[] })
+const routes = routesOf(
+  buildApiRouter(testDeps({ features: { grn: true } })) as unknown as { stack: Layer[] },
+)
 
 describe('API routes', () => {
   it('each start with an access check', () => {

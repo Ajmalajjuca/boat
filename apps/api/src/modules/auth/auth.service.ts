@@ -7,6 +7,7 @@ import {
 } from '@boat/domain/validation'
 import type { Logger } from 'pino'
 import type { AuthContext } from '../../core/access'
+import type { Features } from '../../core/clock'
 import { UnauthenticatedError } from '../../core/errors'
 import { type Mailer, sendOrLog } from '../../core/mailer'
 import type { Db } from '../../core/prisma'
@@ -39,13 +40,15 @@ export async function signInWithPassword(
 }
 
 // What the browser needs after sign-in and on every page load.
-export async function mePayload(settings: SettingsService, auth: AuthContext) {
+// features tells the browser which switched-off areas to hide.
+export async function mePayload(settings: SettingsService, features: Features, auth: AuthContext) {
   const { idleTimeoutMinutes } = await settings.get()
   return {
     user: auth.user,
     allowedActions: allowedActions(auth.user.role),
     csrfToken: auth.csrfToken,
     idleTimeoutMinutes,
+    features,
   }
 }
 export type MePayload = Awaited<ReturnType<typeof mePayload>>

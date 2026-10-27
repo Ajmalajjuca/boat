@@ -15,5 +15,8 @@ export const createClock = (
   },
 })
 
-// What every record module takes: the database and today's company date.
-export type RecordsDeps = { db: PrismaClient; clock: Clock }
+// Switched-off areas. GRN receipts are hidden unless FEATURE_GRN is on.
+export type Features = { grn: boolean }
+
+// What every record module takes: the database, today's company date and the feature switches.
+export type RecordsDeps = { db: PrismaClient; clock: Clock; features: Features }
