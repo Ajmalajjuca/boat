@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ConflictError } from '../src/core/errors'
 import { failingMailer, memoryMailer } from '../src/core/mailer'
 import type { PrismaClient } from '../src/generated/prisma/client'
-import { hashToken } from '../src/modules/auth/tokens'
+import { createGoogleSignIn } from '../src/modules/auth/google'
 import { updateUser } from '../src/modules/users/users.service'
 import { createTestDatabase } from './support/db'
 import { makePoc, makeUser, password, signIn, testApp, unique } from './support/fixtures'
@@ -26,7 +26,6 @@ beforeAll(async () => {
 afterAll(() => close())
 
 const newEmail = () => `${unique('new').replace(/\W/g, '')}@example.com`
-const tokenIn = (text: string) => /#token=([\w-]+)/.exec(text)?.[1]
 
 describe('who may manage users', () => {
   it('answers 401 when signed out', async () => {
@@ -60,7 +59,7 @@ describe('GET /users', () => {
 })
 
 describe('POST /users', () => {
-  it('creates an invited user and emails a 72-hour invite link', async () => {
+  it('FR-11.5 creates an invited user and sends the access email, with no link token', async () => {
     const email = newEmail()
     const res = await admin.send('post', '/api/v1/users', {
       email: `  ${email.toUpperCase()} `,
@@ -79,18 +78,38 @@ describe('POST /users', () => {
         lastLoginAt: null,
         createdAt: expect.any(String),
       },
-      inviteEmailSent: true,
+      accessEmailSent: true,
     })
     const sent = mailer.sent.at(-1)!
     expect(sent.to).toBe(email)
-    expect(sent.text).toContain('http://localhost:5173/invite#token=')
-    const token = await db.authToken.findUniqueOrThrow({
-      where: { tokenHash: hashToken(tokenIn(sent.text)!) },
+    expect(sent.subject).toBe("You've been given access to BOAT")
+    expect(sent.text).toBe(
+      "Hi Asha Rao,\n\nYou've been given access to BOAT. Sign in with your company Google account at http://localhost:5173.\n",
+    )
+    expect(await db.authToken.count({ where: { userId: res.body.user.id } })).toBe(0)
+  })
+  it('FR-11.5 refuses an email outside the company domains when Google sign-in is set up', async () => {
+    const google = createGoogleSignIn({
+      issuer: 'https://accounts.google.com',
+      clientId: 'id',
+      clientSecret: 'secret',
+      redirectUri: 'http://localhost:5173/api/v1/auth/google/callback',
+      allowedDomains: ['company.test'],
     })
-    expect(token).toMatchObject({ userId: res.body.user.id, purpose: 'invite', usedAt: null })
-    const hours = (token.expiresAt.getTime() - Date.now()) / 3_600_000
-    expect(hours).toBeGreaterThan(71.9)
-    expect(hours).toBeLessThanOrEqual(72)
+    const scoped = await signIn(testApp(db, { mailer, google }), admin.me.user.email)
+    const outside = await scoped.send('post', '/api/v1/users', {
+      email: 'x@gmail.com',
+      name: 'X',
+      role: 'viewer',
+    })
+    expect(outside.status).toBe(422)
+    expect(outside.body.fields).toEqual({ email: 'Use a company email address (company.test).' })
+    const inside = await scoped.send('post', '/api/v1/users', {
+      email: `${unique('in').replace(/\W/g, '')}@Company.test`,
+      name: 'In',
+      role: 'viewer',
+    })
+    expect(inside.status).toBe(201)
   })
   it('links a POC user to their point of contact, and nobody else', async () => {
     const poc = await makePoc(db)
@@ -155,30 +174,29 @@ describe('POST /users', () => {
       role: 'viewer',
     })
     expect(res.status).toBe(201)
-    expect(res.body.inviteEmailSent).toBe(false)
+    expect(res.body.accessEmailSent).toBe(false)
   })
 })
 
 describe('POST /users/:id/invite', () => {
-  it('sends a new link and cancels the old one', async () => {
+  it('sends the access email again to an invited user', async () => {
     const created = await admin.send('post', '/api/v1/users', {
       email: newEmail(),
       name: 'Slow Reader',
       role: 'viewer',
     })
-    const first = tokenIn(mailer.sent.at(-1)!.text)!
+    const before = mailer.sent.length
     const res = await admin.send('post', `/api/v1/users/${created.body.user.id}/invite`)
     expect(res.status).toBe(200)
-    expect(res.body.inviteEmailSent).toBe(true)
-    const second = tokenIn(mailer.sent.at(-1)!.text)!
-    expect(second).not.toBe(first)
-    const old = await db.authToken.findUniqueOrThrow({ where: { tokenHash: hashToken(first) } })
-    expect(old.usedAt).not.toBeNull()
+    expect(res.body).toEqual({ accessEmailSent: true })
+    expect(mailer.sent).toHaveLength(before + 1)
+    expect(mailer.sent.at(-1)!.subject).toBe("You've been given access to BOAT")
   })
-  it('refuses users who already set a password', async () => {
-    const user = await makeUser(db)
+  it('refuses users who are not invited', async () => {
+    const user = await makeUser(db, { name: 'Already In' })
     const res = await admin.send('post', `/api/v1/users/${user.id}/invite`)
     expect(res.status).toBe(409)
+    expect(res.body.message).toBe('Already In has already signed in.')
   })
 })
 

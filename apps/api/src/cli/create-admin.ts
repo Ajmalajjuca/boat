@@ -21,7 +21,7 @@ const logger = createLogger(config.LOG_LEVEL)
 const db = createPrisma(config.DATABASE_URL)
 try {
   const { user, inviteEmailSent, inviteUrl } = await inviteFirstAdmin(
-    { db, mailer: createMailer(config, logger), appUrl: config.APP_URL },
+    { db, mailer: createMailer(config, logger), appUrl: config.APP_URL, allowedDomains: [] },
     { email: values.email, name: values.name },
     logger,
   )

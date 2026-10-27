@@ -257,7 +257,9 @@ export type UserItem = {
   createdAt: string
   poc: Ref | null
 }
-export type InviteResult = { user: UserItem; inviteEmailSent: boolean }
+// Adding a user sends a courtesy access email; sign-in is with Google, so it carries no link.
+export type InviteResult = { user: UserItem; accessEmailSent: boolean }
+export type ResendResult = { accessEmailSent: boolean }
 export type ResetResult = {
   deleted: Record<
     | 'shipmentItems'

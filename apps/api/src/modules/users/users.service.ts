@@ -12,10 +12,16 @@ import { type Page, pageArgs, pageOf } from '../../core/pagination'
 import type { Db } from '../../core/prisma'
 import { Prisma, type PrismaClient } from '../../generated/prisma/client'
 import { issueToken } from '../auth/auth-tokens'
-import { inviteEmail, linkFor } from '../auth/emails'
+import { accessEmail, inviteEmail, linkFor } from '../auth/emails'
 import { revokeUserSessions } from '../auth/sessions'
 
-export type UsersDeps = { db: PrismaClient; mailer: Mailer; appUrl: string }
+// allowedDomains: the company's Workspace domains when Google sign-in is set up, else empty.
+export type UsersDeps = {
+  db: PrismaClient
+  mailer: Mailer
+  appUrl: string
+  allowedDomains: string[]
+}
 
 const userSelect = {
   id: true,
@@ -95,6 +101,12 @@ async function sendInvite(deps: UsersDeps, user: UserView, token: string, log: L
   return { user, inviteEmailSent, inviteUrl: linkFor(deps.appUrl, 'invite', token) }
 }
 
+// The courtesy "you've been given access" email; failures are logged and never block access.
+const sendAccessEmail = (deps: UsersDeps, user: { email: string; name: string }, log: Logger) =>
+  sendOrLog(deps.mailer, log, { to: user.email, ...accessEmail(deps.appUrl, user.name) })
+
+// FR-11.5: the person signs in with Google once added, so nothing here issues a link or a
+// password. With Google sign-in set up, only the company's Workspace domains are accepted.
 export async function createUser(deps: UsersDeps, input: NewUser, log: Logger) {
   const account = {
     email: normalizeEmail(input.email),
@@ -102,36 +114,30 @@ export async function createUser(deps: UsersDeps, input: NewUser, log: Logger) {
     role: input.role,
     pocId: input.role === 'poc' ? input.pocId : null,
   }
-  assertValid(validateAccount(account))
-  await assertPoc(deps.db, account.pocId)
-  const { user, token } = await deps.db.$transaction(async (tx) => {
-    const user = await tx.user
-      .create({ data: { ...account, status: 'invited' }, select: userSelect })
-      .catch(rethrowDuplicateEmail)
-    return { user, token: await issueToken(tx, user.id, 'invite') }
+  const domain = account.email.split('@')[1] ?? ''
+  assertValid({
+    ...(deps.allowedDomains.length &&
+      !deps.allowedDomains.includes(domain) && {
+        email: `Use a company email address (${deps.allowedDomains.join(', ')}).`,
+      }),
+    ...validateAccount(account),
   })
-  return sendInvite(deps, user, token, log)
+  await assertPoc(deps.db, account.pocId)
+  const user = await deps.db.user
+    .create({ data: { ...account, status: 'invited' }, select: userSelect })
+    .catch(rethrowDuplicateEmail)
+  return { user, accessEmailSent: await sendAccessEmail(deps, user, log) }
 }
 
-// For an invite that expired or went astray. Allowed until the user sets a password; it also
-// brings a disabled, never-signed-in user back to "invited".
+// For an access email that went astray, while the person hasn't signed in yet.
 export async function resendInvite(deps: UsersDeps, id: string, log: Logger) {
-  const { user, token } = await deps.db.$transaction(async (tx) => {
-    await lockForUserChange(tx, id)
-    const current = await tx.user.findFirst({
-      where: { id, deletedAt: null },
-      select: { name: true, passwordHash: true },
-    })
-    if (!current) throw new NotFoundError()
-    if (current.passwordHash) throw new ConflictError(`${current.name} has already set a password.`)
-    const user = await tx.user.update({
-      where: { id },
-      data: { status: 'invited' },
-      select: userSelect,
-    })
-    return { user, token: await issueToken(tx, id, 'invite') }
+  const user = await deps.db.user.findFirst({
+    where: { id, deletedAt: null },
+    select: { email: true, name: true, status: true },
   })
-  return sendInvite(deps, user, token, log)
+  if (!user) throw new NotFoundError()
+  if (user.status !== 'invited') throw new ConflictError(`${user.name} has already signed in.`)
+  return { accessEmailSent: await sendAccessEmail(deps, user, log) }
 }
 
 export async function updateUser(db: PrismaClient, id: string, patch: UserPatch) {
@@ -219,8 +225,22 @@ export async function inviteFirstAdmin(
     where: { email, deletedAt: null },
     select: { id: true, role: true },
   })
-  if (!existing) return createUser(deps, { ...input, role: 'admin', pocId: null }, log)
-  if (existing.role !== 'admin')
+  if (existing && existing.role !== 'admin')
     throw new ConflictError(`${email} already belongs to a ${existing.role} user.`)
-  return resendInvite(deps, existing.id, log)
+  const account = { email, name: input.name.trim(), role: 'admin' as const, pocId: null }
+  if (!existing) assertValid(validateAccount(account))
+  // The first admin chooses a password from an emailed link.
+  const { user, token } = await deps.db.$transaction(async (tx) => {
+    const user = existing
+      ? await tx.user.update({
+          where: { id: existing.id },
+          data: { status: 'invited' },
+          select: userSelect,
+        })
+      : await tx.user
+          .create({ data: { ...account, status: 'invited' }, select: userSelect })
+          .catch(rethrowDuplicateEmail)
+    return { user, token: await issueToken(tx, user.id, 'invite') }
+  })
+  return sendInvite(deps, user, token, log)
 }

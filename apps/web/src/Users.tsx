@@ -1,6 +1,6 @@
 import { useConfirm } from './ui'
 import { useState, type FormEvent } from 'react'
-import type { InviteResult, UserItem } from '@boat/domain/api'
+import type { InviteResult, ResendResult, UserItem } from '@boat/domain/api'
 import { roleInfo, roles } from '@boat/domain/permissions'
 import { validateAccount } from '@boat/domain/validation'
 import { Plus } from 'lucide-react'
@@ -50,11 +50,12 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
   const lookups = useLookups().data ?? []
   const [editing, setEditing] = useState<{ user: UserItem | null; form: UserForm } | null>(null)
   const form = useFormErrors()
-  const sent = (r: InviteResult) =>
+  // The access email is a courtesy: they sign in with Google either way.
+  const sent = (r: { accessEmailSent: boolean }) =>
     onMessage(
-      r.inviteEmailSent
-        ? `Invite sent to ${r.user.email}.`
-        : `${r.user.email} was invited, but the email didn't send. Use Resend invite to try again.`,
+      r.accessEmailSent
+        ? 'Access email sent.'
+        : `The access email could not be sent. Ask them to sign in at ${window.location.origin} with their company Google account.`,
     )
   const open = (user: UserItem | null) => {
     form.reset()
@@ -91,7 +92,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
     else onMessage(`${input.name} saved.`)
   }
   const resend = async (user: UserItem) => {
-    let result: InviteResult | undefined
+    let result: ResendResult | undefined
     const ok = await run(async () => {
       result = await resendInvite(user.id)
       await refreshUsers()

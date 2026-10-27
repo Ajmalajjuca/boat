@@ -40,17 +40,11 @@ export function usersRouter(deps: UsersDeps) {
   })
 
   router.post('/', requirePermission('manageSettings'), async (req, res) => {
-    const { user, inviteEmailSent } = await createUser(
-      deps,
-      parseInput(createBody, req.body),
-      req.log,
-    )
-    res.status(201).json({ user, inviteEmailSent })
+    res.status(201).json(await createUser(deps, parseInput(createBody, req.body), req.log))
   })
 
   router.post('/:id/invite', requirePermission('manageSettings'), async (req, res) => {
-    const { user, inviteEmailSent } = await resendInvite(deps, parseId(req.params.id), req.log)
-    res.json({ user, inviteEmailSent })
+    res.json(await resendInvite(deps, parseId(req.params.id), req.log))
   })
 
   router.patch('/:id', requirePermission('manageSettings'), async (req, res) => {

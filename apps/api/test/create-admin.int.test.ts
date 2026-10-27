@@ -21,7 +21,12 @@ beforeAll(async () => {
 })
 afterAll(() => close())
 
-const deps = () => ({ db, mailer: memoryMailer(), appUrl: 'https://boat.example.com' })
+const deps = () => ({
+  db,
+  mailer: memoryMailer(),
+  appUrl: 'https://boat.example.com',
+  allowedDomains: [],
+})
 const tokenIn = (link: string) => /#token=([\w-]+)/.exec(link)![1]
 
 // These run in order on one database: no admin, a pending admin, then an active one.

@@ -56,7 +56,7 @@ export function buildApiRouter(deps: ApiDeps) {
   api.use(loadSession({ db: deps.db, settings, sessionSecret: deps.sessionSecret }))
   mount(api, '/health', healthRouter(deps.checkDatabase))
   mount(api, '/auth', authRouter({ ...deps, settings }))
-  mount(api, '/users', usersRouter(deps))
+  mount(api, '/users', usersRouter({ ...deps, allowedDomains: deps.google?.allowedDomains ?? [] }))
   mount(api, '/settings', settingsRouter(settings))
   mount(api, '/lookups', lookupsRouter(deps.db))
   mount(api, '/products', productsRouter(deps.db))

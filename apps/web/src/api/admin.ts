@@ -1,6 +1,7 @@
 import type {
   ImportResult,
   InviteResult,
+  ResendResult,
   LookupItem,
   NewUser,
   Page,
@@ -30,7 +31,7 @@ const fields = { fields: userField }
 
 export const listUsers = () => api.get<Page<UserItem>>('/users?pageSize=200').then((r) => r.items)
 export const inviteUser = (input: NewUser) => api.post<InviteResult>('/users', input, fields)
-export const resendInvite = (id: string) => api.post<InviteResult>(`/users/${id}/invite`)
+export const resendInvite = (id: string) => api.post<ResendResult>(`/users/${id}/invite`)
 export const updateUser = (id: string, patch: UserPatch) =>
   api.patch<UserItem>(`/users/${id}`, patch, fields)
 export const deleteUser = (id: string) => api.delete(`/users/${id}`)
