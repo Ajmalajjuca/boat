@@ -234,10 +234,11 @@ describe('import edge cases', () => {
     moved.data.lots = moved.data.lots.filter((l) => l.id !== from)
     moved.data.grnReceipts = moved.data.grnReceipts.filter((r) => r.lotId !== from)
     expect((await importFile(moved, 'merge')).status).toBe(200)
-    expect(await db.lot.findUniqueOrThrow({ where: { id: from } })).toMatchObject({
-      grnTotal: 300,
-      completedOn: null,
-    })
+    // The GRN total drops, but the lot stays complete: completion follows its actual date.
+    const lot = await db.lot.findUniqueOrThrow({ where: { id: from } })
+    expect(lot.grnTotal).toBe(300)
+    expect(lot.completedOn).toEqual(lot.actualDate)
+    expect(lot.completedOn).not.toBeNull()
   })
   it('FR-7.1 records history for records an import or reset deletes or brings in', async () => {
     const { db, w, importFile } = await world()

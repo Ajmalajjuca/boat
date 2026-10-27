@@ -71,7 +71,13 @@ beforeAll(async () => {
   })
   const b1 = await lot('Bravo', { label: 'b1', plannedDate: day('2026-10-18'), lotQty: 200 })
   await receive(b1.id, 80)
-  const b2 = await lot('Bravo', { label: 'b2', plannedDate: day('2026-10-01'), lotQty: 30 })
+  // Complete by its actual date (FR-11.3), with its full GRN as before.
+  const b2 = await lot('Bravo', {
+    label: 'b2',
+    plannedDate: day('2026-10-01'),
+    lotQty: 30,
+    actualDate: day('2026-10-10'),
+  })
   await receive(b2.id, 30)
   const gone = await lot('Charlie', { label: 'deleted lot' })
   await db.lot.update({ where: { id: gone.id }, data: { deletedAt: new Date() } })

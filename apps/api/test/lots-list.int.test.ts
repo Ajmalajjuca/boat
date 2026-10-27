@@ -84,7 +84,10 @@ beforeAll(async () => {
   await withComponents('kit only', { [L.kit.id]: 100 })
   await withComponents('components received', { [L.pcb.id]: 100, [L.enclosure.id]: 120 })
   await withComponents('enclosure short', { [L.pcb.id]: 100, [L.enclosure.id]: 40 })
-  const done = await lot('completed', { plannedDate: day('2026-10-01') })
+  const done = await lot('completed', {
+    plannedDate: day('2026-10-01'),
+    actualDate: day('2026-10-05'),
+  })
   await db.grnReceipt.create({
     data: { lotId: done.id, label: 'G', date: day('2026-10-05'), quantity: 100 },
   })
@@ -233,7 +236,7 @@ describe('GET /lots/summary', () => {
 })
 
 describe('GET /lots/export.csv', () => {
-  it('FR-2.5 exports the filtered rows with the demo columns', async () => {
+  it('FR-2.5 exports the filtered rows without the hidden GRN and rework columns', async () => {
     const res = await w.viewer.agent.get('/api/v1/lots/export.csv?q=follow-up')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/^text\/csv/)
@@ -243,7 +246,7 @@ describe('GET /lots/export.csv', () => {
     )
     const lines = res.text.trimEnd().split('\r\n')
     expect(lines[0]).toBe(
-      '"Product","Variant","Segment","Lot","Status","StatusSummary","Category","EMS","POC","Stage","Mode","LotQty","Produced","Rework","GRN","Balance","RMReadyPercent","PlannedDate","CurrentETA","Blocker","FollowUp","FullGRNDate","DaysVsPlan","RMToGRNDays"',
+      '"Product","Variant","Segment","Lot","Status","StatusSummary","Category","EMS","POC","Stage","Mode","LotQty","RMReadyPercent","PlannedDate","CurrentETA","ActualDate","Blocker","FollowUp","DaysVsPlan","RMToActualDays"',
     )
     expect(lines).toHaveLength(3)
   })

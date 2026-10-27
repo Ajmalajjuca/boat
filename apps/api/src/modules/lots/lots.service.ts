@@ -261,7 +261,14 @@ async function syncComponents(db: Db, user: SessionUser, current: LotRow, ids: s
 
 export async function createLot({ db, clock }: RecordsDeps, user: SessionUser, input: LotInput) {
   const id = randomUUID()
-  const clean = { ...input, componentIds: [...new Set(input.componentIds)] }
+  // Rework and fresh production are hidden, so a new lot starts with none.
+  const clean = {
+    ...input,
+    freshProductionQty: 0,
+    reworkQty: 0,
+    reworkReason: '',
+    componentIds: [...new Set(input.componentIds)],
+  }
   const date = await clock.today()
   await db.$transaction(async (tx) => {
     await holdDataLockShared(tx)
@@ -291,7 +298,14 @@ export async function updateLot(
   const date = await clock.today()
   await db.$transaction(async (tx) => {
     const current = await lockLotForEdit(tx, user, id)
-    const { version, ...changes } = patch
+    // Rework and fresh production are hidden: a write keeps their stored values.
+    const {
+      version,
+      freshProductionQty: _fresh,
+      reworkQty: _rework,
+      reworkReason: _reason,
+      ...changes
+    } = patch
     if (version !== current.version)
       throw new ConflictError(
         'Someone else changed this lot. Review their changes and try again.',
@@ -374,18 +388,14 @@ const csvHeaders = [
   'Stage',
   'Mode',
   'LotQty',
-  'Produced',
-  'Rework',
-  'GRN',
-  'Balance',
   'RMReadyPercent',
   'PlannedDate',
   'CurrentETA',
+  'ActualDate',
   'Blocker',
   'FollowUp',
-  'FullGRNDate',
   'DaysVsPlan',
-  'RMToGRNDays',
+  'RMToActualDays',
 ]
 const csvRow = (v: LotView) => ({
   Product: v.product.name,
@@ -400,18 +410,15 @@ const csvRow = (v: LotView) => ({
   Stage: v.stage.value,
   Mode: v.logistics?.value ?? '',
   LotQty: v.lotQty,
-  Produced: v.freshProductionQty,
-  Rework: v.reworkQty,
-  GRN: v.computed.grnTotal,
-  Balance: v.computed.balance,
+  // GRN, rework and fresh production are hidden; the actual date marks completion (FR-11.3).
   RMReadyPercent: Math.round(v.computed.rm.percent),
   PlannedDate: v.plannedDate ?? '',
   CurrentETA: v.revisedEta ?? v.plannedDate ?? '',
+  ActualDate: v.actualDate ?? '',
   Blocker: v.blocker?.value ?? '',
   FollowUp: v.followUpDate ?? '',
-  FullGRNDate: v.computed.fullGrnDate ?? '',
   DaysVsPlan: v.computed.planDelay ?? '',
-  RMToGRNDays: v.computed.leadTime ?? '',
+  RMToActualDays: v.computed.leadTime ?? '',
 })
 
 // Every matching lot, loaded 500 at a time.

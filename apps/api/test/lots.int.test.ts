@@ -67,9 +67,6 @@ describe('creating lots', () => {
       rmMode: 'components',
       componentIds: [w.lookups.pcb.id, w.lookups.enclosure.id],
       lotQty: 500,
-      freshProductionQty: 120,
-      reworkQty: 20,
-      reworkReason: 'Solder ',
       rmReadyDate: '2026-10-16',
       plannedDate: '2026-10-20',
       revisedEta: '2026-10-24',
@@ -90,9 +87,6 @@ describe('creating lots', () => {
         { id: w.lookups.enclosure.id, value: 'Enclosure' },
         { id: w.lookups.pcb.id, value: 'PCB' },
       ],
-      freshProductionQty: 120,
-      reworkQty: 20,
-      reworkReason: 'Solder',
       rmReadyDate: '2026-10-16',
       plannedDate: '2026-10-20',
       revisedEta: '2026-10-24',
@@ -294,7 +288,8 @@ describe('editing lots', () => {
       (await w.planner.send('patch', `/api/v1/lots/${created.body.id}`, { lotQty: 60, version: 1 }))
         .status,
     ).toBe(200)
-    expect((await detail(created.body.id)).completedOn).toBe('2026-10-10')
+    // Full GRN no longer completes a lot; only the actual date does (FR-11.3).
+    expect((await detail(created.body.id)).completedOn).toBeNull()
   })
   it('FR-3.3 keeps a component selected while it has batches', async () => {
     const created = await create({
@@ -360,6 +355,40 @@ describe('deleting lots', () => {
       (await w.admin.send('patch', `/api/v1/lots/${created.body.id}`, { lotQty: 1, version: 1 }))
         .status,
     ).toBe(404)
+  })
+})
+
+describe('hidden fields', () => {
+  it('ignores rework and fresh production on writes and keeps stored values', async () => {
+    const lot = await makeLot(db, {
+      productId: w.product.id,
+      freshProductionQty: 5,
+      reworkQty: 3,
+      reworkReason: 'old',
+    })
+    const res = await w.planner.send('patch', `/api/v1/lots/${lot.id}`, {
+      version: lot.version,
+      reworkQty: 9,
+      freshProductionQty: 9,
+      reworkReason: 'new',
+    })
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ reworkQty: 3, freshProductionQty: 5, reworkReason: 'old' })
+  })
+})
+
+describe('completion', () => {
+  it('FR-11.3 setting the actual date completes the lot and clearing it reopens it', async () => {
+    const id = (await create()).body.id
+    let res = await w.planner.send('patch', `/api/v1/lots/${id}`, {
+      version: 1,
+      actualDate: '2026-10-15',
+    })
+    expect(res.body).toMatchObject({ completedOn: '2026-10-15', computed: { completed: true } })
+    const listed = await w.admin.agent.get('/api/v1/lots?view=completed&pageSize=200')
+    expect(listed.body.items.map((l: { id: string }) => l.id)).toContain(id)
+    res = await w.planner.send('patch', `/api/v1/lots/${id}`, { version: 2, actualDate: null })
+    expect(res.body).toMatchObject({ completedOn: null, computed: { completed: false } })
   })
 })
 

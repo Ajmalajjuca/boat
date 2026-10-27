@@ -33,17 +33,16 @@ export async function lockLotForEdit(db: Db, user: SessionUser, id: string) {
   return lot
 }
 
-// FR-4.3: keeps grn_total and completed_on in step with the lot's active receipts. A lot is
-// complete when its quantity is above zero and every unit has been received; the full-GRN date
-// is the latest receipt's date. Editing or deleting a receipt, or raising the lot quantity,
-// clears it. Call it after the change, inside the same transaction.
+// Keeps grn_total in step with the lot's active receipts and completed_on with its actual date:
+// a lot is complete once its actual date is set (FR-11.3), whatever GRN says. Call it after a
+// change to the lot or its receipts, inside the same transaction.
 export async function refreshCompletion(db: Db, lotId: string) {
   await db.$executeRaw`
     UPDATE lots l
     SET grn_total = s.total,
-        completed_on = CASE WHEN l.lot_qty > 0 AND s.total = l.lot_qty THEN s.last END
+        completed_on = l.actual_date
     FROM (
-      SELECT COALESCE(SUM(quantity), 0)::int AS total, MAX(date) AS last
+      SELECT COALESCE(SUM(quantity), 0)::int AS total
       FROM grn_receipts
       WHERE lot_id = ${lotId}::uuid AND deleted_at IS NULL
     ) s

@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PrismaClient } from '../src/generated/prisma/client'
 import { createTestDatabase } from './support/db'
 import {
-  day,
   fixedNow,
   lotBody,
   makeRecordsWorld,
@@ -113,51 +112,18 @@ describe('posting receipts', () => {
   })
 })
 
-describe('completion', () => {
-  it('FR-4.3 completes the lot at full GRN and reverses when a receipt is edited or deleted', async () => {
+describe('GRN totals', () => {
+  // Full GRN used to complete a lot (FR-4.3); completion now follows the actual date (FR-11.3).
+  it('FR-4.4 shows the GRN total, balance and full-GRN date, but leaves the lot open', async () => {
     const lot = await newLot({ lotQty: 100 })
     await receive(w.planner, lot.id, 40, '2026-10-05', 'GRN 1')
     const last = await receive(w.planner, lot.id, 60, '2026-10-12', 'GRN 2')
     expect(await detail(lot.id)).toMatchObject({
-      completedOn: '2026-10-12',
-      computed: { completed: true },
-    })
-    const completed = await w.viewer.agent.get('/api/v1/lots?view=completed&pageSize=200')
-    expect(completed.body.items.map((i: { id: string }) => i.id)).toContain(lot.id)
-
-    await w.planner.send('patch', `/api/v1/grn-receipts/${last.body.id}`, { quantity: 50 })
-    expect(await detail(lot.id)).toMatchObject({
       completedOn: null,
-      computed: { completed: false },
+      computed: { completed: false, grnTotal: 100, balance: 0, fullGrnDate: '2026-10-12' },
     })
-    await w.planner.send('patch', `/api/v1/grn-receipts/${last.body.id}`, { quantity: 60 })
-    expect((await detail(lot.id)).completedOn).toBe('2026-10-12')
     await w.planner.send('delete', `/api/v1/grn-receipts/${last.body.id}`)
-    expect(await detail(lot.id)).toMatchObject({ completedOn: null, computed: { grnTotal: 40 } })
-  })
-  it('FR-4.3 reverses completion when the lot quantity is raised', async () => {
-    const lot = await newLot({ lotQty: 50 })
-    await receive(w.planner, lot.id, 50)
-    expect((await detail(lot.id)).completedOn).toBe('2026-10-10')
-    const res = await w.planner.send('patch', `/api/v1/lots/${lot.id}`, { lotQty: 80, version: 1 })
-    expect(res.body).toMatchObject({
-      completedOn: null,
-      computed: { completed: false, balance: 30 },
-    })
-  })
-  it('FR-4.4 shows the full-GRN date, days against plan and RM-to-GRN lead time', async () => {
-    const lot = await newLot({ lotQty: 100 })
-    // Past forecast dates, set directly: the API only accepts them while they are in the future.
-    await db.lot.update({
-      where: { id: lot.id },
-      data: { plannedDate: day('2026-10-10'), rmReadyDate: day('2026-10-01') },
-    })
-    await receive(w.planner, lot.id, 100, '2026-10-12')
-    expect((await detail(lot.id)).computed).toMatchObject({
-      fullGrnDate: '2026-10-12',
-      planDelay: 2,
-      leadTime: 11,
-    })
+    expect((await detail(lot.id)).computed).toMatchObject({ grnTotal: 40, fullGrnDate: null })
   })
 })
 
