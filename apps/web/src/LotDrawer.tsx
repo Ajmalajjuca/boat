@@ -1,6 +1,6 @@
 import { LoadingState } from './ui'
 import { useConfirm } from './ui'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowRight,
   CheckCircle2,
@@ -50,6 +50,7 @@ import {
   Field,
   Input,
   Modal,
+  SavingContext,
   SearchSelect,
   Select,
   Sheet,
@@ -162,6 +163,10 @@ function LotEditor({
     )
   // The component ticked last, which a new batch starts with.
   const lastTicked = useRef('')
+  // "Add batch" may save the lot, so it waits while another save is on its way, including the
+  // moment after a lot save lands and before its new version is adopted.
+  const saving = useContext(SavingContext),
+    [savingLot, setSavingLot] = useState(false)
   const [batch, setBatch] = useState<RMBatch | null>(null),
     [receipt, setReceipt] = useState<GRNReceipt | null>(null),
     [note, setNote] = useState('')
@@ -226,6 +231,14 @@ function LotEditor({
   // True when the lot saved and this drawer stays open on it. A new lot reopens by id instead,
   // carrying options to the reopened drawer.
   const save = async (closeAfter = false, options?: OpenOptions) => {
+    setSavingLot(true)
+    try {
+      return await saveDraft(closeAfter, options)
+    } finally {
+      setSavingLot(false)
+    }
+  }
+  const saveDraft = async (closeAfter: boolean, options?: OpenOptions) => {
     const found = validateLot(draft, !stored, view?.lot ?? null)
     if (!lotForm.check(found)) {
       showTabFor(found)
@@ -857,7 +870,12 @@ function LotEditor({
                 <Button
                   size="sm"
                   onClick={() => void addBatch()}
-                  disabled={draft.rmMode !== 'components' || !draft.rmComponents.length}
+                  disabled={
+                    saving ||
+                    savingLot ||
+                    draft.rmMode !== 'components' ||
+                    !draft.rmComponents.length
+                  }
                 >
                   <Plus size={14} /> Add batch
                 </Button>
