@@ -1,6 +1,6 @@
 import { LoadingState } from './ui'
 import { useConfirm } from './ui'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowRight,
   CheckCircle2,
@@ -67,12 +67,15 @@ import {
 } from '@boat/domain/validation'
 import { type LotAccess, roleInfo, useAccess } from './access'
 
-export type LotTarget = { id: string } | { draft: Lot }
+// addBatch opens the material batch form once the lot has loaded, for "Add batch" on a new lot.
+// It names the component to start with; empty starts with the first one.
+export type LotTarget = { id: string; addBatch?: string } | { draft: Lot }
+type OpenOptions = { addBatch?: string }
 type Props = {
   target: LotTarget
   onClose: () => void
   // A new lot reopens by id after its first save.
-  onOpen: (id: string) => void
+  onOpen: (id: string, options?: OpenOptions) => void
   // The lot was deleted by someone else.
   onGone: () => void
   run: Run
@@ -81,6 +84,7 @@ type EditorProps = Omit<Props, 'target'> & {
   view: LotView | null
   initial: Lot
   lookups: LookupItem[]
+  addBatchOnOpen?: string
 }
 // Fields edited on the Overview tab; a failed save switches there so the error is visible.
 const overviewFields = [
@@ -95,6 +99,10 @@ const overviewFields = [
   'freshProductionQty',
   'reworkQty',
   'readyQty',
+  'rmReadyDate',
+  'plannedDate',
+  'revisedEta',
+  'actualDate',
   'logisticsMode',
   'blockerCategory',
 ]
@@ -109,7 +117,15 @@ export default function LotDrawer({ target, ...props }: Props) {
   if (lookups && 'draft' in target)
     return <LotEditor view={null} initial={target.draft} lookups={lookups} {...props} />
   if (lookups && detail.data)
-    return <LotEditor view={detail.data} initial={detail.data.lot} lookups={lookups} {...props} />
+    return (
+      <LotEditor
+        view={detail.data}
+        initial={detail.data.lot}
+        lookups={lookups}
+        addBatchOnOpen={'id' in target ? target.addBatch : undefined}
+        {...props}
+      />
+    )
   return (
     <Sheet
       open
@@ -127,12 +143,25 @@ export default function LotDrawer({ target, ...props }: Props) {
   )
 }
 
-function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: EditorProps) {
+function LotEditor({
+  view,
+  initial,
+  lookups,
+  addBatchOnOpen,
+  onClose,
+  onOpen,
+  onGone,
+  run,
+}: EditorProps) {
   const confirm = useConfirm()
   const [draft, setDraft] = useState<Lot & { version?: number }>(initial),
     [baseline, setBaseline] = useState(JSON.stringify(initial)),
     [conflict, setConflict] = useState<LotView | null>(null),
-    [tab, setTab] = useState<'overview' | 'rm' | 'grn' | 'history'>('overview')
+    [tab, setTab] = useState<'overview' | 'rm' | 'grn' | 'history'>(
+      addBatchOnOpen ? 'rm' : 'overview',
+    )
+  // The component ticked last, which a new batch starts with.
+  const lastTicked = useRef('')
   const [batch, setBatch] = useState<RMBatch | null>(null),
     [receipt, setReceipt] = useState<GRNReceipt | null>(null),
     [note, setNote] = useState('')
@@ -194,9 +223,14 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     lotForm.fail(e)
     showTabFor(fieldErrors(e))
   }
-  const save = async (closeAfter = false) => {
-    const found = validateLot(draft, !stored)
-    if (!lotForm.check(found)) return showTabFor(found)
+  // True when the lot saved and this drawer stays open on it. A new lot reopens by id instead,
+  // carrying options to the reopened drawer.
+  const save = async (closeAfter = false, options?: OpenOptions) => {
+    const found = validateLot(draft, !stored, view?.lot ?? null)
+    if (!lotForm.check(found)) {
+      showTabFor(found)
+      return false
+    }
     let saved: LotView | undefined
     const sent = draft
     const ok = await run(async () => {
@@ -204,13 +238,20 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
       queryClient.setQueryData(lotKey(saved.lot.id), saved)
       await refreshLots()
     }, failed)
-    if (!ok || !saved) return
-    if (closeAfter) return onClose()
-    if (!view) return onOpen(saved.lot.id)
+    if (!ok || !saved) return false
+    if (closeAfter) {
+      onClose()
+      return false
+    }
+    if (!view) {
+      onOpen(saved.lot.id, options)
+      return false
+    }
     // Edits typed while the save was on its way stay, with the new version for their own save.
     const next = saved.lot
     setDraft((d) => (d === sent ? next : { ...d, version: next.version }))
     setBaseline(JSON.stringify(next))
+    return true
   }
   const remove = async () => {
     if (!stored) {
@@ -229,13 +270,15 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     }, failed)
     if (removed) onClose()
   }
-  const openBatch = (value?: RMBatch) => {
+  const openBatch = (value?: RMBatch, component = lastTicked.current) => {
     batchForm.reset()
     setBatch(
       value ||
         stamp({
           lotId: draft.id,
-          component: draft.rmComponents[0] || '',
+          component: draft.rmComponents.includes(component)
+            ? component
+            : draft.rmComponents[0] || '',
           label: '',
           plannedQty: 0,
           plannedDate: '',
@@ -246,6 +289,15 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
         }),
     )
   }
+  // "Add batch" saves a new or edited lot first, so the batch belongs to the lot as it stands.
+  const addBatch = async () => {
+    if (stored && !dirty) return openBatch()
+    if (await save(false, { addBatch: lastTicked.current })) openBatch()
+  }
+  // A new lot saved through "Add batch" reopens here with the batch form open.
+  useEffect(() => {
+    if (addBatchOnOpen !== undefined) openBatch(undefined, addBatchOnOpen)
+  }, [])
   const openReceipt = (value?: GRNReceipt) => {
     receiptForm.reset()
     setReceipt(value || stamp({ lotId: draft.id, label: '', date: today(), quantity: 0, note: '' }))
@@ -269,7 +321,8 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     e.preventDefault()
     if (!batch) return
     const existing = bs.some((b) => b.id === batch.id)
-    if (!batchForm.check(validateBatch(batch, undefined, !existing))) return
+    const previous = bs.find((b) => b.id === batch.id) ?? null
+    if (!batchForm.check(validateBatch(batch, undefined, !existing, previous))) return
     const ok = await run(async () => {
       await saveBatch(draft.id, batch, lookups, existing)
       await refreshLots()
@@ -288,13 +341,15 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
     }, entryFailed(receiptForm))
     if (ok) setReceipt(null)
   }
-  const toggleComponent = (component: string) =>
+  const toggleComponent = (component: string) => {
+    if (!draft.rmComponents.includes(component)) lastTicked.current = component
     update(
       'rmComponents',
       draft.rmComponents.includes(component)
         ? draft.rmComponents.filter((c) => c !== component)
         : [...draft.rmComponents, component],
     )
+  }
   const stats = useMemo(
     () => [
       { label: 'Lot quantity', value: quantity(draft.lotQty), icon: ClipboardList },
@@ -591,6 +646,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label="RM ready date at factory"
+                  error={lotForm.errors.rmReadyDate}
                   help={
                     draft.rmMode === 'components'
                       ? 'Leave blank to use the date the last required component was fully received.'
@@ -603,14 +659,18 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                     onChange={(e) => update('rmReadyDate', e.target.value)}
                   />
                 </Field>
-                <Field label="Planned completion / WH receipt" locked={planLocked && !readOnly}>
+                <Field
+                  label="Planned completion / WH receipt"
+                  locked={planLocked && !readOnly}
+                  error={lotForm.errors.plannedDate}
+                >
                   <Input
                     type="date"
                     value={draft.plannedDate}
                     onChange={(e) => update('plannedDate', e.target.value)}
                   />
                 </Field>
-                <Field label="Current revised ETA">
+                <Field label="Current revised ETA" error={lotForm.errors.revisedEta}>
                   <Input
                     type="date"
                     value={draft.revisedEta}
@@ -619,6 +679,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                 </Field>
                 <Field
                   label="Actual date"
+                  error={lotForm.errors.actualDate}
                   help="Optional note. Completion timing is measured from the full GRN date."
                 >
                   <Input
@@ -792,11 +853,6 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                     {lotForm.errors.rmComponents}
                   </p>
                 )}
-                {dirty && (
-                  <p className="mt-3 text-xs text-amber-700">
-                    Save lot changes before adding a material batch.
-                  </p>
-                )}
               </fieldset>
             </Card>
             <div className="flex items-center justify-between">
@@ -804,10 +860,8 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
               {!readOnly && (
                 <Button
                   size="sm"
-                  onClick={() => openBatch()}
-                  disabled={
-                    !stored || draft.rmMode !== 'components' || dirty || !draft.rmComponents.length
-                  }
+                  onClick={() => void addBatch()}
+                  disabled={draft.rmMode !== 'components' || !draft.rmComponents.length}
                 >
                   <Plus size={14} /> Add batch
                 </Button>
@@ -1074,7 +1128,7 @@ function LotEditor({ view, initial, lookups, onClose, onOpen, onGone, run }: Edi
                   onChange={(e) => editBatch({ receivedQty: number(e.target.value) })}
                 />
               </Field>
-              <Field label="Planned date">
+              <Field label="Planned date" error={batchForm.errors.plannedDate}>
                 <Input
                   type="date"
                   value={batch.plannedDate}

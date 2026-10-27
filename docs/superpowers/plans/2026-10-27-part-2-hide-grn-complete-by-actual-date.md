@@ -17,7 +17,7 @@
 - Turning GRN back on restores its screens and routes, but **not** GRN-based completion.
 - A lot is complete exactly when `actualDate` is non-empty.
 - Month-end: Planned = lots whose original planned date is in the month. Completed = those with `actualDate <= monthEnd(month)`, counting the full `lotQty`. Shortfall = `lotQty` of planned lots not completed by month-end. No `grnInMonth`.
-- New integration test ids: `FR-10.3` (completion follows actual date) and `FR-10.4` (GRN switch). `FR-4.3` (GRN completion) leaves `required` in `apps/api/src/fr-coverage.test.ts`. `FR-4.1`, `FR-4.2`, `FR-4.4` and `FR-2.4` stay, with their tests run against an app built with GRN on.
+- New integration test ids: `FR-11.3` (completion follows actual date) and `FR-11.4` (GRN switch). `FR-4.3` (GRN completion) leaves `required` in `apps/api/src/fr-coverage.test.ts`. `FR-4.1`, `FR-4.2`, `FR-4.4` and `FR-2.4` stay, with their tests run against an app built with GRN on.
 - Work on a branch, e.g. `client-feedback-part-2`. Run `pnpm format` before each commit.
 
 ## Review Focus
@@ -50,7 +50,7 @@
 - [ ] **Step 1: Write the failing tests** in `calculations.test.ts`. Replace the receipt-based cases for these functions:
 
 ```ts
-it('FR-10.3 a lot is complete once its actual date is set', () => {
+it('FR-11.3 a lot is complete once its actual date is set', () => {
   expect(isCompleted(makeLot({ actualDate: '' }))).toBe(false)
   expect(isCompleted(makeLot({ actualDate: '2026-10-10' }))).toBe(true)
   expect(lotFlags(makeLot({ actualDate: '2026-10-10', plannedDate: '2026-10-01' }), '2026-10-14').overdue).toBe(false)
@@ -103,7 +103,7 @@ git commit -m "Complete lots by actual date in the domain"
 
 ```ts
 // grn-receipts.int.test.ts, a second app built with the default deps
-it('FR-10.4 GRN routes are off unless FEATURE_GRN is on', async () => {
+it('FR-11.4 GRN routes are off unless FEATURE_GRN is on', async () => {
   const off = testApp(db, { now: fixedNow })
   const admin = await signIn(off, w.adminEmail) // use the world's admin sign-in helper as other tests do
   expect((await admin.agent.get(`/api/v1/lots/${lotId}/grn-receipts`)).status).toBe(404)
@@ -123,7 +123,7 @@ Use the sign-in helper and the lot set-up already used at the top of `grn-receip
 Run: `pnpm --filter @boat/api test -- config && pnpm --filter @boat/api test:int -- grn-receipts`
 Expected: FAIL. The route answers 200, and `features` and `FEATURE_GRN` are undefined.
 
-- [ ] **Step 3: Implement** the switch as described under Files. `FR-10.4` goes into `required` in `fr-coverage.test.ts`.
+- [ ] **Step 3: Implement** the switch as described under Files. `FR-11.4` goes into `required` in `fr-coverage.test.ts`.
 
 - [ ] **Step 4: Run all API tests**
 
@@ -144,7 +144,7 @@ git commit -m "Put GRN receipts behind FEATURE_GRN, off by default"
 - Modify: `apps/api/src/modules/lots/lot-lock.ts`, where `refreshCompletion` keeps updating `grn_total` from receipts and sets `completed_on = l.actual_date`. Update its comment.
 - Modify: `apps/api/src/modules/lots/lot-view.ts` (`computeLot` L106-125 calls the Task 1 signatures, and keeps `grnTotal`, `balance`, `grnPercent`, `fullGrnDate` computed from receipts so the JSON shape is unchanged)
 - Modify: `apps/api/src/modules/lots/lots.service.ts`: the `lotQty < grnTotal` guard (L305) runs only when `features.grn`. `RecordsDeps` in `core/clock.ts` gains `features: { grn: boolean }`, set where `records` is built in `api.ts`; `lotData`/`inputOf`/`LotInput` stop reading and writing `freshProductionQty`, `reworkQty`, `reworkReason`; in `lots.router.ts` those three keys stay in the strict body schemas as `.optional()` and are ignored until Task 5 removes them; `csvRow` drops `Produced`, `Rework`, `GRN`, `Balance`, `FullGRNDate`, and renames `RMToGRNDays` to `RMToActualDays`
-- Modify: `apps/api/src/fr-coverage.test.ts` (remove `'FR-4.3'`, add `'FR-10.3'`)
+- Modify: `apps/api/src/fr-coverage.test.ts` (remove `'FR-4.3'`, add `'FR-11.3'`)
 - Test: `apps/api/test/lots.int.test.ts`, `apps/api/test/lots-list.int.test.ts`, `apps/api/test/database.int.test.ts` (migration), `apps/api/test/data-import.int.test.ts`. Delete or retitle the existing `FR-4.3` tests and the GRN-completion case in `completion`-related tests.
 
 **Interfaces:**
@@ -154,7 +154,7 @@ git commit -m "Put GRN receipts behind FEATURE_GRN, off by default"
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-it('FR-10.3 setting the actual date completes the lot and clearing it reopens it', async () => {
+it('FR-11.3 setting the actual date completes the lot and clearing it reopens it', async () => {
   const id = (await create({})).body.id
   let res = await w.planner.send('patch', `/api/v1/lots/${id}`, { version: 1, actualDate: '2026-10-15' })
   expect(res.body).toMatchObject({ completedOn: '2026-10-15', computed: { completed: true } })
@@ -172,7 +172,7 @@ it('allows lowering lot quantity below old receipts while GRN is off', async () 
 For the migration, in `database.int.test.ts` (or a new `complete-by-actual-date.int.test.ts`), run the migration SQL file against seeded rows and assert:
 
 ```ts
-it('FR-10.3 backfills the actual date of lots that finished through GRN', async () => {
+it('FR-11.3 backfills the actual date of lots that finished through GRN', async () => {
   // before: lot A completed_on '2026-09-30', actual_date NULL; lot B actual_date '2026-10-01', completed_on NULL
   // after:  A.actual_date '2026-09-30', A.completed_on '2026-09-30'; B.completed_on '2026-10-01'
   // and one activity_logs row for A: kind 'updated', message 'Actual date set from the full GRN date', actor_id NULL

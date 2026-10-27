@@ -105,7 +105,7 @@ describe('validateLot', () => {
 
 describe('date rules', () => {
   const lotOn = (o: Partial<Lot>) => makeLot({ plannedDate: '', ...o })
-  it('FR-10.1 keeps forecast dates on or after today', () => {
+  it('FR-11.1 keeps forecast dates on or after today', () => {
     const e = validateLot(
       lotOn({ rmReadyDate: '2026-10-13', plannedDate: '2026-10-13', revisedEta: '2026-10-13' }),
       false,
@@ -119,13 +119,13 @@ describe('date rules', () => {
       validateLot(lotOn({ rmReadyDate: TODAY, plannedDate: TODAY }), false, null, TODAY),
     ).toEqual({})
   })
-  it('FR-10.1 keeps the actual date on or before today', () => {
+  it('FR-11.1 keeps the actual date on or before today', () => {
     expect(validateLot(lotOn({ actualDate: '2026-10-15' }), false, null, TODAY).actualDate).toBe(
       'Actual date cannot be in the future.',
     )
     expect(validateLot(lotOn({ actualDate: '2026-01-02' }), false, null, TODAY)).toEqual({})
   })
-  it('FR-10.1 keeps planned completion and revised ETA on or after RM ready', () => {
+  it('FR-11.1 keeps planned completion and revised ETA on or after RM ready', () => {
     const e = validateLot(
       lotOn({ rmReadyDate: '2026-10-20', plannedDate: '2026-10-18', revisedEta: '2026-10-19' }),
       false,
@@ -135,7 +135,7 @@ describe('date rules', () => {
     expect(e.plannedDate).toBe('Planned completion cannot be before the RM ready date.')
     expect(e.revisedEta).toBe('Current revised ETA cannot be before the RM ready date.')
   })
-  it('FR-10.1 only checks a forecast date that is new or changed', () => {
+  it('FR-11.1 only checks a forecast date that is new or changed', () => {
     const stored = lotOn({
       rmReadyDate: '2026-09-01',
       plannedDate: '2026-09-10',
@@ -150,7 +150,7 @@ describe('date rules', () => {
     const stored = lotOn({ plannedDate: '2026-09-10' })
     expect(validateLot({ ...stored, plannedDate: '' }, false, stored, TODAY)).toEqual({})
   })
-  it('FR-10.2 keeps a new or changed batch planned date on or after today', () => {
+  it('FR-11.2 keeps a new or changed batch planned date on or after today', () => {
     expect(validateBatch(makeBatch({ plannedDate: '2026-10-13' }), TODAY).plannedDate).toBe(
       'Planned date cannot be before today.',
     )

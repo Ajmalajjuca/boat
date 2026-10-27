@@ -109,7 +109,8 @@ export default async function globalSetup() {
     await invited.ctx.dispose()
   }
   await admin.dispose()
-  writeFileSync(path.join(runDir, 'seeded.json'), JSON.stringify({ pocId: poc.id }))
+  // ownerUrl lets the seeder set past forecast dates the API refuses (see seed.ts).
+  writeFileSync(path.join(runDir, 'seeded.json'), JSON.stringify({ pocId: poc.id, ownerUrl }))
 
   return async () => {
     server.kill()

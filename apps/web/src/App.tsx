@@ -593,7 +593,7 @@ function Workspace({ me }: { me: MePayload }) {
               key={'id' in lotTarget ? lotTarget.id : 'new'}
               target={lotTarget}
               onClose={() => setLotTarget(null)}
-              onOpen={(id) => setLotTarget({ id })}
+              onOpen={(id, options) => setLotTarget({ id, ...options })}
               onGone={() => {
                 setLotTarget(null)
                 setSaveState('idle')

@@ -18,7 +18,7 @@
 - New env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ALLOWED_DOMAINS` (comma-separated, lower-cased), and `GOOGLE_ISSUER` (default `https://accounts.google.com`, overridden only by tests). The redirect URI is `${APP_URL}/api/v1/auth/google/callback`. Production requires the three Google vars, and an `https` issuer.
 - Pin new dependencies to exact versions, as the repo does: `pnpm --filter @boat/api add openid-client@6`, then replace the caret with the installed version.
 - Every new route uses `publicRoute()` and gets a row in the route table in `apps/api/src/api.test.ts`.
-- New integration test ids: `FR-10.5` (Google sign-in rules) and `FR-10.6` (backup admin is the only password account). Add both to `required` in `fr-coverage.test.ts`.
+- New integration test ids: `FR-11.5` (Google sign-in rules) and `FR-11.6` (backup admin is the only password account). Add both to `required` in `fr-coverage.test.ts`.
 - The access email (exact copy): subject `You've been given access to BOAT`, body `Hi {name},\n\nYou've been given access to BOAT. Sign in with your company Google account at {APP_URL}.\n`
 - Sign-in error copy, keyed by the `?error=` code: `not_added` → "This Google account hasn't been given access. Ask your admin to add you." · `domain` → "Sign in with your company Google account." · `unverified` → "Google hasn't verified this email address." · `disabled` → "This account is disabled. Ask your admin." · `failed` → "Google sign-in didn't complete. Try again."
 - Work on a branch, e.g. `client-feedback-part-3`. Run `pnpm format` before each commit.
@@ -41,7 +41,7 @@
 - Modify: `apps/api/package.json` (`openid-client` dependency; `@boat/oidc-stub: workspace:*` devDependency), `apps/api/src/config.ts`, `apps/api/src/api.ts` (`ApiDeps.google: GoogleSignIn | null`), `apps/api/src/server.ts`, `apps/api/src/test-deps.ts`, `apps/api/test/support/fixtures.ts` (`testApp` accepts `google`)
 - Modify: `apps/api/src/modules/auth/auth.service.ts` (add `signInWithGoogle`), `auth.router.ts` (three routes), `sessions.ts` (`authContext` selects `passwordLogin` into `auth.user`)
 - Modify: `apps/api/prisma/schema.prisma` (`User.passwordLogin Boolean @default(false) @map("password_login")`), plus a new migration `20261027010000_password_login/migration.sql` that only adds the column (Task 3 adds the data change)
-- Modify: `apps/api/src/api.test.ts` (route rows), `apps/api/src/fr-coverage.test.ts` (`'FR-10.5'`)
+- Modify: `apps/api/src/api.test.ts` (route rows), `apps/api/src/fr-coverage.test.ts` (`'FR-11.5'`)
 - Test: `apps/api/test/google-sign-in.int.test.ts`, `apps/api/src/config.test.ts`
 
 **Interfaces:**
@@ -61,7 +61,7 @@
 - [ ] **Step 1: Write the failing tests.** Start the stub in `beforeAll`, and build the app with `google: createGoogleSignIn({ issuer: stub.issuer, clientId: 'test', clientSecret: 'secret', redirectUri: 'http://127.0.0.1/api/v1/auth/google/callback', allowedDomains: ['company.test'] })`. Write a helper `googleSignIn(agent, email, extra = '')`: GET `/api/v1/auth/google/start`, `fetch` the `location` plus `&email=…${extra}` with `redirect: 'manual'`, then `agent.get` the callback's path and query. It returns the final response.
 
 ```ts
-it('FR-10.5 signs in an added user on the allowed domain and activates them', async () => {
+it('FR-11.5 signs in an added user on the allowed domain and activates them', async () => {
   const user = await makeUser(db, { email: 'jash@company.test', status: 'invited', passwordHash: null })
   const agent = request.agent(app)
   const res = await googleSignIn(agent, 'Jash@Company.test')
@@ -74,18 +74,18 @@ it.each([
   ['not_added', 'nobody@company.test', ''],
   ['domain', 'jash@gmail.com', ''],
   ['unverified', 'jash@company.test', '&email_verified=false'],
-])('FR-10.5 refuses with %s', async (code, email, extra) => {
+])('FR-11.5 refuses with %s', async (code, email, extra) => {
   const res = await googleSignIn(request.agent(app), email, extra)
   expect(res.headers.location).toBe(`${appUrl}/sign-in?error=${code}`)
 })
-it('FR-10.5 refuses a disabled user', async () => { /* makeUser status 'disabled' → error=disabled */ })
-it('FR-10.5 refuses a personal address even when an admin added it', async () => {
+it('FR-11.5 refuses a disabled user', async () => { /* makeUser status 'disabled' → error=disabled */ })
+it('FR-11.5 refuses a personal address even when an admin added it', async () => {
   await makeUser(db, { email: 'someone@gmail.com' })
   expect((await googleSignIn(request.agent(app), 'someone@gmail.com')).headers.location).toBe(
     `${appUrl}/sign-in?error=domain`,
   )
 })
-it('FR-10.5 refuses a callback whose state does not match', async () => {
+it('FR-11.5 refuses a callback whose state does not match', async () => {
   // start, then call the callback with the stub's code but state=forged → error=failed; /auth/me is 401
 })
 it('reports whether Google sign-in is configured', async () => {
@@ -130,7 +130,7 @@ git commit -m "Add Google sign-in with a local OIDC stub for tests"
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-it('FR-10.5 adding a user sends the access email with no link token', async () => {
+it('FR-11.5 adding a user sends the access email with no link token', async () => {
   const res = await w.admin.send('post', '/api/v1/users', { email: 'new@company.test', name: 'New', role: 'viewer', pocId: null })
   expect(res.status).toBe(201)
   expect(res.body).toMatchObject({ accessEmailSent: true })
@@ -138,7 +138,7 @@ it('FR-10.5 adding a user sends the access email with no link token', async () =
   expect(mail.subject).toBe("You've been given access to BOAT")
   expect(mail.text).not.toMatch(/token=|invite\?/)
 })
-it('FR-10.5 refuses an email outside the company domains', async () => {
+it('FR-11.5 refuses an email outside the company domains', async () => {
   const res = await w.admin.send('post', '/api/v1/users', { email: 'x@gmail.com', name: 'X', role: 'viewer', pocId: null })
   expect(res.body.fields).toEqual({ email: 'Use a company email address (company.test).' })
 })
@@ -173,7 +173,7 @@ git commit -m "Send an access email instead of an invite link"
 - Modify: `apps/api/src/modules/auth/auth.router.ts`: delete `/invites/accept`, `/password/forgot`, `/password/reset` and their limiters and bodies; `emails.ts` drops `inviteEmail`, `resetEmail`, `linkFor`; `tokens.ts`/`auth-tokens.ts` delete code that no longer has callers (the `auth_tokens` table stays)
 - Modify: `apps/api/src/modules/users/users.service.ts`: replace `inviteFirstAdmin` L204-226 with `setBackupAdmin`
 - Modify: `apps/api/src/cli/create-admin.ts`
-- Modify: `apps/api/src/api.test.ts` (remove rows), `apps/api/src/fr-coverage.test.ts` (`'FR-10.6'`), `apps/api/test/support/fixtures.ts` (`makeUser` accepts `passwordLogin`; `makeRecordsWorld` users that sign in with a password get `passwordLogin: true`)
+- Modify: `apps/api/src/api.test.ts` (remove rows), `apps/api/src/fr-coverage.test.ts` (`'FR-11.6'`), `apps/api/test/support/fixtures.ts` (`makeUser` accepts `passwordLogin`; `makeRecordsWorld` users that sign in with a password get `passwordLogin: true`)
 - Modify the e2e setup: `e2e/support/global-setup.ts` starts `@boat/oidc-stub` before the API and passes `GOOGLE_ISSUER`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_ALLOWED_DOMAINS` (the domain of `users.*.email` in `e2e/support/env.ts`). The admin signs in with the password that `create-admin` prints, through `POST /auth/login`. Planner, POC and viewer are added through `POST /users`, then signed in by a Playwright `APIRequestContext` that requests `${appUrl}/api/v1/auth/google/start`, follows the redirects with `&email=<their email>` appended to the stub's authorize URL, and saves `storageState`. `e2e/support/api.ts` drops `acceptInvite`; `e2e/support/mail.ts` drops `tokenIn`. Add `@boat/oidc-stub` to `e2e/package.json`.
 - Test: `apps/api/test/auth.int.test.ts` (or the existing password sign-in suite), `apps/api/test/backup-admin.int.test.ts`
 
@@ -191,7 +191,7 @@ git commit -m "Send an access email instead of an invite link"
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-it('FR-10.6 only the backup admin can sign in with a password', async () => {
+it('FR-11.6 only the backup admin can sign in with a password', async () => {
   await makeUser(db, { email: 'planner@company.test', role: 'planner', passwordLogin: false }) // with a password hash
   const refused = await request(app).post('/api/v1/auth/login').send({ email: 'planner@company.test', password })
   expect(refused.status).toBe(401)
@@ -199,12 +199,12 @@ it('FR-10.6 only the backup admin can sign in with a password', async () => {
   const { password: pw } = await setBackupAdmin(db, { email: 'ops@gmail.com', name: 'Ops' })
   expect((await request(app).post('/api/v1/auth/login').send({ email: 'ops@gmail.com', password: pw })).status).toBe(200)
 })
-it('FR-10.6 keeps a single backup admin', async () => {
+it('FR-11.6 keeps a single backup admin', async () => {
   await expect(setBackupAdmin(db, { email: 'other@company.test', name: 'Other' })).rejects.toThrow(
     'ops@gmail.com is already the backup admin.',
   )
 })
-it('FR-10.6 the migration keeps one password: the earliest active admin with one', async () => {
+it('FR-11.6 the migration keeps one password: the earliest active admin with one', async () => {
   // seed: admin A (2026-01-01, hash), admin B (2026-02-01, hash), planner C (hash), invited D (null)
   // run the migration SQL; expect A.password_login true with its hash kept; B, C, D password_hash NULL and password_login false
 })

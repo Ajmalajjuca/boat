@@ -369,7 +369,7 @@ describe('deleting lots', () => {
 
 describe('date rules', () => {
   // The test clock says 15 Oct 2026.
-  it('FR-10.1 refuses a forecast date before today and an actual date after it', async () => {
+  it('FR-11.1 refuses a forecast date before today and an actual date after it', async () => {
     const res = await create({ plannedDate: '2026-10-14', actualDate: '2026-10-16' })
     expect(res.status).toBe(422)
     expect(res.body.fields).toEqual({
@@ -377,7 +377,7 @@ describe('date rules', () => {
       actualDate: 'Actual date cannot be in the future.',
     })
   })
-  it('FR-10.1 keeps a past planned date that the edit does not touch', async () => {
+  it('FR-11.1 keeps a past planned date that the edit does not touch', async () => {
     // Seeded directly, so no rule ran when the planned date was set.
     const lot = await makeLot(db, { productId: w.product.id, plannedDate: day('2026-09-01') })
     const res = await w.planner.send('patch', `/api/v1/lots/${lot.id}`, {

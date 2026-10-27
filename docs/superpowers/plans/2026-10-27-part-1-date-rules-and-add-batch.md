@@ -18,7 +18,7 @@
 - "Not before RM ready" is checked only when `rmReadyDate` is non-empty and either date in the pair is new or changed. It never uses the effective (batch-derived) RM ready date. This is the builder's call from the spec.
 - JSON backup import stays exempt. `import.service.ts` doesn't call `validateLot`/`validateBatch`, so keep it that way.
 - Error copy matches the existing "cannot" style, exactly as written in Task 1.
-- New integration tests that pin these rules carry ids `FR-10.1` (lot dates) and `FR-10.2` (batch planned date). Add both to `required` in `apps/api/src/fr-coverage.test.ts`.
+- New integration tests that pin these rules carry ids `FR-11.1` (lot dates) and `FR-11.2` (batch planned date). Add both to `required` in `apps/api/src/fr-coverage.test.ts`.
 - Work on a branch, e.g. `git switch -c client-feedback-part-1`. Run `pnpm format` before each commit.
 
 ## Review Focus
@@ -46,7 +46,7 @@
 
 ```ts
 const lotOn = (o: Partial<Lot>) => makeLot({ plannedDate: '', ...o })
-it('FR-10.1 keeps forecast dates on or after today', () => {
+it('FR-11.1 keeps forecast dates on or after today', () => {
   const e = validateLot(
     lotOn({ rmReadyDate: '2026-10-13', plannedDate: '2026-10-13', revisedEta: '2026-10-13' }),
     false, null, TODAY,
@@ -56,13 +56,13 @@ it('FR-10.1 keeps forecast dates on or after today', () => {
   expect(e.revisedEta).toBe('Current revised ETA cannot be before today.')
   expect(validateLot(lotOn({ rmReadyDate: TODAY, plannedDate: TODAY }), false, null, TODAY)).toEqual({})
 })
-it('FR-10.1 keeps the actual date on or before today', () => {
+it('FR-11.1 keeps the actual date on or before today', () => {
   expect(validateLot(lotOn({ actualDate: '2026-10-15' }), false, null, TODAY).actualDate).toBe(
     'Actual date cannot be in the future.',
   )
   expect(validateLot(lotOn({ actualDate: '2026-01-02' }), false, null, TODAY)).toEqual({})
 })
-it('FR-10.1 keeps planned completion and revised ETA on or after RM ready', () => {
+it('FR-11.1 keeps planned completion and revised ETA on or after RM ready', () => {
   const e = validateLot(
     lotOn({ rmReadyDate: '2026-10-20', plannedDate: '2026-10-18', revisedEta: '2026-10-19' }),
     false, null, TODAY,
@@ -70,7 +70,7 @@ it('FR-10.1 keeps planned completion and revised ETA on or after RM ready', () =
   expect(e.plannedDate).toBe('Planned completion cannot be before the RM ready date.')
   expect(e.revisedEta).toBe('Current revised ETA cannot be before the RM ready date.')
 })
-it('FR-10.1 only checks a forecast date that is new or changed', () => {
+it('FR-11.1 only checks a forecast date that is new or changed', () => {
   const stored = lotOn({ rmReadyDate: '2026-09-01', plannedDate: '2026-09-10', revisedEta: '2026-09-12' })
   expect(validateLot({ ...stored, status: 'Delayed' }, false, stored, TODAY)).toEqual({})
   expect(validateLot({ ...stored, plannedDate: '2026-09-11' }, false, stored, TODAY).plannedDate).toBe(
@@ -81,7 +81,7 @@ it('allows clearing a forecast date', () => {
   const stored = lotOn({ plannedDate: '2026-09-10' })
   expect(validateLot({ ...stored, plannedDate: '' }, false, stored, TODAY)).toEqual({})
 })
-it('FR-10.2 keeps a new or changed batch planned date on or after today', () => {
+it('FR-11.2 keeps a new or changed batch planned date on or after today', () => {
   expect(validateBatch(makeBatch({ plannedDate: '2026-10-13' }), TODAY).plannedDate).toBe(
     'Planned date cannot be before today.',
   )
@@ -114,7 +114,7 @@ git commit -m "Add lot and batch date rules"
 **Files:**
 - Modify: `apps/api/src/modules/lots/lots.service.ts` (`checkLot` L113-160, `createLot` L255-275, `updateLot` L277-328)
 - Modify: `apps/api/src/modules/rm-batches/rm-batches.service.ts` (`checkBatch` L27-52, `updateBatch` L108-148)
-- Modify: `apps/api/src/fr-coverage.test.ts` (add `'FR-10.1'`, `'FR-10.2'`)
+- Modify: `apps/api/src/fr-coverage.test.ts` (add `'FR-11.1'`, `'FR-11.2'`)
 - Test: `apps/api/test/lots.int.test.ts`, `apps/api/test/rm-batches.int.test.ts`
 - Fix existing tests that now break: `lots.int.test.ts` around L72, L95 (`rmReadyDate: '2026-10-01'`) and L191 (`plannedDate: '2026-10-10'`), and `rm-batches.int.test.ts` L54, L66 (`plannedDate: '2026-10-10'`). Move those dates on or after `testToday` (`'2026-10-15'`) unless the test is about a past date.
 
@@ -125,7 +125,7 @@ git commit -m "Add lot and batch date rules"
 - [ ] **Step 1: Write the failing integration tests** in `lots.int.test.ts` under a new `describe('date rules')`. The test clock is `testToday = '2026-10-15'`.
 
 ```ts
-it('FR-10.1 refuses a forecast date before today and an actual date after it', async () => {
+it('FR-11.1 refuses a forecast date before today and an actual date after it', async () => {
   const res = await create({ plannedDate: '2026-10-14', actualDate: '2026-10-16' })
   expect(res.status).toBe(422)
   expect(res.body.fields).toEqual({
@@ -133,7 +133,7 @@ it('FR-10.1 refuses a forecast date before today and an actual date after it', a
     actualDate: 'Actual date cannot be in the future.',
   })
 })
-it('FR-10.1 keeps a past planned date that the edit does not touch', async () => {
+it('FR-11.1 keeps a past planned date that the edit does not touch', async () => {
   const lot = await makeLot(db, w.product.id, { plannedDate: day('2026-09-01') }) // seeded directly, bypassing validation
   const res = await w.planner.send('patch', `/api/v1/lots/${lot.id}`, {
     version: lot.version, plannedDate: '2026-09-01', blockerDescription: 'waiting on PCB',
@@ -142,7 +142,7 @@ it('FR-10.1 keeps a past planned date that the edit does not touch', async () =>
 })
 ```
 
-In `rm-batches.int.test.ts`, add `it('FR-10.2 refuses a new batch planned before today', …)`, which posts a batch with `plannedDate: '2026-10-14'` and expects 422 with `fields.plannedDate === 'Planned date cannot be before today.'`. Match `makeLot`'s actual parameter shape in `test/support/fixtures.ts` (L97).
+In `rm-batches.int.test.ts`, add `it('FR-11.2 refuses a new batch planned before today', …)`, which posts a batch with `plannedDate: '2026-10-14'` and expects 422 with `fields.plannedDate === 'Planned date cannot be before today.'`. Match `makeLot`'s actual parameter shape in `test/support/fixtures.ts` (L97).
 
 - [ ] **Step 2: Run the tests to verify they fail**
 

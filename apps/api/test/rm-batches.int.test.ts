@@ -72,7 +72,7 @@ describe('adding batches', () => {
     expect((await detail(lot.id)).rmBatches).toHaveLength(1)
     expect(await history(lot.id)).toEqual(['Added PCB batch B1 (70 received)'])
   })
-  it('FR-10.2 refuses a new batch planned before today', async () => {
+  it('FR-11.2 refuses a new batch planned before today', async () => {
     const lot = await componentLot()
     // The test clock says 15 Oct 2026.
     const res = await addBatch(w.planner, lot.id, { plannedDate: '2026-10-14' })

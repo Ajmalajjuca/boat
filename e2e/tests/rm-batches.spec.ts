@@ -45,6 +45,31 @@ test('FR-3.2 adds, edits and deletes batches, and RM readiness follows', async (
   await expect(metric(drawer, 'Producible now')).toContainText('0')
 })
 
+test('adds a batch to a new lot straight after ticking a component', async ({ page }) => {
+  const seed = await seeder()
+  await seed.product('Kilo')
+  await seed.done()
+  await page.goto('/')
+  await page.getByRole('group', { name: 'Kilo' }).getByRole('button', { name: 'Add lot' }).click()
+  const draft = page.getByRole('dialog', { name: 'New production lot' })
+  await draft.getByLabel('Lot label', { exact: true }).fill('K-9')
+  await draft.getByLabel('Lot quantity', { exact: true }).fill('50')
+  await draft.getByRole('tab', { name: 'RM Readiness' }).click()
+  await draft.getByLabel('RM readiness mode').selectOption('components')
+  await draft.getByLabel('Battery', { exact: true }).check()
+  await expect(draft.getByText('Save lot changes before adding a material batch.')).toHaveCount(0)
+  const add = draft.getByRole('button', { name: 'Add batch' })
+  await expect(add).toBeEnabled()
+  await add.click()
+  // The lot is saved first, so the drawer reopens under its label with the batch form open.
+  const modal = page.getByRole('dialog', { name: 'Add material batch' })
+  await expect(modal).toBeVisible()
+  await expect(modal.getByText('Battery')).toBeVisible()
+  // The open form hides the drawer from the accessibility tree; it shows again once closed.
+  await modal.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('dialog', { name: 'K-9' })).toBeVisible()
+})
+
 test('FR-3.1 adds batches only to lots tracked by component', async ({ page }) => {
   const seed = await seeder()
   const kilo = await seed.product('Kilo')

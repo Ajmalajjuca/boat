@@ -1,5 +1,5 @@
 import { authFile } from '../support/env'
-import { seeder } from '../support/seed'
+import { day, seeder } from '../support/seed'
 import { expect, test } from '../support/test'
 import { openLot } from '../support/ui'
 
@@ -83,6 +83,24 @@ test('FR-7.2 posts a note and lists it in the history', async ({ page }) => {
   await expect(drawer.getByText('EMS confirmed the line slot')).toBeVisible()
   await expect(drawer.getByText(/Ada Admin/).first()).toBeVisible()
   await expect(drawer.getByLabel('Update note', { exact: true })).toHaveValue('')
+})
+
+test('FR-11.1 shows the date errors next to the fields', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  await seed.lot(golf.id, 'G-1')
+  await seed.done()
+  await page.goto('/')
+  const drawer = await openLot(page, 'G-1')
+  await drawer.getByLabel('Actual date', { exact: true }).fill(day(1))
+  await drawer.getByLabel('Current revised ETA', { exact: true }).fill(day(-1))
+  await drawer.getByRole('button', { name: 'Save lot' }).click()
+  await expect(
+    drawer.locator('[data-invalid]').filter({ hasText: 'Actual date' }).getByRole('alert'),
+  ).toHaveText('Actual date cannot be in the future.')
+  await expect(
+    drawer.locator('[data-invalid]').filter({ hasText: 'Current revised ETA' }).getByRole('alert'),
+  ).toHaveText('Current revised ETA cannot be before today.')
 })
 
 test('closes the drawer when someone else deleted the lot', async ({ page }) => {

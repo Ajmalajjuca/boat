@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { LotInput, LookupItem, ProductItem } from '@boat/domain/api'
 import type { LookupKind } from '@boat/domain/models'
+import { Client } from 'pg'
 import { apiAs } from './api'
+import { runDir } from './env'
 
 // The company's date in its default time zone, offset by whole days.
 export function day(offset = 0) {
@@ -8,6 +12,29 @@ export function day(offset = 0) {
   const date = new Date(`${today}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + offset)
   return date.toISOString().slice(0, 10)
+}
+
+// The API refuses a forecast date before today (FR-11.1); in real use such dates only pass with
+// time. The seeder sets them straight in the database, as time would have.
+const forecastDates = ['rmReadyDate', 'plannedDate', 'revisedEta'] as const
+const columns = {
+  rmReadyDate: 'rm_ready_date',
+  plannedDate: 'planned_date',
+  revisedEta: 'revised_eta',
+}
+async function backdate(lotId: string, dates: Record<string, string>) {
+  const { ownerUrl } = JSON.parse(readFileSync(path.join(runDir, 'seeded.json'), 'utf8'))
+  const db = new Client({ connectionString: ownerUrl })
+  await db.connect()
+  try {
+    const keys = Object.keys(dates) as (keyof typeof columns)[]
+    await db.query(
+      `UPDATE lots SET ${keys.map((k, i) => `${columns[k]} = $${i + 2}`).join(', ')} WHERE id = $1`,
+      [lotId, ...keys.map((k) => dates[k])],
+    )
+  } finally {
+    await db.end()
+  }
 }
 
 type LotFields = Partial<
@@ -86,11 +113,18 @@ export async function seeder() {
       } = fields
       const componentIds: string[] = []
       for (const c of components) componentIds.push(await lookup('component', c))
-      return api.post('/lots', {
+      const past = Object.fromEntries(
+        forecastDates.flatMap((k) => {
+          const value = rest[k]
+          return value && value < day() ? [[k, value]] : []
+        }),
+      )
+      const created = await api.post('/lots', {
         productId,
         label,
         lotQty: 100,
         ...rest,
+        ...Object.fromEntries(Object.keys(past).map((k) => [k, null])),
         categoryId: await lookup('category', category),
         statusId: await lookup('status', status),
         stageId: await lookup('stage', stage),
@@ -100,6 +134,9 @@ export async function seeder() {
         logisticsId: await optional('logistics', logistics),
         componentIds,
       })
+      if (!Object.keys(past).length) return created
+      await backdate(created.id, past)
+      return api.get(`/lots/${created.id}`)
     },
     receipt: (lotId: string, quantity: number, date = day(), label = `GRN ${quantity}`) =>
       api.post(`/lots/${lotId}/grn-receipts`, { label, date, quantity }),
