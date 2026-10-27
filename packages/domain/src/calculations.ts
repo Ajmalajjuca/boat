@@ -212,43 +212,43 @@ export function monthLabel(month: string) {
     timeZone: 'UTC',
   })
 }
-// Month-end status: lots planned for the month (by original planned date) against the GRN
-// received for those lots by the last day of the month.
-export function monthSummary(lots: Lot[], receipts: GRNReceipt[], month: string) {
+// Month-end status: lots planned for the month (by original planned date) against those
+// completed by the last day of the month. A completed lot counts in full; there is no partial
+// progress without GRN.
+export function monthSummary(lots: Lot[], month: string) {
   const end = monthEnd(month)
   const lotRows = lots
     .filter((lot) => monthOf(lot.plannedDate) === month)
     .map((lot) => {
-      const received = totalGrn(receipts.filter((r) => r.lotId === lot.id && r.date <= end))
-      return { lot, planned: lot.lotQty, received, shortfall: Math.max(0, lot.lotQty - received) }
+      const completed = lot.actualDate && lot.actualDate <= end ? lot.lotQty : 0
+      return { lot, planned: lot.lotQty, completed, shortfall: lot.lotQty - completed }
     })
   const products = new Map<
     string,
-    { productId: string; lots: number; planned: number; received: number; shortfall: number }
+    { productId: string; lots: number; planned: number; completed: number; shortfall: number }
   >()
   for (const row of lotRows) {
     const p = products.get(row.lot.productId) || {
       productId: row.lot.productId,
       lots: 0,
       planned: 0,
-      received: 0,
+      completed: 0,
       shortfall: 0,
     }
     p.lots++
     p.planned += row.planned
-    p.received += row.received
+    p.completed += row.completed
     p.shortfall += row.shortfall
     products.set(p.productId, p)
   }
   const planned = sum(lotRows.map((r) => r.planned)),
-    received = sum(lotRows.map((r) => r.received))
+    completed = sum(lotRows.map((r) => r.completed))
   return {
     lots: lotRows.sort((a, b) => b.shortfall - a.shortfall),
     products: [...products.values()].sort((a, b) => b.shortfall - a.shortfall),
     planned,
-    received,
+    completed,
     shortfall: sum(lotRows.map((r) => r.shortfall)),
-    percent: planned ? clampPercent((received / planned) * 100) : 0,
-    grnInMonth: totalGrn(receipts.filter((r) => monthOf(r.date) === month)),
+    percent: planned ? clampPercent((completed / planned) * 100) : 0,
   }
 }

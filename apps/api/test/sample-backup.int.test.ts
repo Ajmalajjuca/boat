@@ -41,40 +41,39 @@ describe('the sample backup', () => {
     expect(res.status).toBe(200)
     expect(res.body.imported).toMatchObject({ products: 4, lots: 4, shipments: 3 })
   })
-  it("FR-5.1 matches the demo's month-end figures (the Phase 4 gate)", async () => {
+  it("FR-5.1 matches the domain's month-end figures for the sample backup", async () => {
     const data = parseImport(sample())
-    const demo = monthSummary(data.lots, data.grnReceipts, '2026-10')
+    const demo = monthSummary(data.lots, '2026-10')
     const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-10')
     expect(res.body).toMatchObject({
       planned: demo.planned,
-      received: demo.received,
+      completed: demo.completed,
       shortfall: demo.shortfall,
-      grnInMonth: demo.grnInMonth,
     })
     expect(res.body.percent).toBeCloseTo(demo.percent)
-    type ApiLot = { lot: { id: string }; planned: number; received: number; shortfall: number }
+    type ApiLot = { lot: { id: string }; planned: number; completed: number; shortfall: number }
     type ApiProduct = {
       product: { id: string }
       lots: number
       planned: number
-      received: number
+      completed: number
       shortfall: number
     }
-    const lots = (rows: { id: string; planned: number; received: number; shortfall: number }[]) =>
-      byId(rows).map((r) => [r.id, r.planned, r.received, r.shortfall])
+    const lots = (rows: { id: string; planned: number; completed: number; shortfall: number }[]) =>
+      byId(rows).map((r) => [r.id, r.planned, r.completed, r.shortfall])
     expect(lots(res.body.lots.map((r: ApiLot) => ({ ...r, id: r.lot.id })))).toEqual(
       lots(demo.lots.map((r) => ({ ...r, id: r.lot.id }))),
     )
     expect(
       byId<ApiProduct & { id: string }>(
         res.body.products.map((p: ApiProduct) => ({ ...p, id: p.product.id })),
-      ).map((p) => [p.id, p.lots, p.planned, p.received, p.shortfall]),
+      ).map((p) => [p.id, p.lots, p.planned, p.completed, p.shortfall]),
     ).toEqual(
       byId(demo.products.map((p) => ({ ...p, id: p.productId }))).map((p) => [
         p.id,
         p.lots,
         p.planned,
-        p.received,
+        p.completed,
         p.shortfall,
       ]),
     )

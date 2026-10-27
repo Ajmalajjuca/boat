@@ -1,7 +1,6 @@
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PrismaClient } from '../src/generated/prisma/client'
-import { refreshCompletion } from '../src/modules/lots/lot-lock'
 import { createTestDatabase } from './support/db'
 import {
   day,
@@ -18,12 +17,14 @@ let close: () => Promise<void>
 let app: ReturnType<typeof testApp>
 let w: RecordsWorld
 
-// September 2026, seen from 15 October:
-//   L1  planned 10 Sep, 100 units; 40 received 20 Sep, 30 more on 2 Oct (after month end)
-//   L2  planned 25 Sep, revised to 10 Oct, 50 units; 50 received 28 Sep
-//   L3  planned 5 Oct (another month); 10 received 15 Sep, which still counts as GRN in September
+// September 2026, seen from 15 October. A lot counts as completed in full once its actual date
+// is on or before month end (FR-11.3):
+//   L1  planned 10 Sep, 100 units, completed 2 Oct (after month end); a GRN receipt that no
+//       longer counts
+//   L2  planned 25 Sep, revised to 10 Oct, 50 units, completed 28 Sep
+//   L3  planned 5 Oct (another month), completed 15 Sep
 //   L4  planned 12 Sep but deleted
-//   L5  planned 5 Sep on another product, 200 units, nothing received
+//   L5  planned 5 Sep on another product, 200 units, not completed
 beforeAll(async () => {
   ;({ db, close } = await createTestDatabase())
   app = testApp(db, { now: fixedNow })
@@ -31,25 +32,26 @@ beforeAll(async () => {
   const other = await makeProduct(db, { name: 'Woofer' })
   const lot = (label: string, fields: Record<string, unknown>) =>
     makeLot(db, { productId: w.product.id, label, stageId: w.lookups.stage.id, ...fields })
-  const receive = async (lotId: string, date: string, quantity: number) => {
-    await db.grnReceipt.create({ data: { lotId, label: `G ${date}`, date: day(date), quantity } })
-    await refreshCompletion(db, lotId)
-  }
   const l1 = await lot('L1', {
     plannedDate: day('2026-09-10'),
+    actualDate: day('2026-10-02'),
     lotQty: 100,
     blockerId: w.lookups.rmBlocker.id,
   })
-  await receive(l1.id, '2026-09-20', 40)
-  await receive(l1.id, '2026-10-02', 30)
-  const l2 = await lot('L2', {
+  await db.grnReceipt.create({
+    data: { lotId: l1.id, label: 'G', date: day('2026-09-20'), quantity: 40 },
+  })
+  await lot('L2', {
     plannedDate: day('2026-09-25'),
     revisedEta: day('2026-10-10'),
+    actualDate: day('2026-09-28'),
     lotQty: 50,
   })
-  await receive(l2.id, '2026-09-28', 50)
-  const l3 = await lot('L3', { plannedDate: day('2026-10-05'), lotQty: 100 })
-  await receive(l3.id, '2026-09-15', 10)
+  await lot('L3', {
+    plannedDate: day('2026-10-05'),
+    actualDate: day('2026-09-15'),
+    lotQty: 100,
+  })
   const l4 = await lot('L4', { plannedDate: day('2026-09-12'), lotQty: 70 })
   await db.lot.update({ where: { id: l4.id }, data: { deletedAt: new Date() } })
   await lot('L5', { productId: other.id, plannedDate: day('2026-09-05'), lotQty: 200 })
@@ -68,7 +70,7 @@ describe('GET /reports/month-end', () => {
     expect(eta).toEqual({ L1: '2026-09-10', L2: '2026-10-10', L5: '2026-09-05' })
   })
 
-  it('FR-5.1 compares the quantity of lots planned in the month with GRN received by month end', async () => {
+  it('FR-5.1 compares the quantity of lots planned in the month with lots completed by month end', async () => {
     const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-09')
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({
@@ -77,14 +79,14 @@ describe('GET /reports/month-end', () => {
       monthEnd: '2026-09-30',
       inProgress: false,
       planned: 350,
-      received: 90,
-      shortfall: 260,
+      completed: 50,
+      shortfall: 300,
     })
-    expect(res.body.percent).toBeCloseTo((90 / 350) * 100)
+    expect(res.body).not.toHaveProperty('grnInMonth')
+    expect(res.body.percent).toBeCloseTo((50 / 350) * 100)
   })
-  it('FR-5.2 shows totals by product and by lot, largest shortfall first, and all GRN dated in the month', async () => {
+  it('FR-5.2 shows totals by product and by lot, largest shortfall first', async () => {
     const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-09')
-    expect(res.body.grnInMonth).toBe(100)
     expect(
       res.body.products.map((p: { product: { name: string }; shortfall: number }) => [
         p.product.name,
@@ -92,23 +94,23 @@ describe('GET /reports/month-end', () => {
       ]),
     ).toEqual([
       ['Woofer', 200],
-      ['Soundbar', 60],
+      ['Soundbar', 100],
     ])
     expect(
-      res.body.lots.map((r: { lot: { label: string }; received: number; shortfall: number }) => [
+      res.body.lots.map((r: { lot: { label: string }; completed: number; shortfall: number }) => [
         r.lot.label,
-        r.received,
+        r.completed,
         r.shortfall,
       ]),
     ).toEqual([
       ['L5', 0, 200],
-      ['L1', 40, 60],
+      ['L1', 0, 100],
       ['L2', 50, 0],
     ])
     const l1 = res.body.lots.find((r: { lot: { label: string } }) => r.lot.label === 'L1')
     expect(l1.lot.blocker).toEqual({ id: w.lookups.rmBlocker.id, value: 'RM Blocker' })
-    // Today's status counts every receipt, including the one after month end.
-    expect(l1.statusToday).toBe('On Track, 35d overdue — RM Blocker (Factory Production)')
+    // Today's status sees the completion after month end.
+    expect(l1.statusToday).toBe('Completed (Factory Production)')
   })
   it('marks the current month as in progress', async () => {
     const res = await w.viewer.agent.get('/api/v1/reports/month-end?month=2026-10')
@@ -131,7 +133,7 @@ describe('GET /reports/month-end/export.csv', () => {
     )
     const lines = res.text.trimEnd().split('\r\n')
     expect(lines[0]).toBe(
-      '"Month","Product","Variant","Segment","Lot","PlannedDate","PlannedQty","ReceivedByMonthEnd","Shortfall","Blocker","BlockerDescription","StatusToday"',
+      '"Month","Product","Variant","Segment","Lot","PlannedDate","PlannedQty","CompletedByMonthEnd","Shortfall","Blocker","BlockerDescription","StatusToday"',
     )
     expect(lines).toHaveLength(4)
     expect(lines[1]).toContain('"2026-09","Woofer"')

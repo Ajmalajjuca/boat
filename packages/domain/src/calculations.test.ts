@@ -316,45 +316,45 @@ describe('shipments', () => {
 })
 
 describe('monthSummary', () => {
-  const a = makeLot({ id: 'a', productId: 'p1', lotQty: 100, plannedDate: '2026-10-05' })
-  const b = makeLot({
-    id: 'b',
-    productId: 'p1',
-    lotQty: 50,
-    plannedDate: '2026-10-28',
-    revisedEta: '2026-11-05',
-  })
-  const c = makeLot({ id: 'c', productId: 'p2', lotQty: 30, plannedDate: '2026-11-02' })
-  const receipts = [
-    makeReceipt({ lotId: 'a', date: '2026-10-10', quantity: 60 }),
-    makeReceipt({ lotId: 'a', date: '2026-11-01', quantity: 40 }),
-    makeReceipt({ lotId: 'b', date: '2026-10-30', quantity: 50 }),
-    makeReceipt({ lotId: 'c', date: '2026-10-31', quantity: 30 }),
+  const lots = [
+    makeLot({
+      id: 'a',
+      productId: 'p',
+      lotQty: 100,
+      plannedDate: '2026-10-05',
+      actualDate: '2026-09-30',
+    }),
+    makeLot({
+      id: 'b',
+      productId: 'p',
+      lotQty: 40,
+      plannedDate: '2026-10-20',
+      actualDate: '2026-11-02',
+    }),
+    makeLot({ id: 'c', productId: 'p', lotQty: 60, plannedDate: '2026-10-25', actualDate: '' }),
+    makeLot({
+      id: 'd',
+      productId: 'p',
+      lotQty: 999,
+      plannedDate: '2026-11-01',
+      actualDate: '2026-10-31',
+    }),
   ]
 
-  it('compares lots by original planned month with GRN up to month end', () => {
-    const s = monthSummary([a, b, c], receipts, '2026-10')
-    expect(s.lots.map((r) => [r.lot.id, r.planned, r.received, r.shortfall])).toEqual([
-      ['a', 100, 60, 40],
-      ['b', 50, 50, 0],
-    ])
+  it('FR-11.3 counts planned lots completed by month end at full quantity', () => {
+    const s = monthSummary(lots, '2026-10')
+    expect(s).toMatchObject({ planned: 200, completed: 100, shortfall: 100, percent: 50 })
     expect(s.products).toEqual([
-      { productId: 'p1', lots: 2, planned: 150, received: 110, shortfall: 40 },
+      { productId: 'p', lots: 3, planned: 200, completed: 100, shortfall: 100 },
     ])
-    expect(s).toMatchObject({ planned: 150, received: 110, shortfall: 40, grnInMonth: 140 })
-    expect(s.percent).toBeCloseTo(73.33, 2)
-  })
-  it('counts receipts dated before the planned month', () => {
-    const s = monthSummary([a, b, c], receipts, '2026-11')
-    expect(s.lots.map((r) => [r.lot.id, r.received, r.shortfall])).toEqual([['c', 30, 0]])
-    expect(s.grnInMonth).toBe(40)
+    expect(s.lots.map((r) => [r.lot.id, r.completed, r.shortfall])).toEqual([
+      ['c', 0, 60],
+      ['b', 0, 40],
+      ['a', 100, 0],
+    ])
+    expect(s).not.toHaveProperty('grnInMonth')
   })
   it('returns zeros for an empty month', () => {
-    expect(monthSummary([a, b, c], receipts, '2026-12')).toMatchObject({
-      planned: 0,
-      received: 0,
-      percent: 0,
-      grnInMonth: 0,
-    })
+    expect(monthSummary(lots, '2026-12')).toMatchObject({ planned: 0, completed: 0, percent: 0 })
   })
 })

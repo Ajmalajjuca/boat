@@ -9,13 +9,13 @@ import {
 import type { RecordsDeps } from '../../core/clock'
 import { toCsv } from '../../core/csv'
 import { fromDbDate, toDbDate } from '../../core/dates'
-import { lotInclude, toDomainLot, toDomainReceipt } from '../lots/lot-view'
+import { lotInclude, toDomainLot } from '../lots/lot-view'
 
 const activeLot = { deletedAt: null, product: { is: { deletedAt: null } } }
 
-// FR-5.1 and FR-5.2 with the domain's monthSummary, so the figures are the demo's. SQL picks the
-// lots originally planned in the month (a revised ETA doesn't move them) and their receipts;
-// monthSummary counts those dated up to month end.
+// FR-5.1 and FR-5.2 with the domain's monthSummary. SQL picks the lots originally planned in the
+// month (a revised ETA doesn't move them); monthSummary counts those whose actual date is on or
+// before month end as completed in full (FR-11.3).
 export async function monthEndReport({ db, clock }: RecordsDeps, month: string) {
   const date = await clock.today()
   const start = toDbDate(`${month}-01`)!
@@ -24,15 +24,7 @@ export async function monthEndReport({ db, clock }: RecordsDeps, month: string) 
     where: { ...activeLot, plannedDate: { gte: start, lte: toDbDate(end)! } },
     include: lotInclude,
   })
-  const receipts = await db.grnReceipt.findMany({
-    where: { deletedAt: null, lotId: { in: rows.map((r) => r.id) } },
-  })
-  const inMonth = await db.grnReceipt.aggregate({
-    where: { deletedAt: null, date: { gte: start, lte: toDbDate(end)! }, lot: { is: activeLot } },
-    _sum: { quantity: true },
-  })
-  const domainReceipts = receipts.map(toDomainReceipt)
-  const summary = monthSummary(rows.map(toDomainLot), domainReceipts, month)
+  const summary = monthSummary(rows.map(toDomainLot), month)
   const rowById = new Map(rows.map((r) => [r.id, r]))
   const productOf = (productId: string) => rows.find((r) => r.productId === productId)!.product
   return {
@@ -41,16 +33,14 @@ export async function monthEndReport({ db, clock }: RecordsDeps, month: string) 
     monthEnd: end,
     inProgress: date <= end,
     planned: summary.planned,
-    received: summary.received,
+    completed: summary.completed,
     shortfall: summary.shortfall,
     percent: summary.percent,
-    // Every receipt dated in the month, for any lot, as the demo's grnInMonth.
-    grnInMonth: inMonth._sum.quantity ?? 0,
     products: summary.products.map((p) => ({
       product: productOf(p.productId),
       lots: p.lots,
       planned: p.planned,
-      received: p.received,
+      completed: p.completed,
       shortfall: p.shortfall,
     })),
     lots: summary.lots.map((r) => {
@@ -66,7 +56,7 @@ export async function monthEndReport({ db, clock }: RecordsDeps, month: string) 
           blockerDescription: row.blockerDescription,
         },
         planned: r.planned,
-        received: r.received,
+        completed: r.completed,
         shortfall: r.shortfall,
         statusToday: lotSummary(r.lot, date),
       }
@@ -83,7 +73,7 @@ const csvHeaders = [
   'Lot',
   'PlannedDate',
   'PlannedQty',
-  'ReceivedByMonthEnd',
+  'CompletedByMonthEnd',
   'Shortfall',
   'Blocker',
   'BlockerDescription',
@@ -100,7 +90,7 @@ export async function monthEndCsv(deps: RecordsDeps, month: string) {
     Lot: r.lot.label,
     PlannedDate: r.lot.plannedDate ?? '',
     PlannedQty: r.planned,
-    ReceivedByMonthEnd: r.received,
+    CompletedByMonthEnd: r.completed,
     Shortfall: r.shortfall,
     Blocker: r.lot.blocker?.value ?? '',
     BlockerDescription: r.lot.blockerDescription,

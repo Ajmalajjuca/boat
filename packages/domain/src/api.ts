@@ -217,15 +217,15 @@ export type MonthEndReport = {
   monthEnd: string
   inProgress: boolean
   planned: number
-  received: number
+  // Lot quantity of the planned lots completed (actual date) by month end.
+  completed: number
   shortfall: number
   percent: number
-  grnInMonth: number
   products: {
     product: LotProduct
     lots: number
     planned: number
-    received: number
+    completed: number
     shortfall: number
   }[]
   lots: {
@@ -239,7 +239,7 @@ export type MonthEndReport = {
       blockerDescription: string
     }
     planned: number
-    received: number
+    completed: number
     shortfall: number
     statusToday: string
   }[]

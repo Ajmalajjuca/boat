@@ -42,21 +42,16 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
   const cards = [
     ['Planned units', quantity(summary.planned), 'Lot quantity of lots planned for this month.'],
     [
-      inProgress ? 'Received so far' : 'Received by month end',
-      quantity(summary.received),
-      'GRN for those lots dated on or before the last day of the month.',
+      inProgress ? 'Completed so far' : 'Completed by month end',
+      quantity(summary.completed),
+      'Lots from that plan whose actual date is on or before the last day of the month.',
     ],
     [
-      inProgress ? 'Still to receive' : 'Shortfall',
+      inProgress ? 'Still to complete' : 'Shortfall',
       quantity(summary.shortfall),
-      'Planned units not yet received by month end.',
+      'Planned units of lots not completed by month end.',
     ],
-    ['Achieved', `${Math.round(summary.percent)}%`, 'Received as a share of planned units.'],
-    [
-      'All GRN in month',
-      quantity(summary.grnInMonth),
-      'Every receipt dated this month, including lots planned for other months.',
-    ],
+    ['Achieved', `${Math.round(summary.percent)}%`, 'Completed as a share of planned units.'],
   ]
   return (
     <div className="space-y-5">
@@ -85,7 +80,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
           they were planned for.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         {cards.map(([label, value, help]) => (
           <div
             key={label}
@@ -120,21 +115,23 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                     <th>Segment</th>
                     <th>Lots</th>
                     <th>Planned</th>
-                    <th>Received</th>
+                    <th>Completed</th>
                     <th>Shortfall</th>
                     <th>Achieved</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.products.map((row) => {
-                    const percent = row.planned ? Math.round((row.received / row.planned) * 100) : 0
+                    const percent = row.planned
+                      ? Math.round((row.completed / row.planned) * 100)
+                      : 0
                     return (
                       <tr key={row.product.id}>
                         <td className="font-bold text-[#193e40]">{productName(row.product)}</td>
                         <td>{row.product.segment.value || '—'}</td>
                         <td>{row.lots}</td>
                         <td>{quantity(row.planned)}</td>
-                        <td className="font-semibold">{quantity(row.received)}</td>
+                        <td className="font-semibold">{quantity(row.completed)}</td>
                         <td className="font-bold text-[#bd5e2d]">{quantity(row.shortfall)}</td>
                         <td>
                           <div className="flex items-center gap-2">
@@ -157,12 +154,12 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
           <Card>
             <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
               <h2 className="text-base font-bold text-[#1a2024]">
-                {inProgress ? 'Lots still to receive' : 'Lots short of plan'}
+                {inProgress ? 'Lots still to complete' : 'Lots short of plan'}
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 {short.length
-                  ? `${short.length} of ${summary.lots.length} planned lots ${inProgress ? 'are not yet fully received' : `were not fully received by the end of ${monthLabel(month)}`}. Select a lot to open it.`
-                  : 'Every lot planned for this month has been fully received.'}
+                  ? `${short.length} of ${summary.lots.length} planned lots ${inProgress ? 'are not yet completed' : `were not completed by the end of ${monthLabel(month)}`}. Select a lot to open it.`
+                  : 'Every lot planned for this month has been completed.'}
               </p>
             </div>
             {short.length > 0 && (
@@ -175,7 +172,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                       <th>Planned date</th>
                       <th>Current ETA</th>
                       <th>Planned</th>
-                      <th>Received</th>
+                      <th>Completed</th>
                       <th>Short</th>
                       <th>Status today</th>
                       <th>Reason</th>
@@ -193,7 +190,7 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                         <td>{dateLabel(row.lot.plannedDate ?? '')}</td>
                         <td>{dateLabel(row.lot.eta ?? '')}</td>
                         <td>{quantity(row.planned)}</td>
-                        <td>{quantity(row.received)}</td>
+                        <td>{quantity(row.completed)}</td>
                         <td className="font-bold text-[#bd5e2d]">{quantity(row.shortfall)}</td>
                         <td>
                           <span className="block min-w-56 whitespace-normal text-xs text-slate-600">
