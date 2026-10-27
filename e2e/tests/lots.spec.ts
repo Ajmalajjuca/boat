@@ -8,6 +8,8 @@ test.use({ storageState: authFile('admin') })
 test('FR-2.1 adds a lot to a product, then edits and deletes it', async ({ page }) => {
   const seed = await seeder()
   await seed.product('Golf')
+  // A new lot takes the first stage; on a fresh database no other spec has created one yet.
+  await seed.lookup('stage', 'RM Sourcing')
   await seed.done()
   await page.goto('/')
   const golf = page.getByRole('group', { name: 'Golf' })
@@ -46,10 +48,11 @@ test('FR-2.3 shows validation messages under their fields', async ({ page }) => 
   await seed.done()
   await page.goto('/')
   const drawer = await openLot(page, 'G-1')
-  await drawer.getByLabel('Fresh production quantity', { exact: true }).fill('10')
-  await drawer.getByLabel('Rework quantity', { exact: true }).fill('12')
+  await drawer.getByLabel('Lot quantity', { exact: true }).fill('2.5')
   await drawer.getByRole('button', { name: 'Save lot' }).click()
-  await expect(drawer).toContainText('Rework is part of fresh production, so it cannot be larger.')
+  await expect(
+    drawer.locator('[data-invalid]').filter({ hasText: 'Lot quantity' }).getByRole('alert'),
+  ).toHaveText('Lot quantity must be a whole number, zero or more.')
 })
 
 test('FR-2.1 shows a duplicate lot label under the label field', async ({ page }) => {
