@@ -64,6 +64,23 @@ test('FR-6.2 shows a product deleted mid-edit under its line', async ({ page }) 
   ).toContainText('This product no longer exists.')
 })
 
+test('FR-6.1 greys out ETAs and arrival dates before the ETD in the date pickers', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await goTo(page, 'Finished Goods')
+  await page.getByRole('button', { name: 'Add Shipment' }).click()
+  const drawer = page.getByRole('dialog', { name: 'New shipment' })
+  const date = (label: string) => drawer.getByLabel(label, { exact: true })
+  await date('ETD').fill(day(-3))
+  await expect(date('Original planned ETA')).toHaveAttribute('min', day(-3))
+  await expect(date('Current revised ETA')).toHaveAttribute('min', day(-3))
+  await expect(date('Actual warehouse arrival')).toHaveAttribute('min', day(-3))
+  await expect(date('Actual warehouse arrival')).toHaveAttribute('max', day(0))
+  await date('ETD').fill('')
+  await expect(date('Current revised ETA')).not.toHaveAttribute('min')
+})
+
 test('FR-6.1 shows the conflict banner when someone else saved the shipment first', async ({
   page,
 }) => {

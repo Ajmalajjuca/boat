@@ -106,6 +106,24 @@ test('FR-11.1 shows the date errors next to the fields', async ({ page }) => {
   ).toHaveText('Current revised ETA cannot be before today.')
 })
 
+test('FR-11.1 greys out the dates the rules refuse in the date pickers', async ({ page }) => {
+  const seed = await seeder()
+  const golf = await seed.product('Golf')
+  await seed.lot(golf.id, 'G-1')
+  await seed.done()
+  await page.goto('/')
+  const drawer = await openLot(page, 'G-1')
+  const date = (label: string) => drawer.getByLabel(label, { exact: true })
+  await expect(date('RM ready date at factory')).toHaveAttribute('min', day(0))
+  await expect(date('Planned completion / WH receipt')).toHaveAttribute('min', day(0))
+  await expect(date('Current revised ETA')).toHaveAttribute('min', day(0))
+  await expect(date('Actual date')).toHaveAttribute('max', day(0))
+  // Forecast dates can't be before the RM ready date either.
+  await date('RM ready date at factory').fill(day(5))
+  await expect(date('Planned completion / WH receipt')).toHaveAttribute('min', day(5))
+  await expect(date('Current revised ETA')).toHaveAttribute('min', day(5))
+})
+
 test('closes the drawer when someone else deleted the lot', async ({ page }) => {
   const seed = await seeder()
   const golf = await seed.product('Golf')

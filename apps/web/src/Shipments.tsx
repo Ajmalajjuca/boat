@@ -677,6 +677,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Field label="Original planned ETA" error={form.errors.plannedEta}>
                   <Input
                     type="date"
+                    min={draft.etd || undefined}
                     value={draft.plannedEta}
                     onChange={(e) => update('plannedEta', e.target.value)}
                   />
@@ -684,6 +685,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Field label="Current revised ETA" error={form.errors.revisedEta}>
                   <Input
                     type="date"
+                    min={draft.etd || undefined}
                     value={draft.revisedEta}
                     onChange={(e) => update('revisedEta', e.target.value)}
                   />
@@ -691,6 +693,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Field label="Actual warehouse arrival" error={form.errors.actualArrival}>
                   <Input
                     type="date"
+                    min={draft.etd || undefined}
                     max={today()}
                     value={draft.actualArrival}
                     onChange={(e) => update('actualArrival', e.target.value)}

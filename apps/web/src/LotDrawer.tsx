@@ -229,6 +229,9 @@ function LotEditor({
       setSavingLot(false)
     }
   }
+  // The date pickers grey out the days the date rules refuse; typed dates still get the errors.
+  const todayDate = today()
+  const forecastMin = draft.rmReadyDate > todayDate ? draft.rmReadyDate : todayDate
   const saveDraft = async (closeAfter: boolean, options?: OpenOptions) => {
     const found = validateLot(draft, !stored, view?.lot ?? null)
     if (!lotForm.check(found)) {
@@ -647,6 +650,7 @@ function LotEditor({
                 >
                   <Input
                     type="date"
+                    min={todayDate}
                     value={draft.rmReadyDate}
                     onChange={(e) => update('rmReadyDate', e.target.value)}
                   />
@@ -658,6 +662,7 @@ function LotEditor({
                 >
                   <Input
                     type="date"
+                    min={forecastMin}
                     value={draft.plannedDate}
                     onChange={(e) => update('plannedDate', e.target.value)}
                   />
@@ -665,6 +670,7 @@ function LotEditor({
                 <Field label="Current revised ETA" error={lotForm.errors.revisedEta}>
                   <Input
                     type="date"
+                    min={forecastMin}
                     value={draft.revisedEta}
                     onChange={(e) => update('revisedEta', e.target.value)}
                   />
@@ -676,6 +682,7 @@ function LotEditor({
                 >
                   <Input
                     type="date"
+                    max={todayDate}
                     value={draft.actualDate}
                     onChange={(e) => update('actualDate', e.target.value)}
                   />
@@ -1126,6 +1133,7 @@ function LotEditor({
               <Field label="Planned date" error={batchForm.errors.plannedDate}>
                 <Input
                   type="date"
+                  min={todayDate}
                   value={batch.plannedDate}
                   onChange={(e) => editBatch({ plannedDate: e.target.value })}
                 />
@@ -1133,6 +1141,7 @@ function LotEditor({
               <Field label="Received date" error={batchForm.errors.receivedDate}>
                 <Input
                   type="date"
+                  max={todayDate}
                   value={batch.receivedDate}
                   onChange={(e) => editBatch({ receivedDate: e.target.value })}
                 />
