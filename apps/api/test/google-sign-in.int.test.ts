@@ -77,10 +77,16 @@ describe('signing in with Google', () => {
     const res = await request(app).get('/api/v1/auth/google/callback?code=x&state=y')
     expect(res.headers.location).toBe(`${appUrl}/sign-in?error=failed`)
   })
-  it('reports whether Google sign-in is configured', async () => {
-    expect((await request(app).get('/api/v1/auth/options')).body).toEqual({ google: true })
+  it('reports whether Google sign-in is configured, and for which domains', async () => {
+    expect((await request(app).get('/api/v1/auth/options')).body).toEqual({
+      google: true,
+      domains: ['company.test'],
+    })
     const plain = testApp(db)
-    expect((await request(plain).get('/api/v1/auth/options')).body).toEqual({ google: false })
+    expect((await request(plain).get('/api/v1/auth/options')).body).toEqual({
+      google: false,
+      domains: [],
+    })
     expect((await request(plain).get('/api/v1/auth/google/start')).status).toBe(404)
   })
 })

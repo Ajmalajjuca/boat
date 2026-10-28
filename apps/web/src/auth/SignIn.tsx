@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
+import { LoaderCircle } from 'lucide-react'
 import { googleSignInUrl, login } from '../api/auth'
 import { useAuthOptions } from '../api/queries'
 import {
@@ -78,8 +79,10 @@ export function SignIn() {
     [password, setPassword] = useState(''),
     [busy, setBusy] = useState(false)
   const form = useFormErrors()
-  // Without Google set up, the backup admin's password is the only way in.
-  const passwordForm = withPassword || options.data?.google === false
+  // Google is offered only once the server says it's set up. Without it, or when the server can't
+  // be asked, the backup admin's password is the way in.
+  const google = options.data?.google === true
+  const passwordForm = withPassword || (!options.isPending && !google)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
@@ -103,7 +106,15 @@ export function SignIn() {
     >
       {auth.notice && <Notice>{auth.notice}</Notice>}
       <FormError message={googleError} />
-      {passwordForm ? (
+      {options.isPending && !withPassword ? (
+        <div
+          role="status"
+          aria-label="Loading sign-in options"
+          className="flex justify-center py-3 text-slate-400"
+        >
+          <LoaderCircle size={20} aria-hidden="true" className="animate-spin" />
+        </div>
+      ) : passwordForm ? (
         <form onSubmit={submit} noValidate className="space-y-4">
           <FormError message={form.errors.form} />
           <Field label="Email" error={form.errors.email}>
@@ -132,7 +143,7 @@ export function SignIn() {
           <Button type="submit" className="w-full" loading={busy}>
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
-          {options.data?.google && (
+          {google && (
             <button
               type="button"
               onClick={() => {

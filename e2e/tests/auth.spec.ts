@@ -45,6 +45,32 @@ test('FR-11.6 the backup admin signs in with a password', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Change password' })).toBeVisible()
 })
 
+test('offers Google only once the server says it is set up', async ({ page }) => {
+  let release!: () => void
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/v1/auth/options', async (route) => {
+    await waiting
+    await route.continue()
+  })
+  await page.goto('/')
+  await expect(page.getByRole('status', { name: 'Loading sign-in options' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Sign in with Google' })).toHaveCount(0)
+  release()
+  await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible()
+})
+
+test('FR-11.6 falls back to the admin password when sign-in options cannot load', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/options', (route) => route.abort())
+  await page.goto('/')
+  // The query retries before giving up.
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('link', { name: 'Sign in with Google' })).toHaveCount(0)
+})
+
 test('shows the server message for a wrong password', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Admin password sign-in' }).click()

@@ -43,8 +43,9 @@ export type SessionUser = {
   // Only the backup admin signs in with a password; it alone can change one.
   passwordLogin: boolean
 }
-// GET /auth/options: what the sign-in screen offers.
-export type AuthOptions = { google: boolean }
+// GET /auth/options: whether Google sign-in is set up, and the company domains users' emails must
+// be on (none without Google).
+export type AuthOptions = { google: boolean; domains: string[] }
 export type MePayload = {
   user: SessionUser
   allowedActions: Action[]

@@ -1,20 +1,19 @@
 import { useConfirm } from './ui'
 import { useState, type FormEvent } from 'react'
-import type { InviteResult, ResendResult, UserItem } from '@boat/domain/api'
+import type { InviteResult, UserItem } from '@boat/domain/api'
 import { roleInfo, roles } from '@boat/domain/permissions'
 import { validateAccount } from '@boat/domain/validation'
 import { Plus } from 'lucide-react'
 import {
   deleteUser,
   inviteUser,
-  resendInvite,
   updateUser,
   type UserForm,
   userField,
   userInput,
 } from './api/admin'
 import { values } from './api/mappers'
-import { keys, useLookups, useUsers } from './api/queries'
+import { keys, useAuthOptions, useLookups, useUsers } from './api/queries'
 import { queryClient } from './api/queryClient'
 import type { Role } from '@boat/domain/models'
 import {
@@ -50,6 +49,9 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
   const lookups = useLookups().data ?? []
   const [editing, setEditing] = useState<{ user: UserItem | null; form: UserForm } | null>(null)
   const form = useFormErrors()
+  // New users must be on a company domain; the placeholder shows which.
+  const domains = useAuthOptions().data?.domains ?? []
+  const emailPlaceholder = domains.length ? domains.map((d) => `name@${d}`).join(' or ') : undefined
   // The access email is a courtesy: they sign in with Google either way.
   const sent = (r: { accessEmailSent: boolean }) =>
     onMessage(
@@ -90,14 +92,6 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
     setEditing(null)
     if (invited) sent(invited)
     else onMessage(`${input.name} saved.`)
-  }
-  const resend = async (user: UserItem) => {
-    let result: ResendResult | undefined
-    const ok = await run(async () => {
-      result = await resendInvite(user.id)
-      await refreshUsers()
-    })
-    if (ok && result) sent(result)
   }
   const setStatus = (user: UserItem, status: 'active' | 'disabled') =>
     run(async () => {
@@ -192,11 +186,6 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
                       <Button size="sm" variant="ghost" onClick={() => open(u)}>
                         Edit
                       </Button>
-                      {u.status === 'invited' && (
-                        <Button size="sm" variant="ghost" onClick={() => resend(u)}>
-                          Resend access email
-                        </Button>
-                      )}
                       {u.status === 'active' && (
                         <Button size="sm" variant="ghost" onClick={() => setStatus(u, 'disabled')}>
                           Disable
@@ -240,6 +229,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
               <Field label="Email" required error={form.errors.email}>
                 <Input
                   type="email"
+                  placeholder={emailPlaceholder}
                   value={editing.form.email}
                   onChange={(e) => edit({ email: e.target.value })}
                 />

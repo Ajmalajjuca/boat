@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { type CookieOptions, type Response, Router } from 'express'
 import { z } from 'zod'
+import type { AuthOptions } from '@boat/domain/api'
 import { authOf, publicRoute, requireSignedIn } from '../../core/access'
 import type { Features } from '../../core/clock'
 import { NotFoundError } from '../../core/errors'
@@ -97,9 +98,14 @@ export function authRouter(deps: AuthRouterDeps) {
     res.json(await mePayload(deps.settings, deps.features, authOf(req)))
   })
 
-  // FR-11.5: Google sign-in. The sign-in page asks whether it is set up.
+  // FR-11.5: Google sign-in. The sign-in page asks whether it is set up, and the Users screen
+  // which domains new users' emails must be on. The domains aren't secret: Google gets them too.
   router.get('/options', publicRoute(), (_req, res) => {
-    res.json({ google: !!deps.google })
+    const options: AuthOptions = {
+      google: !!deps.google,
+      domains: deps.google?.allowedDomains ?? [],
+    }
+    res.json(options)
   })
 
   // A full-page navigation from the sign-in page: off to Google, with state, nonce and the PKCE

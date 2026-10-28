@@ -46,10 +46,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     whenSessionEnds(() => signedOut('Your session ended. Sign in again.'))
     // The app's only /auth/me call. Every request with a session moves its idle timer, so
-    // polling this would keep sessions alive forever.
-    fetchMe().then(signedIn, (err: unknown) =>
-      signedOut(err instanceof UnauthenticatedError || !(err instanceof Error) ? '' : err.message),
+    // polling this would keep sessions alive forever. An answer that arrives after cleanup (React
+    // runs effects twice in development) is dropped: a second signedOut would clear the sign-in
+    // screen's queries while they load.
+    let current = true
+    fetchMe().then(
+      (payload) => current && signedIn(payload),
+      (err: unknown) =>
+        current &&
+        signedOut(
+          err instanceof UnauthenticatedError || !(err instanceof Error) ? '' : err.message,
+        ),
     )
+    return () => {
+      current = false
+    }
   }, [signedIn, signedOut])
   const signOut = useCallback(
     async (message = '') => {

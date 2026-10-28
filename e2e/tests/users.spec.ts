@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { apiAs, googleSignInApi, newUser } from '../support/api'
 import { authFile, pocValue, users } from '../support/env'
-import { emailsTo, nextEmail } from '../support/mail'
+import { nextEmail } from '../support/mail'
 import { expect, test } from '../support/test'
 import { choose, goTo, toast } from '../support/ui'
 
@@ -21,6 +21,10 @@ test('FR-11.5 adds a user, who shows as active once they sign in with Google', a
   await page.getByRole('button', { name: 'Add user' }).click()
   const form = page.getByRole('dialog', { name: 'Add user' })
   await form.getByLabel('Name', { exact: true }).fill('Ivy Invitee')
+  await expect(form.getByLabel('Email', { exact: true })).toHaveAttribute(
+    'placeholder',
+    'name@e2e.test',
+  )
   await form.getByLabel('Email', { exact: true }).fill(email)
   await form.getByLabel('Role', { exact: true }).selectOption('planner')
   await form.getByRole('button', { name: 'Add user' }).click()
@@ -59,16 +63,14 @@ test('edits a role and POC link', async ({ page }) => {
   await expect(row(page, user.email)).toContainText(pocValue)
 })
 
-test('resends the access email', async ({ page }) => {
-  const email = `resend-${Date.now().toString(36)}@e2e.test`
+test('offers no access email resend for a user who has not signed in', async ({ page }) => {
+  const email = `pending-${Date.now().toString(36)}@e2e.test`
   const admin = await apiAs('admin')
-  await admin.post('/users', { email, name: 'Rae Resend', role: 'viewer', pocId: null })
+  await admin.post('/users', { email, name: 'Pat Pending', role: 'viewer', pocId: null })
   await admin.dispose()
-  await nextEmail(email, 0)
   await openUsers(page)
-  await row(page, email).getByRole('button', { name: 'Resend access email' }).click()
-  await expect(toast(page)).toContainText('Access email sent.')
-  await expect.poll(() => emailsTo(email).length).toBe(2)
+  await expect(row(page, email)).toContainText('Invited')
+  await expect(row(page, email).getByRole('button', { name: /resend/i })).toHaveCount(0)
 })
 
 test('disables, re-enables and deletes a user', async ({ page }) => {
