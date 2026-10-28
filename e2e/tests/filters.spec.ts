@@ -26,7 +26,8 @@ test('FR-2.5 groups lots under their products with totals', async ({ page }) => 
   await seedThree()
   await page.goto('/')
   const alpha = page.getByRole('group', { name: 'Alpha' })
-  await expect(alpha).toContainText('2 lots · 1 delayed')
+  await expect(alpha).toContainText('PA / TWS · 2 lots')
+  await expect(alpha).toContainText('1 delayed')
   await expect(page.getByRole('group', { name: 'Bravo' })).toContainText(/Qty\s*200/)
   await expect(page.getByRole('group', { name: 'Charlie' })).toContainText('0 lots')
   await alpha.getByRole('button', { expanded: false }).click()
@@ -111,7 +112,7 @@ test('FR-11.3 lists lots with an actual date under Completed', async ({ page }) 
   await seed.done()
   await page.goto('/')
   await goTo(page, 'Completed')
-  await expect(page.getByRole('group', { name: 'Echo' })).toContainText('1 lots · completed')
+  await expect(page.getByRole('group', { name: 'Echo' })).toContainText('1 lot')
 })
 
 test('FR-2.5 goes back a page when the last row of a later page is deleted', async ({ page }) => {

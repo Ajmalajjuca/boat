@@ -7,13 +7,11 @@ import {
   CalendarCheck,
   Check,
   CircleAlert,
-  Download,
   Factory,
   Menu,
   Plus,
   Settings2,
   Ship,
-  Upload,
   X,
 } from 'lucide-react'
 import type { DataSet, Product } from '@boat/domain/models'
@@ -52,7 +50,6 @@ import {
   ConfirmationProvider,
   SavingContext,
   useConfirm,
-  Badge,
   Button,
   Card,
   Field,
@@ -92,7 +89,7 @@ const activityKey = 'boat.lastActivity'
 
 function Loading() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f7f8fa]">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-wash">
       <Brand />
       <div className="w-full max-w-md">
         <LoadingState label="Opening Boat OS" />
@@ -354,59 +351,54 @@ function Workspace({ me }: { me: MePayload }) {
   return (
     <AccessContext.Provider value={access}>
       <SavingContext.Provider value={saveState === 'saving'}>
-        <div className="min-h-screen bg-[#f5f6f8] lg:flex">
+        <div className="min-h-screen bg-canvas lg:flex">
           <aside
-            className={`fixed inset-y-0 left-0 z-30 w-64 bg-[#1a2024] text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            className={`fixed inset-y-0 left-0 z-30 w-64 bg-ink text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
+              <div className="flex items-center justify-between px-5 pt-6 pb-5">
                 <Brand dark />
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-white lg:hidden"
+                  className="text-white hover:bg-white/10 hover:text-white lg:hidden"
                   onClick={() => setMenuOpen(false)}
                   aria-label="Close navigation"
                 >
                   <X size={18} />
                 </Button>
               </div>
-              <div className="px-4 pt-8">
-                <div className="px-3 text-[10px] font-bold uppercase tracking-[.18em] text-white/40">
-                  Workspace
-                </div>
-                <nav className="mt-3 space-y-1" aria-label="Main navigation">
-                  {navItems.map(([id, Icon]) => (
-                    <button
-                      key={id}
-                      aria-current={screen === id ? 'page' : undefined}
-                      onClick={() => {
-                        setScreen(id)
-                        setMenuOpen(false)
-                        csvRef.current = null
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${screen === id ? 'bg-[#ed1c24] text-white shadow-sm' : 'text-white/65 hover:bg-white/8 hover:text-white'}`}
-                    >
-                      <Icon size={18} className={screen === id ? 'text-white' : ''} />
-                      <span className="flex-1">{screenInfo[id].title}</span>
-                      {id === 'completed' && (
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">
-                          {completedCount ?? '…'}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-              <div className="mt-auto space-y-3 px-5 pb-6">
+              <nav className="mt-2 space-y-0.5 px-3" aria-label="Main navigation">
+                {navItems.map(([id, Icon]) => (
+                  <button
+                    key={id}
+                    aria-current={screen === id ? 'page' : undefined}
+                    onClick={() => {
+                      setScreen(id)
+                      setMenuOpen(false)
+                      csvRef.current = null
+                    }}
+                    className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${screen === id ? 'bg-white/10 text-white before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-brand' : 'text-white/60 hover:bg-white/[.06] hover:text-white'}`}
+                  >
+                    <Icon size={18} aria-hidden="true" className="shrink-0" />
+                    <span className="flex-1">{screenInfo[id].title}</span>
+                    {id === 'completed' && (
+                      <span className="num rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-semibold text-white/80">
+                        {completedCount ?? '…'}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+              <div className="mt-auto space-y-3 px-3 pb-4">
                 <ProfileCard
                   onChangePassword={() => {
                     setPasswordOpen(true)
                     setMenuOpen(false)
                   }}
                 />
-                <div className="flex items-center gap-2 px-1 text-[11px] text-white/50">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" /> Records shared by
+                <div className="flex items-center gap-2 px-2 text-xs text-white/45">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Records shared by
                   everyone signed in
                 </div>
               </div>
@@ -414,37 +406,54 @@ function Workspace({ me }: { me: MePayload }) {
           </aside>
           {menuOpen && (
             <button
-              className="fixed inset-0 z-20 bg-black/30 lg:hidden"
+              className="fixed inset-0 z-20 bg-ink/40 lg:hidden"
               aria-label="Close navigation"
               onClick={() => setMenuOpen(false)}
             />
           )}
           <main className="min-w-0 flex-1">
-            <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-7 lg:px-8">
-              <div className="mx-auto flex max-w-[1700px] flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+            <header className="sticky top-0 z-10 border-b border-line bg-white/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-4 lg:px-8">
+              <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                <div className="flex min-w-0 items-center gap-2">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="lg:hidden"
+                    className="-ml-2 lg:hidden"
                     aria-label="Open navigation"
                     onClick={() => setMenuOpen(true)}
                   >
                     <Menu size={20} />
                   </Button>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-xl font-extrabold tracking-tight text-[#1a2024] sm:text-2xl">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3">
+                      <h1 className="screen-title truncate text-xl text-ink sm:text-2xl">
                         {screenInfo[screen].title}
                       </h1>
-                      {screen === 'production' && <Badge tone="teal">LIVE</Badge>}
+                      {saveState !== 'idle' && (
+                        <span
+                          className={`flex shrink-0 items-center gap-1.5 text-xs font-semibold ${saveState === 'failed' ? 'text-rose-700' : saveState === 'saving' ? 'text-muted' : 'text-emerald-700'}`}
+                        >
+                          {saveState === 'saving' ? (
+                            <LoaderCircle size={13} className="animate-spin" />
+                          ) : saveState === 'failed' ? (
+                            <CircleAlert size={13} />
+                          ) : (
+                            <Check size={13} />
+                          )}
+                          {saveState === 'saving'
+                            ? 'Saving…'
+                            : saveState === 'saved'
+                              ? 'Saved'
+                              : 'Save failed'}
+                        </span>
+                      )}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+                    <p className="mt-0.5 hidden text-sm text-muted sm:block">
                       {screenInfo[screen].description}
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex w-full items-center gap-2 sm:w-auto">
                   {screen === 'production' || screen === 'completed' ? (
                     <>
                       {can('editProducts', access) && (
@@ -469,22 +478,11 @@ function Workspace({ me }: { me: MePayload }) {
                       <Plus size={16} /> Add Shipment
                     </Button>
                   ) : null}
-                  {can('manageData', access) && (
-                    <Button variant="secondary" size="sm" onClick={openImport}>
-                      <Upload size={15} /> <span className="hidden sm:inline">Import JSON</span>
-                      <span className="sm:hidden">Import</span>
-                    </Button>
-                  )}
-                  {can('exportBackup', access) && (
-                    <Button variant="secondary" size="sm" onClick={exportJson}>
-                      <Download size={15} /> <span className="hidden sm:inline">Export JSON</span>
-                      <span className="sm:hidden">Export</span>
-                    </Button>
-                  )}
                   {screen !== 'settings' && (
                     <Button
-                      variant="secondary"
-                      size="sm"
+                      variant="ghost"
+                      className="ml-auto sm:ml-0"
+                      title="Download the rows on screen as a spreadsheet"
                       onClick={async () => {
                         if (!csvRef.current) return
                         try {
@@ -498,54 +496,34 @@ function Workspace({ me }: { me: MePayload }) {
                         }
                       }}
                     >
-                      <ArrowDownToLine size={15} /> CSV
+                      <ArrowDownToLine size={16} /> CSV
                     </Button>
                   )}
                 </div>
               </div>
             </header>
-            <div className="mx-auto max-w-[1700px] space-y-5 px-4 py-6 sm:px-7 lg:px-8">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-slate-500">
-                  Operations overview <span className="mx-2">/</span>{' '}
-                  <b className="text-[#1a2024]">{screenInfo[screen].title}</b>
-                </div>
-                <div
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${saveState === 'failed' ? 'bg-rose-50 text-rose-700' : saveState === 'saving' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}
-                >
-                  {saveState === 'saving' ? (
-                    <LoaderCircle size={13} className="animate-spin" />
-                  ) : saveState === 'failed' ? (
-                    <CircleAlert size={13} />
-                  ) : (
-                    <Check size={13} />
-                  )}{' '}
-                  {saveState === 'saving'
-                    ? 'Saving…'
-                    : saveState === 'saved'
-                      ? 'Saved'
-                      : saveState === 'failed'
-                        ? 'Save failed'
-                        : 'Shared data'}
-                </div>
-              </div>
+            <div className="mx-auto max-w-[1600px] space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
               {message &&
                 // Portaled toast stays visible and clickable above open drawers and modals.
                 createPortal(
                   <div
                     data-toast
                     role={saveState === 'failed' ? 'alert' : 'status'}
-                    className={`pointer-events-auto fixed left-1/2 top-4 z-[90] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl ${saveState === 'failed' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-teal-200 bg-teal-50 text-slate-800'}`}
+                    className={`pointer-events-auto fixed top-3 left-1/2 z-[90] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm shadow-[0_12px_32px_rgba(16,24,40,.28)] sm:top-4 ${saveState === 'failed' ? 'bg-rose-700 text-white' : 'bg-ink text-white'}`}
                   >
                     <span className="flex items-start gap-2">
                       {saveState === 'failed' ? (
                         <CircleAlert size={16} className="mt-0.5 shrink-0" />
                       ) : (
-                        <Check size={16} className="mt-0.5 shrink-0" />
+                        <Check size={16} className="mt-0.5 shrink-0 text-emerald-400" />
                       )}
                       {message}
                     </span>
-                    <button aria-label="Dismiss message" onClick={() => setMessage('')}>
+                    <button
+                      aria-label="Dismiss message"
+                      className="-mr-1 rounded p-0.5 text-white/70 hover:text-white"
+                      onClick={() => setMessage('')}
+                    >
                       <X size={15} />
                     </button>
                   </div>,
@@ -710,7 +688,7 @@ function Workspace({ me }: { me: MePayload }) {
           </Modal>
           <Modal open={importOpen} onOpenChange={setImportOpen} title="Import JSON backup">
             <div className="space-y-4">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-ink-2">
                 Choose a JSON backup exported from this app. The file is checked before any records
                 are written.
               </p>
@@ -728,10 +706,10 @@ function Workspace({ me }: { me: MePayload }) {
               )}
               {importPreview && (
                 <Card className="p-4">
-                  <div className="mb-2 text-sm font-bold text-[#1a2024]">
+                  <div className="mb-2 text-sm font-bold text-ink">
                     {importFile} · import summary
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <div className="grid grid-cols-2 gap-2 text-xs text-ink-2">
                     {dataKeys.map((key) => (
                       <div key={key} className="flex justify-between gap-3">
                         <span>{key}</span>
@@ -741,7 +719,7 @@ function Workspace({ me }: { me: MePayload }) {
                   </div>
                 </Card>
               )}
-              <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <div className="space-y-2 rounded-xl border border-line p-3">
                 <label className="flex cursor-pointer gap-2 text-sm">
                   <input
                     type="radio"
@@ -751,7 +729,7 @@ function Workspace({ me }: { me: MePayload }) {
                   />
                   <span>
                     <b>Merge</b>
-                    <span className="block text-xs text-slate-500">
+                    <span className="block text-xs text-muted">
                       Matching IDs are updated; new IDs are inserted. Duplicate dropdown values and
                       settings are kept once. Relationships are checked against the combined data.
                     </span>
@@ -766,7 +744,7 @@ function Workspace({ me }: { me: MePayload }) {
                   />
                   <span>
                     <b>Replace</b>
-                    <span className="block text-xs text-slate-500">
+                    <span className="block text-xs text-muted">
                       Current records are cleared only after complete validation and confirmation.
                     </span>
                   </span>
@@ -784,7 +762,7 @@ function Workspace({ me }: { me: MePayload }) {
           </Modal>
           <Modal open={resetOpen} onOpenChange={setResetOpen} title="Reset all data">
             <div className="space-y-4">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-ink-2">
                 Deletes every product, lot, receipt and shipment for everyone. Users, dropdown
                 values and settings stay. Export a JSON backup first if you may need the records
                 again.

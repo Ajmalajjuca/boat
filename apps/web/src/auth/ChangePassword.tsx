@@ -81,7 +81,7 @@ export function ChangePassword({
             }}
           />
         </Field>
-        <p className="text-xs text-slate-500">You stay signed in here; other devices sign out.</p>
+        <p className="text-xs text-muted">You stay signed in here; other devices sign out.</p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={close}>
             Cancel

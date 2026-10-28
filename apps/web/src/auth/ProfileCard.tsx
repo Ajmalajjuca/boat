@@ -1,40 +1,48 @@
 import { roleInfo } from '@boat/domain/permissions'
-import { UserRound } from 'lucide-react'
+import { KeyRound, LogOut } from 'lucide-react'
 import { useAuth } from './AuthProvider'
+
+// Up to two initials, for the avatar.
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join('')
 
 export function ProfileCard({ onChangePassword }: { onChangePassword: () => void }) {
   const auth = useAuth(),
     user = auth.me?.user
   if (!user) return null
+  const action =
+    'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white'
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <div className="flex items-center gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold">
-          <UserRound size={15} />
+    <div className="rounded-lg border border-white/10 bg-white/[.04]">
+      <div className="flex items-center gap-3 px-3 py-3">
+        <span
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/12 text-[13px] font-semibold"
+        >
+          {initials(user.name)}
         </span>
         <div className="min-w-0">
-          <div className="truncate text-xs font-bold">{user.name}</div>
-          <div className="truncate text-[11px] text-white/50">
+          <div className="truncate text-sm font-semibold">{user.name}</div>
+          <div className="truncate text-xs text-white/55">
             {user.role === 'poc'
               ? `POC · ${user.poc?.value ?? 'not linked'}`
               : roleInfo[user.role].label}
           </div>
         </div>
       </div>
-      <div className="mt-3 flex gap-2">
-        <button
-          onClick={() => void auth.signOut()}
-          className="flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-semibold hover:bg-white/15"
-        >
-          Sign out
+      <div className="flex gap-1 border-t border-white/10 p-1">
+        <button onClick={() => void auth.signOut()} className={action}>
+          <LogOut size={13} aria-hidden="true" /> Sign out
         </button>
         {/* Only the backup admin has a password; everyone else signs in with Google. */}
         {user.passwordLogin && (
-          <button
-            onClick={onChangePassword}
-            className="flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-semibold hover:bg-white/15"
-          >
-            Change password
+          <button onClick={onChangePassword} className={action}>
+            <KeyRound size={13} aria-hidden="true" /> Change password
           </button>
         )}
       </div>

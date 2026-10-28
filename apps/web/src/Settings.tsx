@@ -84,16 +84,16 @@ export default function Settings({
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
         <div className="space-y-5">
           <Card>
-            <div className="border-b border-slate-100 px-5 py-4">
-              <h2 className="text-base font-bold text-[#1a2024]">Dropdown values</h2>
-              <p className="mt-1 text-xs text-slate-500">
+            <div className="border-b border-line-soft px-5 py-4">
+              <h2 className="section-title">Dropdown values</h2>
+              <p className="mt-1 max-w-2xl text-[13px] text-muted">
                 {editable
                   ? 'Add values as your operation evolves. Values in use cannot be renamed or deleted until records are reassigned. Required values drive status cards and cannot be changed.'
                   : 'Values used in forms and filters. Only admins can change them.'}
               </p>
             </div>
             <div className="flex flex-col sm:flex-row">
-              <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-100 p-3 sm:w-48 sm:flex-col sm:border-b-0 sm:border-r">
+              <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-line-soft p-3 sm:w-48 sm:flex-col sm:border-b-0 sm:border-r">
                 {kinds.map((k) => (
                   <button
                     key={k.kind}
@@ -101,15 +101,15 @@ export default function Settings({
                       setKind(k.kind)
                       addForm.reset()
                     }}
-                    className={`rounded-lg px-3 py-2 text-left text-xs font-semibold whitespace-nowrap ${kind === k.kind ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                    className={`rounded-md px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap ${kind === k.kind ? 'bg-ink text-white' : 'text-ink-2 hover:bg-wash hover:text-ink'}`}
                   >
                     {k.label}
                   </button>
                 ))}
               </div>
               <div className="min-w-0 flex-1 p-5">
-                <h3 className="font-bold text-[#1a2024]">{current.label}</h3>
-                <p className="mt-1 text-xs text-slate-500">{current.help}</p>
+                <h3 className="text-[15px] font-semibold text-ink">{current.label}</h3>
+                <p className="mt-1 text-[13px] text-muted">{current.help}</p>
                 {editable && (
                   <div className="mt-4 flex items-start gap-2">
                     <Field
@@ -129,18 +129,18 @@ export default function Settings({
                         }}
                       />
                     </Field>
-                    <Button onClick={add} className="mt-[22px]">
+                    <Button variant="secondary" onClick={add} className="mt-[25px]">
                       <Plus size={15} /> Add
                     </Button>
                   </div>
                 )}
-                <div className="mt-5 space-y-2">
+                <div className="mt-5 divide-y divide-line-soft rounded-lg border border-line">
                   {items.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                      className="flex min-h-11 items-center justify-between gap-2 px-3 py-1"
                     >
-                      <span className="text-sm font-medium text-slate-700">
+                      <span className="text-sm text-ink">
                         {item.value}
                         {item.system && (
                           <Badge className="ml-2" tone="slate">
@@ -213,12 +213,10 @@ export default function Settings({
           </Card>
           <Card className="p-5">
             <div className="flex items-start gap-3">
-              <Info size={18} className="mt-0.5 shrink-0 text-[#ed1c24]" />
+              <Info size={18} className="mt-0.5 shrink-0 text-faint" />
               <div>
-                <h3 className="font-bold text-[#1a2024]">
-                  Operational definitions & provisional rules
-                </h3>
-                <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-600 sm:grid-cols-2">
+                <h3 className="section-title">Definitions and working rules</h3>
+                <div className="mt-3 grid gap-x-6 gap-y-3 text-[13px] leading-5 text-ink-2 sm:grid-cols-2">
                   <p>
                     <b>Lot Qty</b> is the client's arrived raw-material quantity, provisionally in
                     finished-product-equivalent units. A lot is completed once its{' '}
@@ -259,38 +257,38 @@ export default function Settings({
           )}
           <Card className="p-5">
             <div className="flex items-start gap-3">
-              <Database size={19} className="shrink-0 text-[#ed1c24]" />
+              <Database size={18} className="mt-0.5 shrink-0 text-faint" />
               <div>
-                <h2 className="font-bold text-[#1a2024]">Data management</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <h2 className="section-title">Data management</h2>
+                <p className="mt-1 text-[13px] leading-5 text-muted">
                   Records are stored on the server and shared by every user. Export a JSON backup
                   for a copy you keep.
                 </p>
               </div>
             </div>
-            <div className="mt-5 grid gap-2">
+            <div className="mt-4 grid gap-2">
               {access.can('exportBackup') && (
-                <Button variant="secondary" onClick={onExport}>
+                <Button variant="secondary" className="justify-start" onClick={onExport}>
                   <Download size={16} /> Export all records as JSON
                 </Button>
               )}
               {access.can('manageData') && (
                 <>
-                  <Button variant="secondary" onClick={onImport}>
+                  <Button variant="secondary" className="justify-start" onClick={onImport}>
                     <Upload size={16} /> Import JSON backup
                   </Button>
-                  <Button variant="danger" onClick={onReset}>
+                  <Button variant="danger" className="justify-start" onClick={onReset}>
                     <RotateCcw size={16} /> Reset all application data
                   </Button>
                 </>
               )}
               {!access.can('exportBackup') && (
-                <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                <p className="rounded-lg bg-wash p-3 text-[13px] text-ink-2">
                   Backups are available to admins and planners. Import and reset are admin only.
                 </p>
               )}
             </div>
-            <p className="mt-3 text-xs text-slate-500">
+            <p className="mt-3 text-[13px] leading-5 text-muted">
               Merge updates matching IDs and adds new records, while keeping one copy of each
               dropdown value and setting key. Replace clears existing records only after validation
               and confirmation.
@@ -321,7 +319,7 @@ export default function Settings({
                 }}
               />
             </Field>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted">
               If this value is in use, reassign its records before renaming it.
             </p>
             <div className="mt-5 flex justify-end gap-2">
@@ -360,7 +358,7 @@ function SignInSettings({ run, onMessage }: { run: Run; onMessage: (message: str
   }
   return (
     <Card className="p-5">
-      <h2 className="font-bold text-[#1a2024]">Sign-in</h2>
+      <h2 className="section-title">Sign-in</h2>
       <div className="mt-4 grid gap-3">
         <FormError message={form.errors.form} />
         <Field label="Idle sign-out (minutes)" error={form.errors.idleTimeoutMinutes}>
@@ -386,7 +384,11 @@ function SignInSettings({ run, onMessage }: { run: Run; onMessage: (message: str
             }}
           />
         </Field>
-        <Button onClick={save}>Save sign-in settings</Button>
+        <div className="flex justify-end">
+          <Button variant="secondary" onClick={save}>
+            Save sign-in settings
+          </Button>
+        </div>
       </div>
     </Card>
   )

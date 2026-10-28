@@ -1,17 +1,32 @@
 @import 'tailwindcss';
+/* Archivo, self-hosted: one family with a width axis. Condensed for dense table headers, a little
+   wider for screen titles, normal for everything else. */
+@import '@fontsource-variable/archivo/standard.css';
+
+/* Design tokens. Ink and brand red are boAt's; the greys are cool so status colours read clearly.
+   Brand red is kept for the main action and for what is late; status uses Tailwind's tones. */
+@theme {
+  --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-ink: #1a2024;
+  --color-ink-2: #3a444b;
+  --color-muted: #66737b;
+  --color-faint: #95a1a8;
+  --color-line: #e1e5e8;
+  --color-line-soft: #eef1f3;
+  --color-canvas: #f3f4f6;
+  --color-wash: #f8f9fa;
+  --color-brand: #ed1c24;
+  --color-brand-deep: #c4121a;
+  --color-brand-wash: #fff1f1;
+}
 :root {
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  color: #1a2024;
-  background: #f5f6f8;
+  font-family: var(--font-sans);
+  font-feature-settings: 'ss01';
+  color: var(--color-ink);
+  background: var(--color-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 /* Base rules stay layered so Tailwind text-size utilities apply to buttons and inputs. */
 @layer base {
@@ -21,6 +36,8 @@
   body {
     margin: 0;
     min-width: 320px;
+    font-size: 14px;
+    line-height: 1.45;
   }
   button,
   input,
@@ -29,9 +46,20 @@
     font: inherit;
   }
   button:focus-visible,
-  a:focus-visible {
-    outline: 2px solid #ed1c24;
+  a:focus-visible,
+  [role='tab']:focus-visible {
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* Quantities, dates and counts line up in columns. */
+  table,
+  .num {
+    font-variant-numeric: tabular-nums;
   }
 }
 /* Layered so Tailwind utilities on a control (flex, pl-9, min-h-20) can override it. */
@@ -40,21 +68,32 @@
     display: block;
     width: 100%;
     min-height: 40px;
-    border: 1px solid #d9e2e4;
-    border-radius: 9px;
+    border: 1px solid #d5dbdf;
+    border-radius: 8px;
     background: #fff;
-    padding: 9px 11px;
-    color: #30383e;
-    font-size: 13px;
+    padding: 9px 12px;
+    color: var(--color-ink);
+    font-size: 14px;
     outline: none;
     transition:
       border-color 0.15s,
       box-shadow 0.15s;
   }
+  .field:hover:not(:disabled):not(:focus) {
+    border-color: #b9c2c8;
+  }
   .field:focus,
   .field:focus-visible {
-    border-color: #ed1c24;
-    box-shadow: 0 0 0 3px rgba(237, 28, 36, 0.12);
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 3px rgba(26, 32, 36, 0.1);
+  }
+  select.field {
+    appearance: none;
+    padding-right: 34px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2366737b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
   }
   [data-invalid] .field {
     border-color: #e11d48;
@@ -65,93 +104,157 @@
     box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.14);
   }
   .field:disabled {
-    background: #f3f6f6;
-    color: #5b6f73;
+    background: var(--color-wash);
+    color: var(--color-muted);
     cursor: not-allowed;
   }
   .field::placeholder {
-    color: #94a3a8;
+    color: var(--color-faint);
   }
   .field-label {
     display: block;
     margin-bottom: 6px;
-    color: #4b5563;
-    font-size: 12px;
-    font-weight: 700;
+    color: var(--color-ink-2);
+    font-size: 13px;
+    font-weight: 600;
   }
   /* The required marker is drawn by CSS with empty alternative text, so it is neither part of the
      label's text nor of the field's accessible name. */
   .field-label[data-required]::after {
     content: '*' / '';
-    margin-left: 2px;
-    color: #e11d48;
+    margin-left: 3px;
+    color: var(--color-brand);
+  }
+  /* Strips of controls that scroll sideways on a phone instead of wrapping into a tall stack.
+     Layered, so md:grid and other utilities can change it on wider screens. */
+  .scroll-row {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+  /* A record's status as a coloured edge on a card (phone layouts). */
+  .tone-edge[data-tone] {
+    box-shadow: inset 3px 0 0 var(--row-tone);
   }
 }
 .table-wrap {
   overflow: auto;
-  scrollbar-color: #cbd5d8 transparent;
+  scrollbar-color: #cbd2d6 transparent;
 }
 .data-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 13px;
 }
 .data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   text-align: left;
-  padding: 11px 13px;
-  background: #f8f9fb;
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  border-bottom: 1px solid #e4ebea;
+  padding: 9px 14px;
+  background: var(--color-wash);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-stretch: 88%;
+  border-bottom: 1px solid var(--color-line);
 }
 .data-table td {
-  padding: 12px 13px;
-  border-bottom: 1px solid #edf1f1;
-  color: #374151;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-line-soft);
+  color: var(--color-ink-2);
   vertical-align: middle;
 }
 .data-table tbody tr:last-child td {
   border-bottom: 0;
 }
 .data-table tbody tr:hover td {
-  background: #fbfcfc;
+  background: #fafbfb;
+}
+/* Rows that open a record. */
+.data-table tbody tr[data-clickable] {
+  cursor: pointer;
+}
+.data-table tbody tr[data-clickable]:hover td {
+  background: #f6f8f9;
+}
+/* A row's status as a coloured edge on its first cell. */
+.data-table tbody tr[data-tone] td:first-child {
+  box-shadow: inset 3px 0 0 var(--row-tone);
+}
+[data-tone='red'] {
+  --row-tone: #e11d48;
+}
+[data-tone='amber'] {
+  --row-tone: #f59e0b;
+}
+[data-tone='green'] {
+  --row-tone: #10b981;
+}
+[data-tone='blue'] {
+  --row-tone: #0ea5e9;
+}
+[data-tone='slate'] {
+  --row-tone: #cbd5e1;
+}
+.data-table .cell-num {
+  text-align: right;
 }
 .section-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: #1a2024;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--color-ink);
 }
 .metric-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #809199;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted);
 }
 .metric-value {
-  font-size: 23px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: #1a2024;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+.screen-title {
+  font-stretch: 112%;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 .tab {
-  padding: 10px 13px;
-  border-bottom: 2px solid transparent;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+  position: relative;
+  padding: 10px 2px;
+  margin-right: 20px;
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
+.tab::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+.tab:hover {
+  color: var(--color-ink);
+}
 .tab[data-active='true'] {
-  border-color: #ed1c24;
-  color: #1a2024;
+  color: var(--color-ink);
+}
+.tab[data-active='true']::after {
+  background: var(--color-brand);
 }
 .icon-dot {
   width: 7px;
@@ -161,7 +264,7 @@
   display: inline-block;
 }
 .skeleton {
-  background: linear-gradient(100deg, #f0f1f3 25%, #fafafa 45%, #f0f1f3 65%);
+  background: linear-gradient(100deg, #eceef0 25%, #f7f8f9 45%, #eceef0 65%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -178,11 +281,24 @@
 [data-toast] {
   animation: appear 160ms ease-out;
 }
+[data-sheet] {
+  animation: slide-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 @keyframes appear {
   from {
     opacity: 0;
   }
   to {
+    opacity: 1;
+  }
+}
+@keyframes slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
     opacity: 1;
   }
 }
@@ -198,9 +314,17 @@
 @media (max-width: 640px) {
   .data-table th,
   .data-table td {
-    padding: 10px 9px;
+    padding: 10px 10px;
   }
   .metric-value {
-    font-size: 20px;
+    font-size: 22px;
   }
+  /* 16px stops iOS zooming into a field on focus. */
+  .field {
+    font-size: 16px;
+  }
+}
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-ink);
 }

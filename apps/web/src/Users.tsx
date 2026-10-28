@@ -39,6 +39,14 @@ const statusLabel: Record<UserItem['status'], string> = {
 }
 const blank: UserForm = { name: '', email: '', role: 'viewer', poc: '' }
 const refreshUsers = () => queryClient.invalidateQueries({ queryKey: keys.users })
+// "28 Oct 2026, 13:48": the day first, as the rest of the app writes dates.
+const signedInAt = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
 // Admins add users, change their role and POC link, and disable or delete them. The server
 // refuses what would leave no active admin; that message shows in the form or as a toast.
@@ -109,16 +117,15 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-[#ed1c24]">
-            Workspace access
-          </div>
-          <h2 className="text-lg font-bold text-[#1a2024]">
-            Users <span className="ml-1 text-sm font-medium text-slate-400">{users.length}</span>
+          <h2 className="section-title">
+            Users <span className="num ml-1 font-normal text-faint">{users.length}</span>
           </h2>
-          <p className="mt-1 text-xs text-slate-500">Manage your team, roles and account access.</p>
+          <p className="mt-1 text-[13px] text-muted">
+            Who can sign in, their role, and the point of contact they work for.
+          </p>
         </div>
-        <Button size="sm" onClick={() => open(null)}>
-          <Plus size={14} /> Add user
+        <Button variant="secondary" onClick={() => open(null)}>
+          <Plus size={15} /> Add user
         </Button>
       </div>
       {usersQuery.isPending ? (
@@ -140,15 +147,15 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
         />
       ) : (
         <div
-          className="table-wrap mt-5 rounded-xl border border-slate-200"
+          className="table-wrap mt-4 rounded-lg border border-line"
           role="region"
           aria-label="User accounts"
           tabIndex={0}
         >
-          <p className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 sm:hidden">
+          <p className="border-b border-line-soft px-3 py-2 text-xs text-muted sm:hidden">
             Swipe horizontally to view all columns and actions.
           </p>
-          <table aria-label="Users" className="data-table min-w-[900px]">
+          <table aria-label="Users" className="data-table min-w-[760px]">
             <thead>
               <tr>
                 {['User', 'Role', 'Status', 'Point of contact', 'Last sign-in', 'Actions'].map(
@@ -164,8 +171,8 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
               {users.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <div className="font-bold text-[#1a2024]">{u.name}</div>
-                    <div className="mt-1 text-xs text-slate-500">{u.email}</div>
+                    <div className="font-medium text-ink">{u.name}</div>
+                    <div className="mt-0.5 text-xs text-muted">{u.email}</div>
                   </td>
                   <td>
                     <Badge>{roleInfo[u.role].label}</Badge>
@@ -180,9 +187,11 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
                     </Badge>
                   </td>
                   <td>{u.poc?.value ?? '—'}</td>
-                  <td>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
+                  <td className="text-muted">
+                    {u.lastLoginAt ? signedInAt.format(new Date(u.lastLoginAt)) : 'Never'}
+                  </td>
                   <td>
-                    <div className="flex gap-1">
+                    <div className="-ml-2 flex gap-0.5">
                       <Button size="sm" variant="ghost" onClick={() => open(u)}>
                         Edit
                       </Button>
@@ -199,7 +208,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-rose-700"
+                        className="text-rose-700 hover:bg-rose-50 hover:text-rose-800"
                         onClick={() => remove(u)}
                       >
                         Delete

@@ -4,7 +4,7 @@ import type { LotProduct } from '@boat/domain/api'
 import { dateLabel, monthLabel, monthOf, quantity, today } from '@boat/domain/calculations'
 import { downloadMonthEndCsv } from './api/reports'
 import { useMonthEnd, useMonths } from './api/queries'
-import { Button, Card, Empty, Select, type CsvExport } from './ui'
+import { Badge, Button, Card, cn, Empty, Select, type CsvExport } from './ui'
 
 type Props = {
   onOpenLot: (id: string) => void
@@ -69,26 +69,27 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
               </option>
             ))}
           </Select>
-          {inProgress && (
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-              Month in progress
-            </span>
-          )}
+          {inProgress && <Badge tone="amber">Month in progress</Badge>}
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="max-w-xl text-[13px] text-muted lg:text-right">
           Plan uses each lot's original planned date, so revised ETAs still count against the month
           they were planned for.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line-soft shadow-[0_1px_2px_rgba(16,24,40,.04)] md:grid-cols-4">
         {cards.map(([label, value, help]) => (
           <div
             key={label}
             title={help}
-            className={`rounded-2xl border bg-white p-4 shadow-[0_2px_14px_rgba(15,23,42,.035)] ${label === cards[2][0] && summary.shortfall ? 'border-orange-300' : 'border-slate-200'}`}
+            className={cn(
+              'relative bg-white px-4 pt-3.5 pb-3',
+              label === cards[2][0] &&
+                summary.shortfall > 0 &&
+                'before:absolute before:inset-x-0 before:top-0 before:h-[3px] before:bg-amber-500',
+            )}
           >
             <span className="metric-label">{label}</span>
-            <div className="mt-2 metric-value">{value}</div>
+            <div className="metric-value mt-1.5">{value}</div>
           </div>
         ))}
       </div>
@@ -100,23 +101,23 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
       ) : (
         <>
           <Card>
-            <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-              <h2 className="text-base font-bold text-[#1a2024]">By product</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
+            <div className="px-4 py-4 sm:px-5">
+              <h2 className="section-title">By product</h2>
+              <p className="mt-0.5 text-[13px] text-muted">
                 {summary.products.length} products planned in {monthLabel(month)}, largest shortfall
                 first
               </p>
             </div>
-            <div className="table-wrap">
+            <div className="table-wrap border-t border-line-soft">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Product</th>
                     <th>Segment</th>
-                    <th>Lots</th>
-                    <th>Planned</th>
-                    <th>Completed</th>
-                    <th>Shortfall</th>
+                    <th className="cell-num">Lots</th>
+                    <th className="cell-num">Planned</th>
+                    <th className="cell-num">Completed</th>
+                    <th className="cell-num">Shortfall</th>
                     <th>Achieved</th>
                   </tr>
                 </thead>
@@ -127,21 +128,31 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                       : 0
                     return (
                       <tr key={row.product.id}>
-                        <td className="font-bold text-[#193e40]">{productName(row.product)}</td>
+                        <td className="font-medium text-ink">{productName(row.product)}</td>
                         <td>{row.product.segment.value || '—'}</td>
-                        <td>{row.lots}</td>
-                        <td>{quantity(row.planned)}</td>
-                        <td className="font-semibold">{quantity(row.completed)}</td>
-                        <td className="font-bold text-[#bd5e2d]">{quantity(row.shortfall)}</td>
+                        <td className="cell-num">{row.lots}</td>
+                        <td className="cell-num">{quantity(row.planned)}</td>
+                        <td className="cell-num font-medium text-ink">{quantity(row.completed)}</td>
+                        <td
+                          className={cn(
+                            'cell-num font-medium',
+                            row.shortfall > 0 ? 'text-rose-700' : 'text-muted',
+                          )}
+                        >
+                          {quantity(row.shortfall)}
+                        </td>
                         <td>
                           <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line-soft">
                               <div
-                                className="h-full bg-[#ed1c24]"
+                                className={cn(
+                                  'h-full rounded-full',
+                                  percent >= 100 ? 'bg-emerald-500' : 'bg-ink/70',
+                                )}
                                 style={{ width: `${percent}%` }}
                               />
                             </div>
-                            {percent}%
+                            <span className="num w-10 text-right">{percent}%</span>
                           </div>
                         </td>
                       </tr>
@@ -152,18 +163,18 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
             </div>
           </Card>
           <Card>
-            <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-              <h2 className="text-base font-bold text-[#1a2024]">
+            <div className="px-4 py-4 sm:px-5">
+              <h2 className="section-title">
                 {inProgress ? 'Lots still to complete' : 'Lots short of plan'}
               </h2>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-[13px] text-muted">
                 {short.length
                   ? `${short.length} of ${summary.lots.length} planned lots ${inProgress ? 'are not yet completed' : `were not completed by the end of ${monthLabel(month)}`}. Select a lot to open it.`
                   : 'Every lot planned for this month has been completed.'}
               </p>
             </div>
             {short.length > 0 && (
-              <div className="table-wrap">
+              <div className="table-wrap border-t border-line-soft">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -171,9 +182,9 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                       <th>Product</th>
                       <th>Planned date</th>
                       <th>Current ETA</th>
-                      <th>Planned</th>
-                      <th>Completed</th>
-                      <th>Short</th>
+                      <th className="cell-num">Planned</th>
+                      <th className="cell-num">Completed</th>
+                      <th className="cell-num">Short</th>
                       <th>Status today</th>
                       <th>Reason</th>
                     </tr>
@@ -182,23 +193,26 @@ export default function MonthEnd({ onOpenLot, csvRef }: Props) {
                     {short.map((row) => (
                       <tr
                         key={row.lot.id}
-                        className="cursor-pointer"
+                        data-clickable
+                        data-tone={inProgress ? 'amber' : 'red'}
                         onClick={() => onOpenLot(row.lot.id)}
                       >
-                        <td className="font-bold text-[#193e40]">{row.lot.label}</td>
+                        <td className="font-semibold text-ink">{row.lot.label}</td>
                         <td>{productName(row.lot.product)}</td>
                         <td>{dateLabel(row.lot.plannedDate ?? '')}</td>
                         <td>{dateLabel(row.lot.eta ?? '')}</td>
-                        <td>{quantity(row.planned)}</td>
-                        <td>{quantity(row.completed)}</td>
-                        <td className="font-bold text-[#bd5e2d]">{quantity(row.shortfall)}</td>
+                        <td className="cell-num">{quantity(row.planned)}</td>
+                        <td className="cell-num">{quantity(row.completed)}</td>
+                        <td className="cell-num font-medium text-rose-700">
+                          {quantity(row.shortfall)}
+                        </td>
                         <td>
-                          <span className="block min-w-56 whitespace-normal text-xs text-slate-600">
+                          <span className="block min-w-56 text-[13px] whitespace-normal text-ink-2">
                             {row.statusToday}
                           </span>
                         </td>
                         <td>
-                          <span className="block min-w-48 whitespace-normal text-xs text-slate-600">
+                          <span className="block min-w-48 text-[13px] whitespace-normal text-ink-2">
                             {row.lot.blockerDescription ||
                               (row.lot.blocker &&
                                 row.lot.blocker.value !== 'None' &&

@@ -39,13 +39,14 @@ test('the menu, drawers and forms are usable', async ({ page }) => {
   await page.goto('/')
   const lot = await openLot(page, 'A-1')
   const width = page.viewportSize()!.width
-  expect((await lot.boundingBox())!.width).toBeLessThanOrEqual(width)
+  // Rounded: the opening slide leaves sub-pixel widths while it runs.
+  expect(Math.round((await lot.boundingBox())!.width)).toBeLessThanOrEqual(width)
   await lot.getByLabel('Follow-up note', { exact: true }).fill('Checked on a phone')
   await lot.getByRole('button', { name: 'Save & close' }).click()
   await expect(lot).toBeHidden()
   await goTo(page, 'Finished Goods')
   const shipment = await openShipment(page, 'INV-MOBILE-0001')
-  expect((await shipment.boundingBox())!.width).toBeLessThanOrEqual(width)
+  expect(Math.round((await shipment.boundingBox())!.width)).toBeLessThanOrEqual(width)
   await shipment.getByLabel('Remarks', { exact: true }).fill('Checked on a phone')
   await shipment.getByRole('button', { name: 'Save & close' }).click()
   await expect(shipment).toBeHidden()

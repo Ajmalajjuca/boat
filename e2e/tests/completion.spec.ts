@@ -24,7 +24,7 @@ test('FR-11.3 entering the actual date moves the lot to Completed, clearing it b
   await drawer.getByRole('button', { name: 'Save & close' }).click()
   await expect(drawer).toBeHidden()
   await goTo(page, 'Production Tracker')
-  await expect(page.getByRole('group', { name: 'Mike' })).toContainText('1 lots')
+  await expect(page.getByRole('group', { name: 'Mike' })).toContainText('1 lot')
 })
 
 test('shows no GRN, rework or fresh production on a lot', async ({ page }) => {

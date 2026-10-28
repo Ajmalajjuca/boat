@@ -1,15 +1,7 @@
 import { LoadingState } from './ui'
 import { useConfirm } from './ui'
 import { useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import {
-  ArrowRight,
-  CheckCircle2,
-  ClipboardList,
-  Clock3,
-  PackageCheck,
-  Plus,
-  Trash2,
-} from 'lucide-react'
+import { CheckCircle2, ClipboardList, Clock3, PackageCheck, Plus, Trash2 } from 'lucide-react'
 import type { LookupItem } from '@boat/domain/api'
 import { addNote } from './api/activity'
 import { NotFoundError } from './api/client'
@@ -395,16 +387,17 @@ function LotEditor({
         title={stored ? `${draft.label || 'Lot details'}` : 'New production lot'}
         subtitle={`${products.find((p) => p.id === draft.productId)?.name || 'Product'} · ${draft.category}${view ? ` · ${view.lot.computed.summary}` : ''}`}
         footer={
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
             <div>
               {stored && access.can('deleteLots') && (
-                <Button variant="danger" size="sm" onClick={remove}>
-                  <Trash2 size={14} /> Delete lot
+                <Button variant="danger" aria-label="Delete lot" className="px-3" onClick={remove}>
+                  <Trash2 size={14} /> <span className="hidden sm:inline">Delete lot</span>
                 </Button>
               )}
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="secondary" onClick={close}>
+            <div className="flex justify-end gap-2">
+              {/* Phones close with the X in the header; the footer keeps room for saving. */}
+              <Button variant="secondary" className="hidden sm:inline-flex" onClick={close}>
                 Close
               </Button>
               {!readOnly && (
@@ -412,9 +405,7 @@ function LotEditor({
                   <Button variant="secondary" onClick={() => save()}>
                     Save lot
                   </Button>
-                  <Button onClick={() => save(true)}>
-                    Save & close <ArrowRight size={15} />
-                  </Button>
+                  <Button onClick={() => save(true)}>Save & close</Button>
                 </>
               )}
             </div>
@@ -444,30 +435,34 @@ function LotEditor({
           />
         </div>
         {access.user && level !== 'full' && (
-          <div className="mb-5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs text-slate-600">
+          <div className="mb-5 rounded-lg border border-line bg-white px-3 py-2.5 text-[13px] text-ink-2">
             {readOnly
               ? `View only. ${roleInfo[access.user.role].label} users can't change this lot${access.user.role === 'poc' ? ` because its POC is ${view?.lot.poc || 'not set'}` : ''}.`
               : 'You can update progress on this lot. Locked fields such as product, lot quantity, planned date, and POC are set by a planner or admin.'}
           </div>
         )}
-        <div className={`mb-5 grid grid-cols-2 gap-3 ${grn ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-          {stats.map((s) => (
-            <Card key={s.label} className="p-3">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                <s.icon size={13} />
-                {s.label}
-              </div>
-              <div className="mt-1 text-xl font-extrabold text-[#1a2024]">{s.value}</div>
-            </Card>
-          ))}
-        </div>
-        <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-200">
+        <Card className="mb-5 overflow-hidden">
           <div
-            className="h-full rounded-full bg-[#ed1c24] transition-all"
-            style={{ width: `${grn ? grnProgress(draft, rs) : metrics.percent}%` }}
-          />
-        </div>
-        <div className="mb-5 flex flex-wrap border-b border-slate-200" role="tablist">
+            className={`grid divide-x divide-line-soft ${grn ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}
+          >
+            {stats.map((s) => (
+              <div key={s.label} className="min-w-0 px-3 py-3 sm:px-4">
+                <div className="flex items-center gap-1.5 truncate text-[13px] text-muted">
+                  <s.icon size={14} aria-hidden="true" className="hidden shrink-0 sm:block" />
+                  {s.label}
+                </div>
+                <div className="num mt-0.5 text-xl font-semibold text-ink">{s.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="h-1 bg-line-soft">
+            <div
+              className="h-full bg-ink/70 transition-all"
+              style={{ width: `${grn ? grnProgress(draft, rs) : metrics.percent}%` }}
+            />
+          </div>
+        </Card>
+        <div className="scroll-row mb-5 border-b border-line" role="tablist">
           {(
             [
               ['overview', 'Overview'],
@@ -490,7 +485,7 @@ function LotEditor({
         </div>
         {tab === 'overview' && (
           <fieldset disabled={readOnly} className="min-w-0 space-y-6">
-            <div>
+            <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
               <h3 className="section-title mb-3">Identification & ownership</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
@@ -560,7 +555,7 @@ function LotEditor({
                     clearable
                   />
                 </Field>
-                <label className="flex items-center gap-3 pt-6 text-sm text-slate-700">
+                <label className="flex items-center gap-3 pt-6 text-sm text-ink-2">
                   <input
                     type="checkbox"
                     disabled={planLocked}
@@ -569,14 +564,14 @@ function LotEditor({
                   />
                   <span>
                     Direct FG{' '}
-                    <span className="block text-xs text-slate-500">
+                    <span className="block text-xs text-muted">
                       Finished goods ready for direct billing
                     </span>
                   </span>
                 </label>
               </div>
             </div>
-            <div>
+            <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
               <h3 className="section-title mb-3">Production & material</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Overall status" required error={lotForm.errors.status}>
@@ -638,7 +633,7 @@ function LotEditor({
                 )}
               </div>
             </div>
-            <div>
+            <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
               <h3 className="section-title mb-3">Dates & logistics</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
@@ -714,7 +709,7 @@ function LotEditor({
                 </div>
               </div>
             </div>
-            <div>
+            <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
               <h3 className="section-title mb-3">Blockers & follow-up</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Blocker category" error={lotForm.errors.blockerCategory}>
@@ -760,7 +755,7 @@ function LotEditor({
               ].map(([label, value]) => (
                 <Card key={label} className="p-3">
                   <div className="metric-label">{label}</div>
-                  <div className="mt-1 text-lg font-bold text-[#1a2024]">{value}</div>
+                  <div className="mt-1 text-lg font-bold text-ink">{value}</div>
                 </Card>
               ))}
             </div>
@@ -770,7 +765,7 @@ function LotEditor({
               ) : (
                 <Badge tone="amber">RM Incomplete</Badge>
               )}
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted">
                 Quantities are finished-product-equivalent units.
               </span>
             </div>
@@ -800,14 +795,14 @@ function LotEditor({
                   )}
                 </div>
                 {draft.rmMode === 'all' && (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+                  <div className="mt-3 flex items-center gap-2 text-xs text-ink-2">
                     <Badge tone="teal">Kit (All Together) selected</Badge>
                     The ready quantity represents the complete material kit.
                   </div>
                 )}
                 {draft.rmMode === 'components' && (
                   <fieldset disabled={planLocked} className="min-w-0">
-                    <p className="mt-4 text-xs text-slate-500">
+                    <p className="mt-4 text-xs text-muted">
                       Choose required components. Kit (All Together) is handled by All RM Received
                       mode to avoid double-counting.
                     </p>
@@ -829,7 +824,7 @@ function LotEditor({
                         .map((component) => (
                           <label
                             key={component}
-                            className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold ${draft.rmComponents.includes(component) ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-600'}`}
+                            className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold ${draft.rmComponents.includes(component) ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-line bg-white text-ink-2'}`}
                           >
                             <input
                               type="checkbox"
@@ -933,7 +928,7 @@ function LotEditor({
                 </table>
               </Card>
             ) : (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+              <p className="rounded-xl border border-dashed border-line bg-white p-6 text-center text-sm text-muted">
                 No material batches yet. Select components, save the lot, then add batches.
               </p>
             )}
@@ -954,7 +949,7 @@ function LotEditor({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="section-title">Warehouse receipts</h3>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted">
                   Multiple partial Goods Received Notes are supported.
                 </p>
               </div>
@@ -974,10 +969,10 @@ function LotEditor({
                       className="flex flex-wrap items-center justify-between gap-3 p-4"
                     >
                       <div>
-                        <div className="font-semibold text-[#1a2024]">
+                        <div className="font-semibold text-ink">
                           {r.label} <Badge tone="teal">{quantity(r.quantity)} units</Badge>
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className="mt-1 text-xs text-muted">
                           {dateLabel(r.date)}
                           {r.note ? ` · ${r.note}` : ''}
                         </div>
@@ -1013,7 +1008,7 @@ function LotEditor({
                   ))}
               </div>
             ) : (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+              <p className="rounded-xl border border-dashed border-line bg-white p-8 text-center text-sm text-muted">
                 No GRN receipts recorded. Add the first partial or full warehouse receipt.
               </p>
             )}
@@ -1051,11 +1046,11 @@ function LotEditor({
             )}
             <div className="space-y-3">
               {logs.map((item) => (
-                <div key={item.id} className="flex gap-3 border-b border-slate-200 pb-3">
-                  <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#dc713a]" />
+                <div key={item.id} className="flex gap-3 border-b border-line pb-3">
+                  <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                   <div>
-                    <div className="text-sm text-slate-700">{item.message}</div>
-                    <div className="mt-1 text-xs text-slate-500">
+                    <div className="text-sm text-ink-2">{item.message}</div>
+                    <div className="mt-1 text-xs text-muted">
                       {new Date(item.createdAt).toLocaleString()}
                       {item.actorName && ` · ${item.actorName}`}
                     </div>
@@ -1063,7 +1058,7 @@ function LotEditor({
                 </div>
               ))}
               {!logs.length && (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted">
                   No updates yet. Committed changes and notes appear here.
                 </p>
               )}
@@ -1227,7 +1222,7 @@ function LotEditor({
                 onChange={(e) => editReceipt({ note: e.target.value })}
               />
             </Field>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted">
               Available to receive:{' '}
               {quantity(
                 draft.lotQty - totalGrn(rs) + (rs.find((r) => r.id === receipt.id)?.quantity || 0),

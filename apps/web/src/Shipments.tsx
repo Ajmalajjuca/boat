@@ -53,6 +53,7 @@ import {
   Badge,
   Button,
   Card,
+  cn,
   ConflictBanner,
   Empty,
   Field,
@@ -71,6 +72,11 @@ import {
 type Props = {
   onOpen: (id: string) => void
   csvRef: MutableRefObject<CsvExport | null>
+}
+// Shipments that need attention get a coloured edge in the list.
+const edge = (s: ShipmentRecord) => {
+  const t = tone(s)
+  return t === 'red' || t === 'amber' ? t : undefined
 }
 const tone = (s: ShipmentRecord) =>
   s.actualArrival
@@ -172,81 +178,97 @@ export default function Shipments({ onOpen, csvRef }: Props) {
   const names = (s: ShipmentRecord) => s.lines.map((l) => l.product.name).join(', ')
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <section
+        aria-label="Shipment signals"
+        className="scroll-row gap-px overflow-hidden rounded-xl border border-line bg-line-soft shadow-[0_1px_2px_rgba(16,24,40,.04)] md:grid md:grid-cols-3 xl:grid-cols-6"
+      >
         {cards.map((card) => {
           const flag = card.id === 'units' ? 'open' : card.id
+          const on = quick === flag
           return (
             <button
               key={card.id}
               title={card.help}
-              onClick={() => setQuick(quick === flag ? '' : flag)}
-              className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-red-300 ${quick === flag ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200'}`}
+              aria-pressed={on}
+              onClick={() => setQuick(on ? '' : flag)}
+              className={cn(
+                'relative min-w-[150px] shrink-0 bg-white px-4 pt-3.5 pb-3 text-left transition-colors md:min-w-0',
+                'before:absolute before:inset-x-0 before:top-0 before:h-[3px]',
+                on ? 'bg-wash before:bg-ink' : 'before:bg-transparent hover:bg-wash',
+              )}
             >
-              <div className="flex items-center justify-between">
-                <span className="metric-label">{card.label}</span>
-                <card.icon size={16} className="text-[#dc713a]" />
-              </div>
-              <div className="mt-2 metric-value">{card.value}</div>
+              <span className="flex items-center gap-2 text-[13px] font-medium text-muted">
+                <card.icon size={15} aria-hidden="true" className="shrink-0 text-faint" />
+                {card.label}
+              </span>
+              <span className="metric-value mt-1.5 block">{card.value}</span>
             </button>
           )
         })}
-      </div>
+      </section>
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
-          <div>
-            <h2 className="text-base font-bold text-[#1a2024]">Finished goods shipments</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {list?.total ?? 0} shipments · Arrival means actual warehouse arrival
-            </p>
-          </div>
+        <div className="px-4 pt-4 sm:px-5">
+          <h2 className="section-title">Finished goods shipments</h2>
+          <p className="num mt-0.5 text-[13px] text-muted">
+            {list?.total ?? 0} {list?.total === 1 ? 'shipment' : 'shipments'}. Arrived means it
+            reached the warehouse.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2 px-4 py-3 sm:px-5">
-          <div className="relative min-w-48 flex-1 sm:max-w-sm">
-            <Search size={15} className="absolute left-3 top-3 text-slate-400" />
+        <div className="flex flex-col gap-2 px-4 pt-3 pb-4 sm:flex-row sm:items-center sm:px-5">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search
+              size={16}
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+            />
             <Input
               aria-label="Search shipments"
               className="pl-9"
-              placeholder="Search product, invoice, vessel..."
+              placeholder="Search product, invoice, vessel"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Select
-            aria-label="Filter shipment stage"
-            className="max-w-48"
-            value={stage}
-            onChange={(e) => setStage(e.target.value)}
-          >
-            <option value="">All stages</option>
-            {values(lookups, 'shipmentStage').map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </Select>
-          <Select
-            aria-label="Filter vessel"
-            className="max-w-48"
-            value={vessel}
-            onChange={(e) => setVessel(e.target.value)}
-          >
-            <option value="">All vessels</option>
-            {(summary?.vessels ?? []).map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </Select>
-          <Select
-            aria-label="Sort shipments"
-            className="max-w-44"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as ShipmentSort)}
-          >
-            <option value="eta-asc">ETA: soonest</option>
-            <option value="eta-desc">ETA: latest</option>
-            <option value="qty-desc">Qty: high to low</option>
-            <option value="number-asc">Invoice: A–Z</option>
-          </Select>
-          <Button variant="ghost" size="sm" onClick={clear}>
-            <X size={14} /> Clear
-          </Button>
+          <div className="scroll-row -mx-4 items-center gap-2 px-4 sm:mx-0 sm:px-0">
+            <Select
+              aria-label="Filter shipment stage"
+              className="w-auto shrink-0"
+              value={stage}
+              onChange={(e) => setStage(e.target.value)}
+            >
+              <option value="">All stages</option>
+              {values(lookups, 'shipmentStage').map((v) => (
+                <option key={v}>{v}</option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Filter vessel"
+              className="w-auto shrink-0"
+              value={vessel}
+              onChange={(e) => setVessel(e.target.value)}
+            >
+              <option value="">All vessels</option>
+              {(summary?.vessels ?? []).map((v) => (
+                <option key={v}>{v}</option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Sort shipments"
+              className="w-auto shrink-0"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as ShipmentSort)}
+            >
+              <option value="eta-asc">ETA: soonest</option>
+              <option value="eta-desc">ETA: latest</option>
+              <option value="qty-desc">Qty: high to low</option>
+              <option value="number-asc">Invoice: A–Z</option>
+            </Select>
+            {(search || stage || vessel || quick) && (
+              <Button variant="ghost" className="shrink-0" onClick={clear}>
+                <X size={15} /> Clear
+              </Button>
+            )}
+          </div>
         </div>
         {listQuery.isPending ? (
           <LoadingState label="Loading shipments" />
@@ -264,36 +286,38 @@ export default function Shipments({ onOpen, csvRef }: Props) {
           </div>
         ) : shipments.length ? (
           <>
-            <div className="table-wrap hidden md:block">
+            <div className="table-wrap hidden border-t border-line md:block">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Shipment / invoice</th>
                     <th>Vessel</th>
                     <th>Products</th>
-                    <th>Units</th>
+                    <th className="cell-num">Units</th>
                     <th>ETD</th>
                     <th>Current ETA</th>
-                    <th>ETA slip</th>
+                    <th className="cell-num">ETA slip</th>
                     <th>Status</th>
                     <th>Arrival</th>
-                    <th></th>
+                    <th aria-label="Open" className="w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {shipments.map((s) => (
-                    <tr key={s.id} className="cursor-pointer" onClick={() => onOpen(s.id)}>
-                      <td className="font-bold text-[#1a2024]">{s.number}</td>
+                    <tr key={s.id} data-clickable data-tone={edge(s)} onClick={() => onOpen(s.id)}>
+                      <td className="font-semibold text-ink">{s.number}</td>
                       <td>{s.vessel}</td>
                       <td className="max-w-56 truncate" title={names(s)}>
                         {names(s)}
                       </td>
-                      <td className="font-semibold">{quantity(s.computed.totalQty)}</td>
+                      <td className="cell-num font-medium text-ink">
+                        {quantity(s.computed.totalQty)}
+                      </td>
                       <td>{dateLabel(s.etd)}</td>
-                      <td className={s.computed.flags.overdue ? 'font-bold text-rose-700' : ''}>
+                      <td className={s.computed.flags.overdue ? 'font-semibold text-rose-700' : ''}>
                         {dateLabel(s.computed.currentEta ?? '')}
                       </td>
-                      <td>
+                      <td className="cell-num">
                         {s.computed.etaSlip === null
                           ? '—'
                           : `${s.computed.etaSlip > 0 ? '+' : ''}${s.computed.etaSlip}d`}
@@ -301,31 +325,38 @@ export default function Shipments({ onOpen, csvRef }: Props) {
                       <td>
                         <Badge tone={tone(s)}>{s.computed.status}</Badge>
                         {s.actualArrival && (
-                          <div className="mt-1 text-[11px] text-slate-500">Stage: {s.stage}</div>
+                          <div className="mt-1 text-xs text-muted">Stage: {s.stage}</div>
                         )}
                       </td>
                       <td>{dateLabel(s.actualArrival)}</td>
-                      <td>
-                        <ChevronRight size={14} />
+                      <td className="text-faint">
+                        <ChevronRight size={15} aria-hidden="true" />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="divide-y divide-slate-100 md:hidden">
+            <div className="divide-y divide-line-soft border-t border-line md:hidden">
               {shipments.map((s) => (
-                <button key={s.id} onClick={() => onOpen(s.id)} className="w-full p-4 text-left">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#1a2024]">{s.number}</span>
+                <button
+                  key={s.id}
+                  data-tone={edge(s)}
+                  onClick={() => onOpen(s.id)}
+                  className="tone-edge block w-full px-4 py-3.5 text-left active:bg-wash"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-semibold text-ink">{s.number}</span>
                     <Badge tone={tone(s)}>{s.computed.status}</Badge>
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="num mt-1 text-[13px] text-muted">
                     {s.vessel} · {quantity(s.computed.totalQty)} units
                   </div>
-                  <div className="mt-3 flex justify-between text-xs text-slate-600">
+                  <div className="num mt-2 flex justify-between text-[13px] text-ink-2">
                     <span>ETA {dateLabel(s.computed.currentEta ?? '')}</span>
-                    <span>{s.lines.length} product lines</span>
+                    <span>
+                      {s.lines.length} product {s.lines.length === 1 ? 'line' : 'lines'}
+                    </span>
                   </div>
                 </button>
               ))}
@@ -516,16 +547,22 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
       title={stored ? draft.number || 'Shipment details' : 'New shipment'}
       subtitle="Finished goods · Multiple product lines · Actual warehouse arrival"
       footer={
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div>
             {stored && access.can('deleteShipments') && (
-              <Button variant="danger" size="sm" onClick={remove}>
-                <Trash2 size={14} /> Delete shipment
+              <Button
+                variant="danger"
+                aria-label="Delete shipment"
+                className="px-3"
+                onClick={remove}
+              >
+                <Trash2 size={14} /> <span className="hidden sm:inline">Delete shipment</span>
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" onClick={close}>
+          <div className="flex justify-end gap-2">
+            {/* Phones close with the X in the header; the footer keeps room for saving. */}
+            <Button variant="secondary" className="hidden sm:inline-flex" onClick={close}>
               Close
             </Button>
             {!readOnly && (
@@ -533,9 +570,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Button variant="secondary" onClick={() => save()}>
                   Save shipment
                 </Button>
-                <Button onClick={() => save(true)}>
-                  Save & close <ArrowRight size={15} />
-                </Button>
+                <Button onClick={() => save(true)}>Save & close</Button>
               </>
             )}
           </div>
@@ -565,11 +600,11 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
         />
       </div>
       {access.user && readOnly && (
-        <div className="mb-5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs text-slate-600">
+        <div className="mb-5 rounded-xl bg-canvas px-3 py-2.5 text-xs text-ink-2">
           View only. {roleInfo[access.user.role].label} users can't change shipments.
         </div>
       )}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line-soft sm:grid-cols-4">
         {[
           ['Total units', quantity(shipmentQuantity(lines))],
           ['Product lines', String(lines.length)],
@@ -586,13 +621,13 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
               : `${arrivalDelay(draft)! > 0 ? '+' : ''}${arrivalDelay(draft)} days`,
           ],
         ].map(([label, value]) => (
-          <Card key={label} className="p-3">
-            <div className="metric-label">{label}</div>
-            <div className="mt-1 text-lg font-bold text-[#1a2024]">{value}</div>
-          </Card>
+          <div key={label} className="bg-white px-4 py-3">
+            <div className="text-[13px] text-muted">{label}</div>
+            <div className="num mt-0.5 text-lg font-semibold text-ink">{value}</div>
+          </div>
         ))}
       </div>
-      <div className="mb-5 flex flex-wrap border-b border-slate-200" role="tablist">
+      <div className="scroll-row mb-5 border-b border-line" role="tablist">
         <button
           role="tab"
           aria-selected={tab === 'details'}
@@ -615,7 +650,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
       {tab === 'details' && (
         <form onSubmit={submit} noValidate>
           <fieldset disabled={readOnly} className="min-w-0 space-y-6">
-            <div>
+            <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
               <h3 className="section-title mb-3">Identity & schedule</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Shipment / invoice number" required error={form.errors.number}>
@@ -684,7 +719,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 </Field>
               </div>
             </div>
-            <div>
+            <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
               <h3 className="section-title mb-3">Product lines</h3>
               <div className="space-y-3" data-invalid={form.errors.lines ? true : undefined}>
                 {form.errors.lines && (
@@ -737,7 +772,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 <Button type="button" variant="secondary" size="sm" onClick={addLine}>
                   <Plus size={14} /> Add product line
                 </Button>
-                <div className="text-sm font-bold text-[#1a2024]">
+                <div className="text-sm font-bold text-ink">
                   Total: {quantity(shipmentQuantity(lines))} units
                 </div>
               </div>
@@ -768,7 +803,7 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
       )}
       {tab === 'history' && (
         <div className="space-y-6">
-          <div>
+          <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <h3 className="section-title mb-3">ETA revision history</h3>
             {revisions.length ? (
               <div className="space-y-3">
@@ -776,10 +811,10 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                   <Card key={r.id} className="p-4">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                       <span>{dateLabel(r.previousDate ?? '')}</span>
-                      <ArrowRight size={15} className="text-[#ed1c24]" />
+                      <ArrowRight size={15} className="text-brand" />
                       <span>{dateLabel(r.newDate ?? '')}</span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">
+                    <div className="mt-1 text-xs text-muted">
                       {new Date(r.createdAt).toLocaleString()}
                       {r.reason ? ` · ${r.reason}` : ''}
                     </div>
@@ -787,12 +822,12 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted">
                 No ETA revisions yet. Saving a changed effective ETA records one here.
               </p>
             )}
           </div>
-          <div>
+          <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <h3 className="section-title mb-3">Activity & notes</h3>
             {!readOnly && (
               <>
@@ -823,9 +858,9 @@ function ShipmentEditor({ view, initial, lookups, onClose, onOpen, onGone, run }
             )}
             <div className="mt-4 space-y-3">
               {logs.map((a) => (
-                <div key={a.id} className="border-b border-slate-200 pb-3">
-                  <div className="text-sm text-slate-700">{a.message}</div>
-                  <div className="mt-1 text-xs text-slate-500">
+                <div key={a.id} className="border-b border-line pb-3">
+                  <div className="text-sm text-ink-2">{a.message}</div>
+                  <div className="mt-1 text-xs text-muted">
                     {new Date(a.createdAt).toLocaleString()}
                     {a.actorName && ` · ${a.actorName}`}
                   </div>

@@ -22,7 +22,7 @@ test('FR-2.1 adds a lot to a product, then edits and deletes it', async ({ page 
   const saved = page.getByRole('dialog', { name: 'G-100' })
   await expect(saved).toBeVisible()
   await saved.getByRole('button', { name: 'Close' }).first().click()
-  await expect(golf).toContainText('1 lots')
+  await expect(golf).toContainText('1 lot')
 
   const edit = await openLot(page, 'G-100')
   await edit.getByLabel('Lot quantity', { exact: true }).fill('300')

@@ -37,7 +37,7 @@ export function Brand({ dark = false }: { dark?: boolean }) {
       <span
         className={cn(
           'border-l pl-3 text-lg font-bold tracking-tight',
-          dark ? 'border-white/20 text-white' : 'border-slate-200 text-[#1a2024]',
+          dark ? 'border-white/20 text-white' : 'border-line text-ink',
         )}
       >
         OS
@@ -49,13 +49,13 @@ export function Brand({ dark = false }: { dark?: boolean }) {
 export function LoadingState({ label = 'Loading' }: { label?: string }) {
   return (
     <div role="status" aria-label={label} className="space-y-5 p-5 sm:p-7">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
-        <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-[#ed1c24]" />
+      <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+        <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-brand" />
         {label}…
       </div>
       <div aria-hidden="true" className="space-y-3">
         {[0, 1, 2, 3].map((row) => (
-          <div key={row} className="flex gap-4 rounded-xl border border-slate-100 p-4">
+          <div key={row} className="flex gap-4 rounded-lg border border-line-soft p-4">
             <span className="skeleton h-9 w-9 rounded-lg" />
             <span className="flex-1 space-y-2">
               <span className="skeleton block h-3 w-2/5 rounded" />
@@ -107,7 +107,7 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
         }}
       >
         <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm" />
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-ink/55" />
           <DialogPrimitive.Content
             role="alertdialog"
             onOpenAutoFocus={(event) => {
@@ -119,15 +119,15 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
               // The originating button becomes enabled after its confirmation promise settles.
               requestAnimationFrame(() => returnFocus.current?.focus())
             }}
-            className="fixed left-1/2 top-1/2 z-[101] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl outline-none"
+            className="fixed left-1/2 top-1/2 z-[101] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-[0_24px_60px_rgba(16,24,40,.25)] outline-none"
           >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-[#ed1c24]">
-              <CircleAlert size={24} />
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-brand-wash text-brand">
+              <CircleAlert size={20} />
             </div>
-            <DialogPrimitive.Title className="text-lg font-bold">
+            <DialogPrimitive.Title className="screen-title text-lg text-ink">
               {discard ? 'Discard changes?' : 'Confirm action'}
             </DialogPrimitive.Title>
-            <DialogPrimitive.Description className="mt-2 text-sm leading-6 text-slate-600">
+            <DialogPrimitive.Description className="mt-2 text-sm leading-6 text-ink-2">
               {message}
             </DialogPrimitive.Description>
             <div className="mt-6 flex justify-end gap-2">
@@ -204,7 +204,7 @@ export function FormError({ message }: { message?: string }) {
     <div
       role="alert"
       data-form-error
-      className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800"
+      className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800"
     >
       <CircleAlert size={16} className="mt-0.5 shrink-0" />
       <span>{message}</span>
@@ -212,17 +212,24 @@ export function FormError({ message }: { message?: string }) {
   )
 }
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-45 cursor-pointer [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default: 'bg-[#ed1c24] text-white hover:bg-[#ce141c] shadow-sm',
-        secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50',
-        ghost: 'text-slate-600 hover:bg-slate-100',
-        danger: 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200',
-        teal: 'bg-[#1a2024] text-white hover:bg-[#101416]',
+        default: 'bg-brand text-white hover:bg-brand-deep active:bg-brand-deep',
+        secondary:
+          'bg-white text-ink border border-line hover:border-[#c6cdd2] hover:bg-wash active:bg-line-soft',
+        ghost: 'text-ink-2 hover:bg-ink/[.06] hover:text-ink',
+        danger:
+          'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 hover:border-rose-300',
+        teal: 'bg-ink text-white hover:bg-black',
       },
-      size: { default: 'h-10 px-4', sm: 'h-8 px-3 text-xs', icon: 'h-9 w-9', lg: 'h-11 px-5' },
+      size: {
+        default: 'h-10 px-4',
+        sm: 'h-8 gap-1.5 px-3 text-[13px]',
+        icon: 'h-9 w-9',
+        lg: 'h-11 px-5 text-[15px]',
+      },
     },
     defaultVariants: { variant: 'default', size: 'default' },
   },
@@ -296,7 +303,7 @@ export function Input({ className, type, ...props }: InputHTMLAttributes<HTMLInp
         aria-label={`${visible ? 'Hide' : 'Show'} ${(field?.label || props['aria-label'] || 'password').toLowerCase()}`}
         aria-controls={props.id ?? id}
         aria-pressed={visible}
-        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-slate-500 hover:text-[#ed1c24]"
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted hover:text-ink"
         onClick={(event) => {
           event.preventDefault()
           setVisible(!visible)
@@ -360,7 +367,7 @@ export function Field({
           {label}
           {locked && (
             <span title="Your role cannot change this field" aria-hidden="true">
-              <Lock size={11} className="ml-1 inline align-[-1px] text-slate-400" />
+              <Lock size={11} className="ml-1 inline align-[-1px] text-faint" />
             </span>
           )}
         </span>
@@ -369,13 +376,13 @@ export function Field({
       {error ? (
         <span
           role="alert"
-          className="mt-1 flex items-start gap-1 text-xs font-medium text-rose-700"
+          className="mt-1.5 flex items-start gap-1 text-[13px] font-medium text-rose-700"
         >
           <CircleAlert size={13} className="mt-px shrink-0" />
           {error}
         </span>
       ) : (
-        help && <span className="mt-1 block text-xs text-slate-500">{help}</span>
+        help && <span className="mt-1.5 block text-[13px] leading-snug text-muted">{help}</span>
       )}
     </Outer>
   )
@@ -392,14 +399,14 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold leading-none whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-md px-2 py-[3px] text-xs font-semibold leading-4 whitespace-nowrap ring-1 ring-inset',
         {
-          slate: 'bg-slate-100 text-slate-600',
-          green: 'bg-emerald-50 text-emerald-700',
-          amber: 'bg-amber-50 text-amber-700',
-          red: 'bg-rose-50 text-rose-700',
-          blue: 'bg-sky-50 text-sky-700',
-          teal: 'bg-teal-50 text-teal-700',
+          slate: 'bg-wash text-ink-2 ring-line',
+          green: 'bg-emerald-50 text-emerald-800 ring-emerald-200/80',
+          amber: 'bg-amber-50 text-amber-800 ring-amber-200/80',
+          red: 'bg-rose-50 text-rose-700 ring-rose-200/80',
+          blue: 'bg-sky-50 text-sky-800 ring-sky-200/80',
+          teal: 'bg-teal-50 text-teal-800 ring-teal-200/80',
         }[tone],
         className,
       )}
@@ -412,7 +419,7 @@ export function Card({ children, className }: { children: ReactNode; className?:
   return (
     <div
       className={cn(
-        'rounded-2xl border border-slate-200 bg-white shadow-[0_2px_14px_rgba(15,23,42,.035)]',
+        'rounded-xl border border-line bg-white shadow-[0_1px_2px_rgba(16,24,40,.04)]',
         className,
       )}
     >
@@ -430,12 +437,12 @@ export function Empty({
   action?: ReactNode
 }) {
   return (
-    <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-10 text-center">
-      <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400">
+    <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-line bg-white px-6 py-10 text-center">
+      <div className="mb-3 rounded-full bg-canvas p-3 text-faint">
         <Check size={22} />
       </div>
-      <h3 className="font-semibold text-slate-800">{title}</h3>
-      <p className="mt-1 max-w-md text-sm text-slate-500">{description}</p>
+      <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+      <p className="mt-1 max-w-md text-sm text-muted">{description}</p>
       {action && <div className="mt-4">{action}</div>}
     </div>
   )
@@ -460,23 +467,24 @@ export function Sheet({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[#101416]/50 backdrop-blur-[2px]" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-ink/45" />
         <DialogPrimitive.Content
+          data-sheet
           onEscapeKeyDown={keepOpenForSearch}
           onPointerDownOutside={keepOpenForToast}
           onInteractOutside={keepOpenForToast}
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-[#f8f9fb] shadow-2xl outline-none',
-            width === 'wide' ? 'max-w-[780px]' : 'max-w-[560px]',
+            'fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-wash shadow-[-12px_0_40px_rgba(16,24,40,.18)] outline-none',
+            width === 'wide' ? 'max-w-[800px]' : 'max-w-[560px]',
           )}
         >
-          <div className="flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
-            <div>
-              <DialogPrimitive.Title className="text-lg font-bold text-[#1a2024]">
+          <div className="flex items-start justify-between gap-4 border-b border-line bg-white px-5 py-4 sm:px-7 sm:py-5">
+            <div className="min-w-0">
+              <DialogPrimitive.Title className="screen-title truncate text-xl text-ink">
                 {title}
               </DialogPrimitive.Title>
               {subtitle && (
-                <DialogPrimitive.Description className="mt-1 text-sm text-slate-500">
+                <DialogPrimitive.Description className="mt-1 text-sm text-muted">
                   {subtitle}
                 </DialogPrimitive.Description>
               )}
@@ -489,7 +497,7 @@ export function Sheet({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">{children}</div>
           {footer && (
-            <div className="border-t border-slate-200 bg-white px-5 py-4 sm:px-7">{footer}</div>
+            <div className="border-t border-line bg-white px-5 py-3 sm:px-7 sm:py-4">{footer}</div>
           )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
@@ -512,17 +520,17 @@ export function Modal({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-[#101416]/50" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-ink/45" />
         {/* Centred with flexbox, not a transform, so fixed-position dropdowns are not clipped. */}
         <div className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center p-4">
           <DialogPrimitive.Content
             onEscapeKeyDown={keepOpenForSearch}
             onPointerDownOutside={keepOpenForToast}
             onInteractOutside={keepOpenForToast}
-            className="pointer-events-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl outline-none sm:p-6"
+            className="pointer-events-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-[0_24px_60px_rgba(16,24,40,.22)] outline-none sm:p-6"
           >
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <DialogPrimitive.Title className="text-lg font-bold text-[#1a2024]">
+            <div className="-mt-1 mb-5 flex items-center justify-between gap-3">
+              <DialogPrimitive.Title className="screen-title text-xl text-ink">
                 {title}
               </DialogPrimitive.Title>
               <DialogPrimitive.Close asChild>
@@ -533,7 +541,11 @@ export function Modal({
             </div>
             <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
             {children}
-            {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
+            {footer && (
+              <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-line-soft pt-4">
+                {footer}
+              </div>
+            )}
           </DialogPrimitive.Content>
         </div>
       </DialogPrimitive.Portal>
@@ -612,22 +624,22 @@ export function SearchSelect({
         }}
         className="field flex w-full items-center justify-between text-left"
       >
-        <span className={cn('truncate', value ? 'text-slate-800' : 'text-slate-400')}>
+        <span className={cn('truncate', value ? 'text-ink' : 'text-faint')}>
           {selected?.label || value || placeholder}
         </span>
-        <ChevronDown size={15} className="shrink-0 text-slate-400" />
+        <ChevronDown size={15} className="shrink-0 text-faint" />
       </button>
       {open && (
         <div
           style={position}
           // Inside a <label>, clicks on non-button areas would re-trigger the toggle button.
           onClick={(e) => e.preventDefault()}
-          className="fixed z-[80] rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+          className="fixed z-[80] rounded-xl border border-line bg-white p-1 shadow-xl"
         >
           <input
             autoFocus
             aria-label="Search options"
-            className="w-full border-b border-slate-100 px-2 py-2 text-sm outline-none"
+            className="w-full border-b border-line-soft px-2 py-2 text-sm outline-none"
             placeholder="Search..."
             value={term}
             onChange={(e) => {
@@ -663,7 +675,7 @@ export function SearchSelect({
                   onChange('')
                   setOpen(false)
                 }}
-                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm text-slate-500 hover:bg-slate-100 focus:bg-slate-100"
+                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm text-muted hover:bg-canvas focus:bg-canvas"
               >
                 Clear selection
               </button>
@@ -679,14 +691,14 @@ export function SearchSelect({
                     onChange(option.value)
                     setOpen(false)
                   }}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-100 focus:bg-slate-100 ${index === active ? 'bg-slate-50' : ''}`}
+                  className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-canvas focus:bg-canvas ${index === active ? 'bg-wash' : ''}`}
                 >
                   {option.label}
                   {option.value === value && <Check size={14} className="text-teal-700" />}
                 </button>
               ))
             ) : (
-              <div className="px-2 py-3 text-xs text-slate-500">
+              <div className="px-2 py-3 text-xs text-muted">
                 No matching values. Add one in Settings.
               </div>
             )}
@@ -716,7 +728,7 @@ export function Pager({
   const first = (page - 1) * pageSize + 1,
     last = Math.min(total, page * pageSize)
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-5">
+    <div className="flex items-center justify-between gap-3 border-t border-line-soft px-4 py-3 text-xs text-ink-2 sm:px-5">
       <span>
         {first}–{last} of {total}
       </span>

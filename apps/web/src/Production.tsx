@@ -3,14 +3,15 @@ import type { LotCards, LotFlag, LotGroup, LotSort } from '@boat/domain/api'
 import { dateLabel, effectiveLotEta, quantity, signedDays } from '@boat/domain/calculations'
 import type { LookupKind } from '@boat/domain/models'
 import {
-  ChevronDown,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
   Columns3,
-  Filter,
+  List,
   Plus,
+  Rows3,
   Search,
+  SlidersHorizontal,
   X,
 } from 'lucide-react'
 import { type MutableRefObject, type ReactNode, useEffect, useMemo, useState } from 'react'
@@ -18,7 +19,7 @@ import { useAccess, useFeatures } from './access'
 import { downloadLotsCsv, type LotQuery, lotPageSize } from './api/lots'
 import type { LotRecord, ProductRecord } from './api/mappers'
 import { useLookups, useLotGroups, useLots, useLotSummary, useProducts } from './api/queries'
-import { Badge, Button, Card, type CsvExport, Empty, Input, Pager, Select } from './ui'
+import { Badge, Button, Card, cn, type CsvExport, Empty, Input, Pager, Select } from './ui'
 
 type Props = {
   mode: 'active' | 'completed'
@@ -228,6 +229,33 @@ function useDebounced<T>(value: T, ms = 250) {
   return settled
 }
 
+// Signal colours: the dot on each status card, and its top edge while it filters the list.
+const toneDot: Record<string, string> = {
+  red: 'bg-rose-500',
+  amber: 'bg-amber-500',
+  green: 'bg-emerald-500',
+  blue: 'bg-sky-500',
+  teal: 'bg-teal-500',
+}
+const toneBar: Record<string, string> = {
+  red: 'before:bg-rose-500',
+  amber: 'before:bg-amber-500',
+  green: 'before:bg-emerald-500',
+  blue: 'before:bg-sky-500',
+  teal: 'before:bg-teal-500',
+}
+// Columns of numbers, right-aligned so they compare down the column.
+const numericCols: Column[] = ['lotQty', 'grn', 'balance', 'rm', 'planDelay', 'leadTime']
+// Only lots that need attention get a coloured edge, so the eye finds them.
+const toneOf = (lot: LotRecord) => {
+  const f = lot.computed.flags
+  if (lot.computed.completed) return undefined
+  if (f.blocked) return lot.status === 'Hold' ? 'amber' : 'red'
+  if (f.overdue) return 'red'
+  if (f.dueSoon) return 'amber'
+  return undefined
+}
+
 const statuses = (lot: LotRecord) => {
   const f = lot.computed.flags
   if (lot.computed.completed) return <Badge tone="green">Completed</Badge>
@@ -246,12 +274,12 @@ function renderCell(l: LotRecord, col: Column): ReactNode {
   const c = l.computed
   switch (col) {
     case 'label':
-      return <span className="font-bold text-[#193e40]">{l.label}</span>
+      return <span className="font-semibold text-ink">{l.label}</span>
     case 'status':
       return (
         <div>
           {statuses(l)}
-          <span className="mt-1 block min-w-48 max-w-64 whitespace-normal text-[11px] leading-4 text-slate-500">
+          <span className="mt-1 block max-w-64 min-w-48 text-xs leading-4 whitespace-normal text-muted">
             {c.summary}
           </span>
         </div>
@@ -269,7 +297,7 @@ function renderCell(l: LotRecord, col: Column): ReactNode {
     case 'grn':
       return <span className="font-semibold">{quantity(c.grnTotal)}</span>
     case 'balance':
-      return <span className="font-bold text-[#bd5e2d]">{quantity(c.balance)}</span>
+      return <span className="font-semibold text-rose-700">{quantity(c.balance)}</span>
     case 'plannedDate':
       return dateLabel(l.plannedDate)
     case 'eta':
@@ -372,6 +400,7 @@ export default function Production({
   }, [mode])
   // Searching or filtering expands the matching products so their lots are visible at once.
   const narrowing = !!term.trim() || !!quick || Object.values(filters).some(Boolean)
+  const activeFilters = Object.values(filters).filter(Boolean).length
   const matchingProducts = withLots.map((g) => g.product.id).join(',')
   useEffect(() => {
     if (narrowing) setExpanded(matchingProducts ? matchingProducts.split(',') : [])
@@ -398,42 +427,55 @@ export default function Production({
   return (
     <div className="space-y-5">
       {mode === 'active' && (
-        <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-            {cards.map((card) => (
-              <button
-                key={card.id}
-                title={card.help}
-                onClick={() => setQuick(quick === card.id ? '' : card.id)}
-                className={`rounded-2xl border bg-white p-4 text-left shadow-[0_2px_14px_rgba(15,23,42,.035)] transition hover:border-red-300 ${quick === card.id ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="metric-label">{card.label}</span>
-                  <span
-                    className={`icon-dot ${card.tone === 'red' ? 'text-rose-500' : card.tone === 'amber' ? 'text-amber-500' : card.tone === 'green' ? 'text-emerald-500' : card.tone === 'blue' ? 'text-sky-500' : 'text-teal-500'}`}
-                  />
-                </div>
-                <div className="mt-2 metric-value">{summary ? summary[card.id] : '—'}</div>
-              </button>
-            ))}
+        <section aria-label="Lot signals">
+          <div className="scroll-row gap-px overflow-hidden rounded-xl border border-line bg-line-soft shadow-[0_1px_2px_rgba(16,24,40,.04)] md:grid md:grid-cols-4 xl:grid-cols-8">
+            {cards.map((card) => {
+              const on = quick === card.id
+              return (
+                <button
+                  key={card.id}
+                  title={card.help}
+                  aria-pressed={on}
+                  onClick={() => setQuick(on ? '' : card.id)}
+                  className={cn(
+                    'relative flex min-w-[136px] shrink-0 flex-col bg-white px-4 pt-3.5 pb-3 text-left transition-colors md:min-w-0',
+                    'before:absolute before:inset-x-0 before:top-0 before:h-[3px] before:transition-colors',
+                    on ? cn('bg-wash', toneBar[card.tone]) : 'before:bg-transparent hover:bg-wash',
+                  )}
+                >
+                  <span className="flex items-baseline gap-2 text-[13px] leading-5 font-medium text-muted">
+                    <span
+                      className={cn(
+                        'h-2 w-2 shrink-0 -translate-y-px rounded-full',
+                        toneDot[card.tone],
+                      )}
+                    />
+                    {card.label}
+                  </span>
+                  <span className="metric-value mt-auto block pt-1.5">
+                    {summary ? summary[card.id] : '—'}
+                  </span>
+                </button>
+              )
+            })}
           </div>
-          <p className="text-xs text-slate-500">
-            Cards describe overlapping conditions; their counts are not intended to add up to the
-            total number of lots. Hover for definitions.
+          <p className="mt-2 hidden text-xs text-muted sm:block">
+            A lot can count under more than one signal. Select one to filter the list below.
           </p>
-        </>
+        </section>
       )}
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
-          <div>
-            <h2 className="text-base font-bold text-[#1a2024]">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 sm:px-5">
+          <div className="min-w-0">
+            <h2 className="section-title">
               {mode === 'active' ? 'Active production lots' : 'Completed lots'}
             </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {total} lots across {groups.length} products · Completion is based on the actual date
+            <p className="num mt-0.5 text-[13px] text-muted">
+              {total} {total === 1 ? 'lot' : 'lots'} across {groups.length}{' '}
+              {groups.length === 1 ? 'product' : 'products'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-1">
             <Button
               variant="secondary"
               size="sm"
@@ -441,70 +483,97 @@ export default function Production({
                 setGroup(!group)
                 setExpanded([])
               }}
+              title={group ? 'Switch to one list of lots' : 'Group lots under their product'}
             >
+              {group ? <Rows3 size={14} /> : <List size={14} />}
               {group ? 'Grouped by product' : 'Flat view'}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setExpanded(groups.map((g) => g.product.id))}
-              title="Expand all products"
-            >
-              <ChevronsUpDown size={14} /> Expand all
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setExpanded([])}
-              title="Collapse all products"
-            >
-              <ChevronsDownUp size={14} /> Collapse
-            </Button>
+            {group && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpanded(groups.map((g) => g.product.id))}
+                  title="Expand all products"
+                >
+                  <ChevronsUpDown size={14} /> <span className="hidden sm:inline">Expand all</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpanded([])}
+                  title="Collapse all products"
+                >
+                  <ChevronsDownUp size={14} /> <span className="hidden sm:inline">Collapse</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5">
-          <div className="relative min-w-52 flex-1 sm:max-w-sm">
-            <Search size={15} className="absolute left-3 top-3 text-slate-400" />
+        <div className="flex flex-col gap-2 px-4 pt-3 pb-4 sm:flex-row sm:items-center sm:px-5">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search
+              size={16}
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+            />
             <Input
               aria-label="Search product, variant, or lot"
               className="pl-9"
-              placeholder="Search product, variant, or lot..."
+              placeholder="Search product, variant, or lot"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setFiltersOpen(!filtersOpen)}>
-            <Filter size={14} /> Filters{' '}
-            {Object.values(filters).filter(Boolean).length > 0 && (
-              <Badge tone="amber">{Object.values(filters).filter(Boolean).length}</Badge>
+          <div className="scroll-row -mx-4 items-center gap-2 px-4 sm:mx-0 sm:px-0">
+            <Button
+              variant={filtersOpen ? 'teal' : 'secondary'}
+              className="shrink-0"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              aria-expanded={filtersOpen}
+            >
+              <SlidersHorizontal size={15} /> Filters
+              {activeFilters > 0 && (
+                <span className="num rounded bg-brand px-1.5 text-xs leading-5 text-white">
+                  {activeFilters}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant={columnsOpen ? 'teal' : 'secondary'}
+              className="shrink-0"
+              onClick={() => setColumnsOpen(!columnsOpen)}
+              aria-expanded={columnsOpen}
+            >
+              <Columns3 size={15} /> Columns
+            </Button>
+            <Select
+              aria-label="Sort lots"
+              className="w-auto shrink-0"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as LotSort)}
+            >
+              <option value="eta-asc">ETA: soonest</option>
+              <option value="eta-desc">ETA: latest</option>
+              <option value="qty-desc">Qty: high to low</option>
+              <option value="balance-desc">Balance: high to low</option>
+              <option value="product-asc">Product: A–Z</option>
+              <option value="label-asc">Lot: A–Z</option>
+            </Select>
+            {(search || narrowing) && (
+              <Button variant="ghost" className="shrink-0" onClick={clear}>
+                <X size={15} /> Clear filters
+              </Button>
             )}
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setColumnsOpen(!columnsOpen)}>
-            <Columns3 size={14} /> Columns
-          </Button>
-          <Select
-            aria-label="Sort lots"
-            className="max-w-40"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as LotSort)}
-          >
-            <option value="eta-asc">ETA: soonest</option>
-            <option value="eta-desc">ETA: latest</option>
-            <option value="qty-desc">Qty: high to low</option>
-            <option value="balance-desc">Balance: high to low</option>
-            <option value="product-asc">Product: A–Z</option>
-            <option value="label-asc">Lot: A–Z</option>
-          </Select>
-          <Button variant="ghost" size="sm" onClick={clear}>
-            <X size={14} /> Clear filters
-          </Button>
+          </div>
         </div>
         {filtersOpen && (
-          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-4 sm:grid-cols-4 xl:grid-cols-8 sm:px-5">
+          <div className="grid grid-cols-2 gap-2 border-t border-line-soft bg-wash px-4 py-4 sm:grid-cols-4 sm:px-5 xl:grid-cols-5">
             {(Object.keys(filterKinds) as (keyof typeof filterKinds)[]).map((key) => (
               <Select
                 key={key}
                 aria-label={`Filter by ${key}`}
+                className={filters[key] ? 'border-ink' : undefined}
                 value={filters[key]}
                 onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}
               >
@@ -516,44 +585,56 @@ export default function Production({
                 ))}
               </Select>
             ))}
-            <label className="col-span-1 flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <label className="flex min-h-10 items-center gap-2 rounded-lg px-1 text-sm font-medium text-ink-2">
               <input
                 type="checkbox"
+                className="h-4 w-4"
                 checked={filters.rm}
                 onChange={(e) => setFilters({ ...filters, rm: e.target.checked })}
-              />{' '}
+              />
               RM incomplete
             </label>
-            <label className="col-span-1 flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <label className="flex min-h-10 items-center gap-2 rounded-lg px-1 text-sm font-medium text-ink-2">
               <input
                 type="checkbox"
+                className="h-4 w-4"
                 checked={filters.followUp}
                 onChange={(e) => setFilters({ ...filters, followUp: e.target.checked })}
-              />{' '}
+              />
               Follow-up due
             </label>
           </div>
         )}
         {columnsOpen && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-3 sm:px-5">
-            <Button variant="ghost" size="sm" onClick={() => setColumns(simpleCols)}>
-              Simple View
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setColumns(allCols)}>
-              Show All Details
-            </Button>
-            {shown(allCols).map((c) => (
-              <label key={c} className="flex items-center gap-1 text-xs text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={columns.includes(c)}
-                  onChange={(e) =>
-                    setColumns(e.target.checked ? [...columns, c] : columns.filter((x) => x !== c))
-                  }
-                />
-                {columnLabels[c]}
-              </label>
-            ))}
+          <div className="border-t border-line-soft bg-wash px-4 py-4 sm:px-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-[13px] font-medium text-muted">Show</span>
+              <Button variant="secondary" size="sm" onClick={() => setColumns(simpleCols)}>
+                Simple View
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setColumns(allCols)}>
+                Show All Details
+              </Button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {shown(allCols).map((c) => (
+                <label
+                  key={c}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1.5 text-[13px] text-ink-2 has-[:checked]:border-ink/30 has-[:checked]:text-ink"
+                >
+                  <input
+                    type="checkbox"
+                    checked={columns.includes(c)}
+                    onChange={(e) =>
+                      setColumns(
+                        e.target.checked ? [...columns, c] : columns.filter((x) => x !== c),
+                      )
+                    }
+                  />
+                  {columnLabels[c]}
+                </label>
+              ))}
+            </div>
           </div>
         )}
         {groupsQuery.isPending ? (
@@ -571,7 +652,7 @@ export default function Production({
             />
           </div>
         ) : !groups.length ? (
-          <div className="p-5">
+          <div className="p-5 pt-1">
             <Empty
               title={
                 mode === 'completed'
@@ -603,7 +684,7 @@ export default function Production({
             />
           </div>
         ) : group ? (
-          <div>
+          <div className="border-t border-line">
             {groups.map((g) => {
               const open = expanded.includes(g.product.id)
               return (
@@ -611,11 +692,16 @@ export default function Production({
                   key={g.product.id}
                   role="group"
                   aria-label={groupName(g)}
-                  className="border-t border-slate-100 first:border-t-0"
+                  className="border-t border-line-soft first:border-t-0"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 hover:bg-slate-50/60 sm:px-5">
+                  <div
+                    className={cn(
+                      'flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-5',
+                      open ? 'bg-wash' : 'hover:bg-wash/70',
+                    )}
+                  >
                     <button
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      className="flex min-w-0 flex-1 basis-56 items-start gap-2.5 text-left"
                       onClick={() =>
                         setExpanded(
                           open
@@ -625,36 +711,46 @@ export default function Production({
                       }
                       aria-expanded={open}
                     >
-                      {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-extrabold text-slate-700">
-                        {g.product.name.slice(0, 1)}
-                      </span>
+                      <ChevronRight
+                        size={18}
+                        aria-hidden="true"
+                        className={cn(
+                          'mt-0.5 shrink-0 text-faint transition-transform',
+                          open && 'rotate-90 text-ink',
+                        )}
+                      />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold text-[#1a2024]">
-                          {g.product.name}{' '}
+                        <span className="block truncate text-[15px] font-semibold text-ink">
+                          {g.product.name}
                           {g.product.variant && (
-                            <span className="font-normal text-slate-500">
-                              · {g.product.variant}
-                            </span>
+                            <span className="font-normal text-muted"> · {g.product.variant}</span>
                           )}
                         </span>
-                        <span className="text-xs text-slate-500">
-                          {g.product.segment.value} · {g.lots} lots ·{' '}
-                          {mode === 'active' ? `${g.delayed} delayed` : 'completed'}
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
+                          <span className="num">
+                            {g.product.segment.value} · {g.lots} {g.lots === 1 ? 'lot' : 'lots'}
+                          </span>
+                          {mode === 'active' && g.delayed > 0 && (
+                            <Badge tone="red">{g.delayed} delayed</Badge>
+                          )}
                         </span>
                       </span>
                     </button>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                      <span title="Total lot quantity">
-                        Qty <b>{quantity(g.lotQty)}</b>
+                    <div className="ml-auto flex items-center gap-1 pl-7 sm:pl-0">
+                      <span className="num mr-2 text-[13px] text-muted" title="Total lot quantity">
+                        Qty <b className="font-semibold text-ink">{quantity(g.lotQty)}</b>
                       </span>
                       {grn && (
                         <>
-                          <span title="Total GRN">
-                            GRN <b>{quantity(g.grnTotal)}</b>
+                          <span className="num mr-2 text-[13px] text-muted" title="Total GRN">
+                            GRN <b className="font-semibold text-ink">{quantity(g.grnTotal)}</b>
                           </span>
-                          <span title="Remaining balance">
-                            Balance <b className="text-[#c46736]">{quantity(g.balance)}</b>
+                          <span
+                            className="num mr-2 text-[13px] text-muted"
+                            title="Remaining balance"
+                          >
+                            Balance{' '}
+                            <b className="font-semibold text-rose-700">{quantity(g.balance)}</b>
                           </span>
                         </>
                       )}
@@ -670,7 +766,7 @@ export default function Production({
                         onOpenLot={onOpenLot}
                       />
                     ) : (
-                      <p className="px-5 pb-4 text-xs text-slate-500">
+                      <p className="px-5 pb-4 pl-12 text-[13px] text-muted">
                         No active lots yet.
                         {access.can('createLots') && ' Use Add lot to start tracking this product.'}
                       </p>
@@ -682,7 +778,7 @@ export default function Production({
         ) : (
           <>
             {flat.data && flat.data.items.length > 0 && (
-              <>
+              <div className="border-t border-line">
                 <LotTable
                   lots={flat.data.items}
                   columns={columns}
@@ -695,11 +791,11 @@ export default function Production({
                   total={flat.data.total}
                   onPage={(next) => setPaging({ key: queryKey, page: next })}
                 />
-              </>
+              </div>
             )}
             {emptyProducts.length > 0 && (
-              <div className="border-t border-slate-100 px-4 py-4 sm:px-5">
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <div className="border-t border-line-soft px-4 py-4 sm:px-5">
+                <h3 className="mb-3 text-[13px] font-semibold text-muted">
                   Products without active lots
                 </h3>
                 <div className="space-y-2">
@@ -708,15 +804,15 @@ export default function Production({
                       key={g.product.id}
                       role="group"
                       aria-label={groupName(g)}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2.5"
                     >
-                      <div>
-                        <b className="text-sm text-[#1a2024]">{g.product.name}</b>
-                        <span className="ml-2 text-xs text-slate-500">
+                      <div className="min-w-0">
+                        <b className="text-sm font-semibold text-ink">{g.product.name}</b>
+                        <span className="ml-2 text-[13px] text-muted">
                           {[g.product.variant, g.product.segment.value].filter(Boolean).join(' · ')}
                         </span>
                       </div>
-                      <div className="flex gap-2">{productButtons(g)}</div>
+                      <div className="flex gap-1">{productButtons(g)}</div>
                     </div>
                   ))}
                 </div>
@@ -742,12 +838,12 @@ function ProductLots({
   onOpenLot: (id: string) => void
 }) {
   const lots = useLots({ ...query, productId }, 1, 200)
-  if (!lots.data) return <p className="px-5 pb-4 text-xs text-slate-500">Loading lots…</p>
+  if (!lots.data) return <p className="px-5 py-3 text-[13px] text-muted">Loading lots…</p>
   return (
     <>
       <LotTable lots={lots.data.items} columns={columns} onOpenLot={onOpenLot} />
       {lots.data.total > lots.data.items.length && (
-        <p className="px-5 pb-4 text-xs text-slate-500">
+        <p className="px-5 pb-4 text-[13px] text-muted">
           Showing {lots.data.items.length} of {lots.data.total} lots. Use the flat view or filters
           to see the rest.
         </p>
@@ -770,82 +866,109 @@ function LotTable({
   const { grn } = useFeatures()
   return (
     <>
-      <div className="table-wrap hidden md:block">
+      <div className="table-wrap hidden border-t border-line-soft md:block">
         <table className="data-table">
           <thead>
             <tr>
               {showProduct && <th>Product</th>}
               {columns.map((c) => (
-                <th key={c}>{columnLabels[c]}</th>
+                <th key={c} className={numericCols.includes(c) ? 'cell-num' : undefined}>
+                  {columnLabels[c]}
+                </th>
               ))}
-              <th></th>
+              <th aria-label="Open" className="w-8"></th>
             </tr>
           </thead>
           <tbody>
             {lots.map((l) => (
-              <tr key={l.id} className="cursor-pointer" onClick={() => onOpenLot(l.id)}>
-                {showProduct && <td className="font-semibold">{l.product.name}</td>}
+              <tr key={l.id} data-clickable data-tone={toneOf(l)} onClick={() => onOpenLot(l.id)}>
+                {showProduct && <td className="font-medium text-ink">{l.product.name}</td>}
                 {columns.map((c) => (
-                  <td key={c}>{renderCell(l, c)}</td>
+                  <td key={c} className={numericCols.includes(c) ? 'cell-num num' : undefined}>
+                    {renderCell(l, c)}
+                  </td>
                 ))}
-                <td>
-                  <ChevronRight size={14} />
+                <td className="text-faint">
+                  <ChevronRight size={15} aria-hidden="true" />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="divide-y divide-slate-100 md:hidden">
-        {lots.map((l) => (
-          <button key={l.id} onClick={() => onOpenLot(l.id)} className="w-full p-4 text-left">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-[#1a2024]">{l.label}</span>
-              {statuses(l)}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">{l.computed.summary}</div>
-            {showProduct && <div className="mt-1 text-xs text-slate-500">{l.product.name}</div>}
-            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-              <span>
-                Qty <b>{quantity(l.lotQty)}</b>
-              </span>
-              {grn ? (
-                <>
-                  <span>
-                    GRN <b>{quantity(l.computed.grnTotal)}</b>
-                  </span>
-                  <span>
-                    Balance <b>{quantity(l.computed.balance)}</b>
-                  </span>
-                </>
+      <div className="divide-y divide-line-soft border-t border-line-soft md:hidden">
+        {lots.map((l) => {
+          const c = l.computed
+          return (
+            <button
+              key={l.id}
+              data-tone={toneOf(l)}
+              onClick={() => onOpenLot(l.id)}
+              className="tone-edge block w-full px-4 py-3.5 text-left active:bg-wash"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-ink">{l.label}</span>
+                  {showProduct && (
+                    <span className="block truncate text-[13px] text-muted">{l.product.name}</span>
+                  )}
+                </span>
+                {statuses(l)}
+              </div>
+              <p className="mt-1 text-[13px] leading-snug text-muted">{c.summary}</p>
+              <dl className="num mt-3 grid grid-cols-3 gap-2">
+                <div>
+                  <dt className="text-xs text-muted">Qty</dt>
+                  <dd className="text-sm font-semibold text-ink">{quantity(l.lotQty)}</dd>
+                </div>
+                {grn ? (
+                  <div>
+                    <dt className="text-xs text-muted">Balance</dt>
+                    <dd className="text-sm font-semibold text-ink">{quantity(c.balance)}</dd>
+                  </div>
+                ) : (
+                  <div>
+                    <dt className="text-xs text-muted">RM ready</dt>
+                    <dd className="text-sm font-semibold text-ink">{Math.round(c.rm.percent)}%</dd>
+                  </div>
+                )}
+                {c.completed ? (
+                  <div>
+                    <dt className="text-xs text-muted">Completed</dt>
+                    <dd className="text-sm font-semibold text-ink">{dateLabel(l.actualDate)}</dd>
+                  </div>
+                ) : (
+                  <div>
+                    <dt className="text-xs text-muted">ETA</dt>
+                    <dd
+                      className={cn(
+                        'text-sm font-semibold',
+                        c.flags.overdue ? 'text-rose-700' : 'text-ink',
+                      )}
+                    >
+                      {dateLabel(effectiveLotEta(l))}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              {c.completed ? (
+                <p className="mt-2 text-[13px] text-muted">
+                  {signedDays(c.planDelay)} vs plan · RM→actual {c.leadTime ?? '—'} days
+                </p>
               ) : (
-                <span>
-                  RM <b>{Math.round(l.computed.rm.percent)}%</b>
-                </span>
+                <div className="mt-3 flex items-center gap-3">
+                  <span className="truncate text-[13px] text-muted">{l.stage}</span>
+                  <span className="h-1 flex-1 overflow-hidden rounded-full bg-line-soft">
+                    <span
+                      className="block h-full rounded-full bg-ink/60"
+                      style={{ width: `${grn ? c.grnPercent : c.rm.percent}%` }}
+                    />
+                  </span>
+                </div>
               )}
-            </div>
-            {l.computed.completed ? (
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 text-xs text-slate-500">
-                <span>Completed {dateLabel(l.actualDate)}</span>
-                <span>
-                  {signedDays(l.computed.planDelay)} vs plan · RM→actual{' '}
-                  {l.computed.leadTime ?? '—'} days
-                </span>
-              </div>
-            ) : (
-              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                <span>{l.stage}</span>
-                <span>ETA {dateLabel(effectiveLotEta(l))}</span>
-              </div>
-            )}
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full bg-[#ed1c24]"
-                style={{ width: `${grn ? l.computed.grnPercent : l.computed.rm.percent}%` }}
-              />
-            </div>
-          </button>
-        ))}
+            </button>
+          )
+        })}
       </div>
     </>
   )
