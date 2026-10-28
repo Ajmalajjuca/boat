@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { listLookups } from './lookups'
 import { type ActivityOwner, listActivity } from './activity'
 import { fetchSettings, listUsers } from './admin'
+import { fetchAuthOptions } from './auth'
 import {
   fetchLot,
   fetchLotGroups,
@@ -24,6 +25,7 @@ export const keys = {
   shipments: ['shipments'],
   settings: ['settings'],
   users: ['users'],
+  authOptions: ['auth-options'],
 } as const
 
 // Another admin may change dropdown values at any time, so they refresh like other reads.
@@ -93,6 +95,10 @@ export const useShipment = (id: string | undefined) =>
     queryFn: () => fetchShipment(id!),
     enabled: !!id,
   })
+
+// What the sign-in screen offers; it doesn't change while the app is open.
+export const useAuthOptions = () =>
+  useQuery({ queryKey: keys.authOptions, queryFn: fetchAuthOptions, staleTime: Infinity })
 
 export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: fetchSettings })
 // Only admins may list users, so the screen enables this for them alone.

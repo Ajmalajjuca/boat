@@ -9,7 +9,7 @@ test('FR-10.2 signs out after the idle timeout', async ({ page }) => {
   await signInWithGoogle(page, user.email)
   await page.clock.fastForward('16:00')
   await expect(page.getByText('Signed out after 15 minutes without activity.')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible()
 })
 
 test('FR-10.2 keeps you signed in while you are active', async ({ page }) => {

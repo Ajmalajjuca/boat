@@ -58,15 +58,23 @@ export async function signInApi(email: string, pw: string) {
 // would: start, choose the identity at the stub, and follow its redirects back through the
 // callback. The returned context holds the session cookie.
 export async function googleSignInApi(email: string) {
-  const ctx = await request.newContext({ baseURL: appUrl })
+  // An empty cookie jar: in a test, new contexts otherwise take the spec's storageState.
+  const ctx = await request.newContext({
+    baseURL: appUrl,
+    storageState: { cookies: [], origins: [] },
+  })
   const start = await ctx.get('/api/v1/auth/google/start', { maxRedirects: 0 })
   const location = start.headers()['location']
   if (start.status() !== 302 || !location)
     throw new Error(`Google sign-in did not start (${start.status()})`)
   const landed = await ctx.get(`${location}&email=${encodeURIComponent(email)}`)
   const me = await ctx.get('/api/v1/auth/me')
-  if (!me.ok()) throw new Error(`Google sign-in as ${email} failed and landed on ${landed.url()}`)
-  return { ctx, me: (await me.json()) as MePayload }
+  const payload = me.ok() ? ((await me.json()) as MePayload) : null
+  if (payload?.user.email !== email) {
+    await ctx.dispose()
+    throw new Error(`Google sign-in as ${email} failed and landed on ${landed.url()}`)
+  }
+  return { ctx, me: payload }
 }
 
 let counter = 0

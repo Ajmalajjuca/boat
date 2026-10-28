@@ -43,6 +43,8 @@ export type SessionUser = {
   // Only the backup admin signs in with a password; it alone can change one.
   passwordLogin: boolean
 }
+// GET /auth/options: what the sign-in screen offers.
+export type AuthOptions = { google: boolean }
 export type MePayload = {
   user: SessionUser
   allowedActions: Action[]

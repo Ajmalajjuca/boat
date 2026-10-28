@@ -23,13 +23,15 @@ pnpm --filter @boat/api dev      # http://localhost:3000/api/v1/health/ready
 pnpm --filter @boat/api test:int # needs Docker
 ```
 
-The first admin is invited from the command line. The link is printed, and also emailed when `RESEND_API_KEY` or `SMTP_HOST` is set:
+Staff sign in with their company Google account. An admin adds each person under **Settings → Users** first; BOAT then emails them that they have access. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_ALLOWED_DOMAINS` as `apps/api/.env.example` describes.
+
+One backup admin signs in with a password instead, for setup and for when Google sign-in is unavailable. Create it from the command line; the password is printed once:
 
 ```bash
-pnpm api create-admin --email you@example.com --name "Your Name"
+pnpm api create-admin --email you@your-company.com --name "Your Name"
 ```
 
-On Render, run `node apps/api/dist/create-admin.js --email … --name …` from the service's Shell.
+Running it again makes that address the backup admin, sets a new password and ends its sessions. On Render, run `node apps/api/dist/create-admin.js --email … --name …` from the service's Shell.
 
 ## Data and backups
 

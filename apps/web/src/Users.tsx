@@ -41,7 +41,7 @@ const statusLabel: Record<UserItem['status'], string> = {
 const blank: UserForm = { name: '', email: '', role: 'viewer', poc: '' }
 const refreshUsers = () => queryClient.invalidateQueries({ queryKey: keys.users })
 
-// Admins invite users, change their role and POC link, and disable or delete them. The server
+// Admins add users, change their role and POC link, and disable or delete them. The server
 // refuses what would leave no active admin; that message shows in the form or as a toast.
 export default function Users({ run, onMessage }: { run: Run; onMessage: (text: string) => void }) {
   const confirm = useConfirm()
@@ -124,7 +124,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
           <p className="mt-1 text-xs text-slate-500">Manage your team, roles and account access.</p>
         </div>
         <Button size="sm" onClick={() => open(null)}>
-          <Plus size={14} /> Invite user
+          <Plus size={14} /> Add user
         </Button>
       </div>
       {usersQuery.isPending ? (
@@ -140,7 +140,10 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
           }
         />
       ) : !users.length ? (
-        <Empty title="No users yet" description="Invite a teammate to get started." />
+        <Empty
+          title="No users yet"
+          description="Add a teammate's company email to give them access."
+        />
       ) : (
         <div
           className="table-wrap mt-5 rounded-xl border border-slate-200"
@@ -191,7 +194,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
                       </Button>
                       {u.status === 'invited' && (
                         <Button size="sm" variant="ghost" onClick={() => resend(u)}>
-                          Resend invite
+                          Resend access email
                         </Button>
                       )}
                       {u.status === 'active' && (
@@ -225,7 +228,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
         onOpenChange={(v) => {
           if (!v) setEditing(null)
         }}
-        title={editing?.user ? 'Edit user' : 'Invite user'}
+        title={editing?.user ? 'Edit user' : 'Add user'}
       >
         {editing && (
           <form onSubmit={submit} noValidate className="space-y-4">
@@ -267,7 +270,7 @@ export default function Users({ run, onMessage }: { run: Run; onMessage: (text: 
               <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button type="submit">{editing.user ? 'Save user' : 'Send invite'}</Button>
+              <Button type="submit">{editing.user ? 'Save user' : 'Add user'}</Button>
             </div>
           </form>
         )}

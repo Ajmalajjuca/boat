@@ -44,13 +44,14 @@ Roles are predefined. The application does not currently provide custom roles or
 | Add, rename or delete dropdown values | Yes | No | No | No |
 | Change idle sign-out time or company time zone | Yes | No | No | No |
 | View the Users table | Yes | No | No | No |
-| Invite users or resend invitations | Yes | No | No | No |
+| Add users or resend their access email | Yes | No | No | No |
 | Edit user names, roles and POC links | Yes | No | No | No |
 | Enable, disable or delete user accounts | Yes | No | No | No |
 | Export a JSON backup | Yes | Yes | No | No |
 | Import a JSON backup using merge or replace | Yes | No | No | No |
 | Reset all application business data | Yes | No | No | No |
-| Change their own password and sign out | Yes | Yes | Yes | Yes |
+| Sign out | Yes | Yes | Yes | Yes |
+| Change their own password (backup admin only) | Yes | No | No | No |
 
 **Planner deletion exception:** Planners can delete RM batches (and GRN receipts while `FEATURE_GRN` is on). The executable `deleteEntries` grant allows this, even though the short Planner description in the application currently says “No … record deletes.” Products, lots and shipments remain Admin-only deletes.
 
@@ -96,13 +97,12 @@ Assigned POCs can also add and edit batches and receipts under the lot, includin
 ## 4. User administration and account access
 
 - Only Admins can access the Users table and administer another user's account.
-- Invited users choose a password through their invitation link before their account becomes active.
+- Users sign in with their company Google account. An admin adds them first, with an address on one of `GOOGLE_ALLOWED_DOMAINS`; a Google account nobody added is refused. A user shows as Invited until their first sign-in, then Active.
 - A POC account requires a valid linked point of contact.
 - User email addresses cannot be changed through the user-edit API.
-- Changing a user's role or account status revokes their existing sessions. Deleting a user also revokes sessions and invalidates unused account tokens.
+- Changing a user's role or account status revokes their existing sessions. Deleting a user also revokes their sessions.
 - The last active Admin cannot be demoted, disabled or deleted. Another active Admin must exist first.
-- Every role can change its own password. A successful password change preserves the new current session and ends the user's other sessions.
-- Invitation acceptance and forgotten-password/reset flows use token-based public routes. They do not grant operational access without a valid active account/session.
+- One backup admin, created with `create-admin`, signs in with a password instead. Only that account can change a password; a successful change keeps the current session and ends its others. There are no invite or password-reset links.
 
 ## 5. Rules that apply even when a role has permission
 

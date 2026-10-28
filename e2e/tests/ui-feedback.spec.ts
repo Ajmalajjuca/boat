@@ -6,6 +6,8 @@ test('password visibility preserves the value and sign-in shows progress', async
   await page.goto('/')
   await expect(page).toHaveTitle(/Boat OS/)
   await expect(page.getByRole('img', { name: 'boAt' })).toBeVisible()
+  // Google is the default; the password form is the backup admin's.
+  await page.getByRole('button', { name: 'Admin password sign-in' }).click()
   const password = page.getByLabel('Password', { exact: true })
   await password.fill('a private password')
   await page.getByRole('button', { name: 'Show password', exact: true }).click()

@@ -28,12 +28,15 @@ export function ProfileCard({ onChangePassword }: { onChangePassword: () => void
         >
           Sign out
         </button>
-        <button
-          onClick={onChangePassword}
-          className="flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-semibold hover:bg-white/15"
-        >
-          Change password
-        </button>
+        {/* Only the backup admin has a password; everyone else signs in with Google. */}
+        {user.passwordLogin && (
+          <button
+            onClick={onChangePassword}
+            className="flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-semibold hover:bg-white/15"
+          >
+            Change password
+          </button>
+        )}
       </div>
     </div>
   )

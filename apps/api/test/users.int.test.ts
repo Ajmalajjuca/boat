@@ -232,13 +232,21 @@ describe('PATCH /users/:id', () => {
       .send({ email: user.email, password })
     expect(again.status).toBe(401)
   })
-  it("won't activate a user who hasn't accepted their invite", async () => {
-    const user = await makeUser(db, { status: 'invited', password: null, name: 'Pending' })
+  it('re-enables a user who signs in with Google', async () => {
+    const user = await makeUser(db, { status: 'disabled', password: null })
+    await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     const res = await admin.send('patch', `/api/v1/users/${user.id}`, { status: 'active' })
-    expect(res.status).toBe(422)
-    expect(res.body.fields).toEqual({
-      status: "Pending hasn't accepted their invite yet. Resend the invite instead.",
-    })
+    expect(res.status).toBe(200)
+    expect(res.body.status).toBe('active')
+  })
+  it("keeps a user who hasn't signed in yet invited when enabled", async () => {
+    const invited = await makeUser(db, { status: 'invited', password: null })
+    const disabled = await makeUser(db, { status: 'disabled', password: null })
+    for (const user of [invited, disabled]) {
+      const res = await admin.send('patch', `/api/v1/users/${user.id}`, { status: 'active' })
+      expect(res.status).toBe(200)
+      expect(res.body.status).toBe('invited')
+    }
   })
   it('refuses fields it does not change, such as email', async () => {
     const user = await makeUser(db)

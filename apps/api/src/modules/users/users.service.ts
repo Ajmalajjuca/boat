@@ -144,7 +144,7 @@ export async function updateUser(db: PrismaClient, id: string, patch: UserPatch)
         role: true,
         status: true,
         pocId: true,
-        passwordHash: true,
+        lastLoginAt: true,
       },
     })
     if (!current) throw new NotFoundError()
@@ -156,11 +156,11 @@ export async function updateUser(db: PrismaClient, id: string, patch: UserPatch)
       pocId: role === 'poc' ? (patch.pocId === undefined ? current.pocId : patch.pocId) : null,
     }
     assertValid(validateAccount(next))
-    if (patch.status === 'active' && !current.passwordHash)
-      throw new ValidationError({
-        status: `${current.name} hasn't accepted their invite yet. Resend the invite instead.`,
-      })
-    const status = patch.status ?? current.status
+    // Only signing in makes a user active, so enabling one who never has leaves them invited.
+    const status =
+      patch.status === 'active' && !current.lastLoginAt
+        ? 'invited'
+        : (patch.status ?? current.status)
     if (next.pocId !== current.pocId) await assertPoc(tx, next.pocId)
     if (
       current.role === 'admin' &&

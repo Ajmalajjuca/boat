@@ -1,6 +1,17 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
-import { forgotPassword, login } from '../api/auth'
-import { Brand, Button, Card, Field, FormError, Input, useFormErrors } from '../ui'
+import { googleSignInUrl, login } from '../api/auth'
+import { useAuthOptions } from '../api/queries'
+import {
+  Brand,
+  Button,
+  buttonVariants,
+  Card,
+  cn,
+  Field,
+  FormError,
+  Input,
+  useFormErrors,
+} from '../ui'
 import { useAuth } from './AuthProvider'
 
 // The frame of every screen a signed-out user sees.
@@ -40,50 +51,59 @@ export function Notice({ children }: { children: ReactNode }) {
   )
 }
 
+// What the Google callback's ?error= codes mean to the person who tried to sign in.
+const googleErrors: Record<string, string> = {
+  not_added: "This Google account hasn't been given access. Ask your admin to add you.",
+  domain: 'Sign in with your company Google account.',
+  unverified: "Google hasn't verified this email address.",
+  disabled: 'This account is disabled. Ask your admin.',
+  failed: "Google sign-in didn't complete. Try again.",
+}
+
+// Reads the callback's error once and drops it from the address bar, so a reload doesn't repeat it.
+function takeGoogleError() {
+  const params = new URLSearchParams(window.location.search),
+    code = params.get('error')
+  if (code === null) return ''
+  window.history.replaceState(null, '', '/')
+  return googleErrors[code] ?? googleErrors.failed
+}
+
 export function SignIn() {
   const auth = useAuth()
-  const [forgot, setForgot] = useState(false),
+  const options = useAuthOptions()
+  const [googleError] = useState(takeGoogleError)
+  const [withPassword, setWithPassword] = useState(false),
     [email, setEmail] = useState(''),
     [password, setPassword] = useState(''),
-    [sent, setSent] = useState(''),
     [busy, setBusy] = useState(false)
   const form = useFormErrors()
+  // Without Google set up, the backup admin's password is the only way in.
+  const passwordForm = withPassword || options.data?.google === false
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
     setBusy(true)
     try {
-      if (forgot) setSent((await forgotPassword(email)).message)
-      else auth.signedIn(await login(email, password))
+      auth.signedIn(await login(email, password))
     } catch (err) {
       form.fail(err)
     } finally {
       setBusy(false)
     }
   }
-  const toggle = () => {
-    setForgot(!forgot)
-    setSent('')
-    form.reset()
-  }
   return (
     <AuthCard
-      title={forgot ? 'Reset your password' : 'Sign in'}
+      title="Sign in"
       intro={
-        forgot
-          ? "Enter your email address and we'll send a link to choose a new password."
-          : 'Use the email address your admin invited.'
+        passwordForm
+          ? 'The backup admin signs in with the password set when BOAT was set up.'
+          : 'Use the company Google account your admin added.'
       }
     >
       {auth.notice && <Notice>{auth.notice}</Notice>}
-      {sent ? (
-        <div className="space-y-4">
-          <Notice>{sent}</Notice>
-          <Button variant="secondary" className="w-full" onClick={toggle}>
-            Back to sign in
-          </Button>
-        </div>
-      ) : (
+      <FormError message={googleError} />
+      {passwordForm ? (
         <form onSubmit={submit} noValidate className="space-y-4">
           <FormError message={form.errors.form} />
           <Field label="Email" error={form.errors.email}>
@@ -98,36 +118,47 @@ export function SignIn() {
               }}
             />
           </Field>
-          {!forgot && (
-            <Field label="Password" error={form.errors.password}>
-              <Input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  form.clear('password')
-                }}
-              />
-            </Field>
-          )}
+          <Field label="Password" error={form.errors.password}>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                form.clear('password')
+              }}
+            />
+          </Field>
           <Button type="submit" className="w-full" loading={busy}>
-            {busy
-              ? forgot
-                ? 'Sending link…'
-                : 'Signing in…'
-              : forgot
-                ? 'Send reset link'
-                : 'Sign in'}
+            {busy ? 'Signing in…' : 'Sign in'}
           </Button>
+          {options.data?.google && (
+            <button
+              type="button"
+              onClick={() => {
+                setWithPassword(false)
+                form.reset()
+              }}
+              className="w-full text-center text-xs font-semibold text-slate-800 hover:underline"
+            >
+              Back to Google sign-in
+            </button>
+          )}
+        </form>
+      ) : (
+        <div className="space-y-4">
+          {/* A full-page link, not a fetch: Google's consent screen needs the whole window. */}
+          <a href={googleSignInUrl} className={cn(buttonVariants(), 'w-full')}>
+            Sign in with Google
+          </a>
           <button
             type="button"
-            onClick={toggle}
+            onClick={() => setWithPassword(true)}
             className="w-full text-center text-xs font-semibold text-slate-800 hover:underline"
           >
-            {forgot ? 'Back to sign in' : 'Forgot password?'}
+            Admin password sign-in
           </button>
-        </form>
+        </div>
       )}
     </AuthCard>
   )

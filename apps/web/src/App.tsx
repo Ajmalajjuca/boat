@@ -32,7 +32,6 @@ import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { ChangePassword } from './auth/ChangePassword'
 import { ProfileCard } from './auth/ProfileCard'
 import { SignIn } from './auth/SignIn'
-import { AcceptInvite, ResetPassword } from './auth/TokenPages'
 import { AccessContext, accessFrom, can } from './access'
 import type { LookupItem } from '@boat/domain/api'
 import { NotFoundError } from './api/client'
@@ -114,16 +113,13 @@ export default function App() {
   )
 }
 
-// The invite and reset pages are chosen by path; everything else needs a session.
+// Everything needs a session. Google sign-in returns to /, or to /sign-in?error=… when refused,
+// which the sign-in screen reads; once signed in, the address goes back to /.
 function Root() {
   const auth = useAuth()
-  const [path, setPath] = useState(location.pathname)
-  const home = () => {
-    history.replaceState(null, '', '/')
-    setPath('/')
-  }
-  if (path === '/invite') return <AcceptInvite onDone={home} />
-  if (path === '/reset-password') return <ResetPassword onDone={home} />
+  useEffect(() => {
+    if (auth.me && location.pathname !== '/') history.replaceState(null, '', '/')
+  }, [auth.me])
   if (auth.me === undefined) return <Loading />
   if (!auth.me) return <SignIn />
   // A new key per user, so nothing from the last user's screens survives.

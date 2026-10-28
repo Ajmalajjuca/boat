@@ -14,14 +14,14 @@ pnpm --filter @boat/api db:migrate
 pnpm api create-admin --email admin@example.test --name "Test Admin"
 ```
 
-The invite link is printed in the `create-admin` output and in the API log, since `RESEND_API_KEY` is unset. Then run these two side by side:
+`create-admin` prints the backup admin's password once; keep it. Then run these two side by side:
 
 ```bash
 pnpm --filter @boat/api dev    # API on :3000
 pnpm dev                       # web on http://localhost:5173
 ```
 
-Open the invite link, set a password (at least 12 characters), and sign in.
+Open the web app, choose **Admin password sign-in**, and sign in with that email and password.
 
 To start again from empty later: **Settings → Reset all application data** as admin (it keeps users, dropdowns and settings), or `docker compose down -v` and repeat the steps above.
 
@@ -163,7 +163,7 @@ Finally, set **Actual warehouse arrival** to `2026-10-17`, change the stage to *
 
 ## 7. Roles and sign-in
 
-As admin, open **Settings → Users → Invite user** and invite these three. Each invite link is printed in the API log.
+This section needs Google sign-in set up (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_ALLOWED_DOMAINS` in `apps/api/.env`, as `.env.example` describes) and three Google accounts on the company domain. As admin, open **Settings → Users → Add user** and add them with these names and roles; replace the example addresses with theirs. Each access email is printed in the API log.
 
 | Name | Email | Role | Point of contact |
 | --- | --- | --- | --- |
@@ -171,7 +171,7 @@ As admin, open **Settings → Users → Invite user** and invite these three. Ea
 | Maya Shah | maya@example.test | POC | Maya Shah |
 | Test Viewer | viewer@example.test | Viewer | — |
 
-Accept each invite in a private window, or in another browser so the admin stays signed in, then check:
+Sign in as each with **Sign in with Google** in a private window, or in another browser so the admin stays signed in, then check:
 
 | Signed in as | Should be able to | Should not be able to |
 | --- | --- | --- |
@@ -181,10 +181,11 @@ Accept each invite in a private window, or in another browser so the admin stays
 
 Then check sign-in itself:
 
-1. **Wrong password:** each failed attempt shows an error. After 5 failures within 15 minutes, sign-in shows **"Too many failed attempts. Wait 15 minutes and try again."** The limit also applies per IP address, so do this test last, or locally it will block every account for 15 minutes (restarting the API clears it).
-2. **Forgot password:** use it from the sign-in page. The reset link appears in the API log. After the reset, you sign in again with the new password.
-3. **Disable a user:** as admin, disable the viewer while they are signed in. Their next action shows **"Your session ended. Sign in again."**
-4. **Idle sign-out:** set **Idle sign-out (minutes)** in Settings to a small value, wait, and confirm the app signs you out.
+1. **Not added:** sign in with a Google account nobody added. Sign-in shows **"This Google account hasn't been given access. Ask your admin to add you."**
+2. **Wrong password:** under **Admin password sign-in**, each failed attempt shows an error. After 5 failures within 15 minutes, sign-in shows **"Too many failed attempts. Wait 15 minutes and try again."** The limit also applies per IP address, so do this test last, or locally it will block every account for 15 minutes (restarting the API clears it).
+3. **Lost backup password:** run `create-admin` again with the same email. It prints a new password and ends that account's sessions.
+4. **Disable a user:** as admin, disable the viewer while they are signed in. Their next action shows **"Your session ended. Sign in again."**
+5. **Idle sign-out:** set **Idle sign-out (minutes)** in Settings to a small value, wait, and confirm the app signs you out.
 
 ## 8. Conflicts, reports and data
 
